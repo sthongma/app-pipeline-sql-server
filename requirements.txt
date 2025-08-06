@@ -1,0 +1,4 @@
+send2trash
+customtkinter
+sqlalchemy
+pyodbc
