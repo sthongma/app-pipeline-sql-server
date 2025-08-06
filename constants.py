@@ -86,8 +86,8 @@ class AppConstants:
     UI_UPDATE_INTERVAL = 100  # milliseconds
     
     # File management settings
-    DEFAULT_ARCHIVE_DAYS = 90  # วันสำหรับย้ายไฟล์เก่า
-    DEFAULT_DELETE_ARCHIVE_DAYS = 90  # วันสำหรับลบไฟล์ใน archive
+    DEFAULT_ARCHIVE_DAYS = 30  # วันสำหรับย้ายไฟล์เก่าจาก last_path ไป archive
+    DEFAULT_DELETE_ARCHIVE_DAYS = 90  # วันสำหรับย้ายไฟล์ใน archive ไปถังขยะ
     
     # Logging settings
     LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'

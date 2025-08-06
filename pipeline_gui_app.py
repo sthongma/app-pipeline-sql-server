@@ -1,13 +1,12 @@
-"""GUI Application สำหรับ PIPELINE_SQLSERVER"""
-
-import os
-
 try:
     import customtkinter as ctk
 except ImportError:
     import tkinter as ctk
 
+from ui.main_window import MainWindow
 from ui.login_window import LoginWindow
+from services.database_service import DatabaseService
+import os
 
 def main():
     # ตั้ง working directory เป็นที่อยู่ของไฟล์นี้

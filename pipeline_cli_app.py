@@ -28,12 +28,18 @@ logging.basicConfig(
 
 def load_last_path() -> Optional[str]:
     """
-    โหลด search path ล่าสุดจากการตั้งค่า
+    โหลด search path ล่าสุดจากไฟล์ last_path.json (เหมือนกับ GUI)
     
     Returns:
         Optional[str]: search path หรือ None ถ้าไม่มี
     """
-    return settings_manager.get_last_search_path()
+    try:
+        import json
+        with open('config/last_path.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('last_path', None)
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return None
 
 def process_file(file_path: str, file_service: FileService, db_service: DatabaseService) -> None:
     """

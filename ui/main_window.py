@@ -20,7 +20,7 @@ class MainWindow(ctk.CTk):
         
         # ตั้งค่าหน้าต่างแอปพลิเคชัน
         self.title("ตรวจสอบและอัปโหลดไฟล์")
-        self.geometry("900x800")
+        self.geometry("900x780")
         self.resizable(False, False)
         
         # กำหนดประเภทข้อมูลที่รองรับ (SQL Server data types)
@@ -918,12 +918,12 @@ class MainWindow(ctk.CTk):
             # กำหนดโฟลเดอร์ปลายทางในไดร์ D
             archive_path = "D:/Archived_Files"
             
-            self.log(f"กำลังย้ายไฟล์เก่ามากว่า 90 วันจาก {folder_path} ไปยัง {archive_path}")
+            self.log(f"กำลังย้ายไฟล์เก่ามากว่า 30 วันจาก {folder_path} ไปยัง {archive_path}")
             
             result = self.file_mgmt_service.archive_old_files(
                 source_path=folder_path,
                 archive_path=archive_path,
-                days=90,  # ย้ายไฟล์เก่ามากว่า 90 วัน
+                days=30,  # ย้ายไฟล์เก่ามากว่า 30 วัน
                 delete_archive_days=90  # ย้ายไฟล์ใน archive ที่เก่ามากว่า 90 วันไปถังขยะ
             )
             
