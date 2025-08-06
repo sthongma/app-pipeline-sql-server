@@ -264,7 +264,8 @@ def process_main_files_step(source_path: str) -> None:
     """
     logging.info("=== ขั้นตอนที่ 2: ประมวลผลไฟล์หลัก ===")
     
-    file_service = FileService(search_path=source_path)
+    # ใช้ logging.info เป็น log_callback สำหรับ CLI
+    file_service = FileService(search_path=source_path, log_callback=logging.info)
     db_service = DatabaseService()
 
     # ตรวจสอบการเชื่อมต่อฐานข้อมูลก่อน

@@ -20,7 +20,7 @@ class MainWindow(ctk.CTk):
         
         # ตั้งค่าหน้าต่างแอปพลิเคชัน
         self.title("ตรวจสอบและอัปโหลดไฟล์")
-        self.geometry("900x700")
+        self.geometry("900x800")
         self.resizable(False, False)
         
         # กำหนดประเภทข้อมูลที่รองรับ (SQL Server data types)
@@ -50,7 +50,7 @@ class MainWindow(ctk.CTk):
         self.sql_config = self.db_config.config
         
         # สร้างบริการ
-        self.file_service = FileService()
+        self.file_service = FileService(log_callback=self.log)
         self.db_service = DatabaseService()
         self.file_mgmt_service = FileManagementService()
         
@@ -581,6 +581,16 @@ class MainWindow(ctk.CTk):
         """สร้างปุ่มควบคุมและปุ่มจัดการโฟลเดอร์ในแถวเดียวกัน"""
         button_frame = ctk.CTkFrame(self.main_tab)
         button_frame.pack(pady=5)
+        
+         # ปุ่มเลือก/ยกเลิกการเลือกทั้งหมด
+        self.select_all_var = ctk.BooleanVar(value=False)
+        self.select_all_button = ctk.CTkButton(
+            button_frame,
+            text="เลือกทั้งหมด",
+            command=self._toggle_select_all,
+            state="disabled"
+        )
+        self.select_all_button.pack(side="left", padx=5)
 
         # ปุ่มเลือกโฟลเดอร์
         self.folder_btn = ctk.CTkButton(
@@ -599,15 +609,7 @@ class MainWindow(ctk.CTk):
         )
         self.check_btn.pack(side="left", padx=5)
 
-        # ปุ่มเลือก/ยกเลิกการเลือกทั้งหมด
-        self.select_all_var = ctk.BooleanVar(value=False)
-        self.select_all_button = ctk.CTkButton(
-            button_frame,
-            text="เลือกทั้งหมด",
-            command=self._toggle_select_all,
-            state="disabled"
-        )
-        self.select_all_button.pack(side="left", padx=5)
+       
 
         # ปุ่มอัปโหลดไฟล์
         self.upload_button = ctk.CTkButton(
@@ -622,11 +624,28 @@ class MainWindow(ctk.CTk):
             button_frame,
             text="🤖 ประมวลผลอัตโนมัติ",
             command=self._start_auto_process,
-            width=160,
-            fg_color="#FF6B35",
-            hover_color="#E55A2B"
+            width=160
         )
         self.auto_process_button.pack(side="left", padx=5)
+        
+        # ปุ่มยกเลิกการทำงาน
+        self.cancel_button = ctk.CTkButton(
+            button_frame,
+            text="Cancel",
+            command=self._cancel_operation,
+            width=100,
+            state="disabled"
+        )
+        self.cancel_button.pack(side="left", padx=5)
+        
+        # สร้าง cancellation token สำหรับการยกเลิกการทำงาน
+        self.cancellation_token = threading.Event()
+
+    def _cancel_operation(self):
+        """ยกเลิกการทำงานที่กำลังดำเนินการอยู่"""
+        self.cancellation_token.set()
+        self.log("❌ การทำงานถูกยกเลิกโดยผู้ใช้")
+        self.after(0, lambda: self.progress_bar.update(0.0, "การทำงานถูกยกเลิก", ""))
 
     def _start_auto_process(self):
         """เริ่มการประมวลผลอัตโนมัติ (รวม ZIP, ประมวลผลไฟล์, ย้ายไฟล์เก่า)"""
@@ -636,6 +655,23 @@ class MainWindow(ctk.CTk):
             messagebox.showerror(
                 "ข้อผิดพลาด", 
                 f"โฟลเดอร์ต้นทางไม่ถูกต้อง: {last_path}\n\nกรุณาเลือกโฟลเดอร์ต้นทางก่อน"
+            )
+            return
+        
+        # ตรวจสอบการเชื่อมต่อฐานข้อมูล
+        success, message = self.db_service.check_connection()
+        if not success:
+            messagebox.showerror(
+                "ข้อผิดพลาด", 
+                f"ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้:\n{message}\n\nกรุณาตรวจสอบการตั้งค่าฐานข้อมูลก่อน"
+            )
+            return
+        
+        # ตรวจสอบการตั้งค่าประเภทไฟล์
+        if not self.column_settings:
+            messagebox.showerror(
+                "ข้อผิดพลาด", 
+                "ไม่พบการตั้งค่าประเภทไฟล์\n\nกรุณาไปที่แท็บ Settings และเพิ่มประเภทไฟล์ก่อน"
             )
             return
         
@@ -656,44 +692,79 @@ class MainWindow(ctk.CTk):
         # เริ่มการทำงานใน thread แยก
         thread = threading.Thread(target=self._run_auto_process, daemon=True)
         thread.start()
+        
+        # เปิดปุ่มยกเลิก
+        self.cancel_button.configure(state="normal")
 
     def _run_auto_process(self):
         """รันการประมวลผลอัตโนมัติใน thread แยก"""
         try:
-            # ปิดปุ่มต่างๆ ระหว่างการทำงาน
+            # รีเซ็ต cancellation token
+            self.cancellation_token.clear()
+            
+            # ปิดปุ่มต่างๆ ระหว่างการทำงาน (เหมือนกับการอัปโหลด)
             self.after(0, lambda: self.auto_process_button.configure(state="disabled"))
             self.after(0, lambda: self.check_btn.configure(state="disabled"))
             self.after(0, lambda: self.upload_button.configure(state="disabled"))
             self.after(0, lambda: self.folder_btn.configure(state="disabled"))
+            self.after(0, lambda: self.select_all_button.configure(state="disabled"))
+            self.after(0, lambda: self.file_list.disable_all_checkboxes())
+            
+            # รีเซ็ต progress bar และแสดงสถานะเริ่มต้น
+            self.after(0, lambda: self.progress_bar.reset())
+            self.after(0, lambda: self.progress_bar.set_status("เริ่มการประมวลผลอัตโนมัติ", "กำลังเตรียมระบบ..."))
             
             last_path = self._load_last_path()
             self.log("🤖 เริ่มการประมวลผลอัตโนมัติ")
             self.log(f"📂 โฟลเดอร์ต้นทาง: {last_path}")
             
+            # ตรวจสอบการยกเลิกก่อนเริ่มขั้นตอนที่ 1
+            if self.cancellation_token.is_set():
+                self.log("❌ การทำงานถูกยกเลิก")
+                return
+            
             # === ขั้นตอนที่ 1: รวมไฟล์ ZIP ===
             self.log("=== ขั้นตอนที่ 1: รวมไฟล์ ZIP ===")
             self._auto_process_zip_merger(last_path)
+            
+            # ตรวจสอบการยกเลิกก่อนเริ่มขั้นตอนที่ 2
+            if self.cancellation_token.is_set():
+                self.log("❌ การทำงานถูกยกเลิก")
+                return
             
             # === ขั้นตอนที่ 2: ประมวลผลไฟล์หลัก ===
             self.log("=== ขั้นตอนที่ 2: ประมวลผลไฟล์หลัก ===")
             self._auto_process_main_files(last_path)
             
+            # ตรวจสอบการยกเลิกก่อนเริ่มขั้นตอนที่ 3
+            if self.cancellation_token.is_set():
+                self.log("❌ การทำงานถูกยกเลิก")
+                return
+            
             # === ขั้นตอนที่ 3: ย้ายไฟล์เก่า ===
             self.log("=== ขั้นตอนที่ 3: ย้ายไฟล์เก่าไปถังขยะ ===")
             self._auto_process_archive_old_files(last_path)
             
-            self.log("=== 🏁 การประมวลผลอัตโนมัติเสร็จสิ้น ===")
-            self.after(0, lambda: messagebox.showinfo("สำเร็จ", "การประมวลผลอัตโนมัติเสร็จสิ้นแล้ว"))
+            if not self.cancellation_token.is_set():
+                self.log("=== 🏁 การประมวลผลอัตโนมัติเสร็จสิ้น ===")
+                self.after(0, lambda: self.progress_bar.update(1.0, "การประมวลผลอัตโนมัติเสร็จสิ้น", "ทุกขั้นตอนเสร็จสิ้นเรียบร้อย"))
+                self.after(0, lambda: messagebox.showinfo("สำเร็จ", "การประมวลผลอัตโนมัติเสร็จสิ้นแล้ว"))
+            else:
+                self.log("❌ การทำงานถูกยกเลิก")
+                self.after(0, lambda: self.progress_bar.update(0.0, "การทำงานถูกยกเลิก", ""))
             
         except Exception as e:
             self.log(f"❌ เกิดข้อผิดพลาดในการประมวลผลอัตโนมัติ: {e}")
             self.after(0, lambda: messagebox.showerror("ข้อผิดพลาด", f"เกิดข้อผิดพลาด: {e}"))
         finally:
-            # เปิดปุ่มกลับมา
+            # เปิดปุ่มกลับมา (เหมือนกับการอัปโหลด)
             self.after(0, lambda: self.auto_process_button.configure(state="normal"))
             self.after(0, lambda: self.check_btn.configure(state="normal"))
             self.after(0, lambda: self.upload_button.configure(state="normal"))
             self.after(0, lambda: self.folder_btn.configure(state="normal"))
+            self.after(0, lambda: self.select_all_button.configure(state="normal"))
+            self.after(0, lambda: self.file_list.enable_all_checkboxes())
+            self.after(0, lambda: self.cancel_button.configure(state="disabled"))
 
     def _auto_process_zip_merger(self, folder_path):
         """ขั้นตอนที่ 1: รวมไฟล์ ZIP อัตโนมัติ"""
@@ -757,8 +828,12 @@ class MainWindow(ctk.CTk):
             for file_path in data_files:
                 try:
                     processed_files += 1
-                    progress = processed_files / total_files
-                    self.after(0, lambda p=progress: self.progress_bar.update(p))
+                    # คำนวณ progress ที่ถูกต้อง (0.0 - 1.0)
+                    progress = (processed_files - 1) / total_files  # เริ่มจาก 0
+                    
+                    # อัปเดตความคืบหน้าแบบละเอียด
+                    self.after(0, lambda p=progress, f=os.path.basename(file_path), current=processed_files, total=total_files: 
+                        self.progress_bar.update(p, f"กำลังประมวลผล: {f}", f"ไฟล์ที่ {current} จาก {total}"))
                     
                     self.log(f"📁 กำลังประมวลผล: {os.path.basename(file_path)}")
                     
@@ -794,6 +869,18 @@ class MainWindow(ctk.CTk):
                     
                     # อัปโหลดข้อมูล
                     required_cols = self.file_service.get_required_dtypes(logic_type)
+                    
+                    # ตรวจสอบว่า required_cols ไม่ว่างเปล่า
+                    if not required_cols:
+                        self.log(f"❌ ไม่พบการตั้งค่าประเภทข้อมูลสำหรับ {logic_type}")
+                        continue
+                    
+                    # ตรวจสอบว่าข้อมูลไม่ว่างเปล่า
+                    if df.empty:
+                        self.log(f"❌ ไฟล์ {os.path.basename(file_path)} ไม่มีข้อมูล")
+                        continue
+                    
+                    self.log(f"📊 กำลังอัปโหลดข้อมูล {len(df)} แถว สำหรับประเภท {logic_type}")
                     success, message = self.db_service.upload_data(df, logic_type, required_cols, log_func=self.log)
                     
                     if success:
@@ -801,19 +888,25 @@ class MainWindow(ctk.CTk):
                         successful_uploads += 1
                         
                         # ย้ายไฟล์หลังอัปโหลดสำเร็จ
-                        move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
-                        if move_success:
-                            for original_path, new_path in move_result:
-                                self.log(f"📦 ย้ายไฟล์ไปยัง: {os.path.basename(new_path)}")
-                        else:
-                            self.log(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
+                        try:
+                            move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
+                            if move_success:
+                                for original_path, new_path in move_result:
+                                    self.log(f"📦 ย้ายไฟล์ไปยัง: {os.path.basename(new_path)}")
+                            else:
+                                self.log(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
+                        except Exception as move_error:
+                            self.log(f"❌ เกิดข้อผิดพลาดในการย้ายไฟล์: {move_error}")
                     else:
                         self.log(f"❌ อัปโหลดไม่สำเร็จ: {message}")
+                        # ลองตรวจสอบ error เพิ่มเติม
+                        self.log(f"🔍 ตรวจสอบข้อมูล: แถว {len(df)}, คอลัมน์ {list(df.columns)}")
                         
                 except Exception as e:
                     self.log(f"❌ เกิดข้อผิดพลาดขณะประมวลผล {os.path.basename(file_path)}: {e}")
             
-            self.after(0, lambda: self.progress_bar.update(1.0))
+            # อัปเดต progress เป็น 100% เมื่อเสร็จสิ้น
+            self.after(0, lambda: self.progress_bar.update(1.0, "การประมวลผลเสร็จสิ้น", f"สำเร็จ {successful_uploads} ไฟล์ จาก {total_files} ไฟล์"))
             self.log(f"✅ ประมวลผลไฟล์เสร็จสิ้น: {successful_uploads}/{total_files} ไฟล์สำเร็จ")
             
         except Exception as e:
@@ -878,6 +971,10 @@ class MainWindow(ctk.CTk):
     def _check_files(self):
         """ตรวจสอบไฟล์ใน Path ที่กำหนด"""
         try:
+            # รีเซ็ต progress bar และแสดงสถานะเริ่มต้น
+            self.progress_bar.reset()
+            self.progress_bar.set_status("เริ่มการตรวจสอบไฟล์", "กำลังสแกนโฟลเดอร์...")
+            
             # โหลดการตั้งค่าใหม่
             self.file_service.load_settings()
             # ล้างรายการไฟล์เก่า
@@ -886,9 +983,15 @@ class MainWindow(ctk.CTk):
             self.select_all_button.configure(state="disabled")
             self.select_all_button.configure(text="เลือกทั้งหมด")
             self.select_all_var.set(False)
+            
+            # ปิดปุ่มประมวลผลอัตโนมัติระหว่างตรวจสอบไฟล์
+            self.auto_process_button.configure(state="disabled")
+            
             # ค้นหาไฟล์ Excel/CSV
+            self.progress_bar.update(0.2, "กำลังค้นหาไฟล์", "สแกนไฟล์ .xlsx และ .csv...")
             data_files = self.file_service.find_data_files()
             if not data_files:
+                self.progress_bar.update(1.0, "การตรวจสอบเสร็จสิ้น", "ไม่พบไฟล์ .xlsx หรือ .csv")
                 self.status_bar.update_status("ไม่พบไฟล์ .xlsx หรือ .csv", is_error=True)
                 self.log("🤷 ไม่พบไฟล์ .xlsx หรือ .csv ในโฟลเดอร์ที่กำหนด")
                 self.log("--- 🏁 ตรวจสอบไฟล์เสร็จสิ้น ---")
@@ -896,15 +999,24 @@ class MainWindow(ctk.CTk):
                 self.select_all_button.configure(state="disabled")
                 self.select_all_button.configure(text="เลือกทั้งหมด")
                 self.select_all_var.set(False)
+                # เปิดปุ่มประมวลผลอัตโนมัติกลับมา
+                self.auto_process_button.configure(state="normal")
                 return
             found_files_count = 0
-            for file in data_files:
+            total_files = len(data_files)
+            
+            for i, file in enumerate(data_files):
+                # คำนวณ progress ที่ถูกต้อง (0.2 - 0.8)
+                progress = 0.2 + (0.6 * (i / total_files))  # 20% - 80%
+                self.progress_bar.update(progress, f"กำลังตรวจสอบไฟล์: {os.path.basename(file)}", f"ไฟล์ที่ {i+1} จาก {total_files}")
+                
                 logic_type = self.file_service.detect_file_type(file)
                 if logic_type:
                     found_files_count += 1
                     self.log(f"✅ พบไฟล์ตรงเงื่อนไข: {os.path.basename(file)} [{logic_type}]")
                     self.file_list.add_file(file, logic_type)
             if found_files_count > 0:
+                self.progress_bar.update(1.0, "การตรวจสอบเสร็จสิ้น", f"พบไฟล์ที่ตรงเงื่อนไข {found_files_count} ไฟล์")
                 self.status_bar.update_status(f"พบไฟล์ที่ตรงเงื่อนไข {found_files_count} ไฟล์")
                 # เปิดการใช้งานปุ่มเลือกทั้งหมด
                 self.select_all_button.configure(state="normal")
@@ -912,15 +1024,24 @@ class MainWindow(ctk.CTk):
                 self.select_all_var.set(True)
                 self.file_list.select_all()
                 self.select_all_button.configure(text="ยกเลิกการเลือกทั้งหมด")
+                # เปิดปุ่มประมวลผลอัตโนมัติกลับมา
+                self.auto_process_button.configure(state="normal")
             else:
+                self.progress_bar.update(1.0, "การตรวจสอบเสร็จสิ้น", "ไม่พบไฟล์ที่ตรงเงื่อนไข")
                 self.status_bar.update_status("ไม่พบไฟล์ที่ตรงเงื่อนไข", is_error=True)
                 # ปิดปุ่มเลือกทั้งหมดถ้าไม่พบไฟล์ที่ตรงเงื่อนไข
                 self.select_all_button.configure(state="disabled")
                 self.select_all_button.configure(text="เลือกทั้งหมด")
                 self.select_all_var.set(False)
+                # เปิดปุ่มประมวลผลอัตโนมัติกลับมา
+                self.auto_process_button.configure(state="normal")
             self.log("--- 🏁 ตรวจสอบไฟล์เสร็จสิ้น ---")
+            # เปิดปุ่มประมวลผลอัตโนมัติกลับมา
+            self.auto_process_button.configure(state="normal")
         except Exception as e:
             self.log(f"❌ เกิดข้อผิดพลาดขณะตรวจสอบไฟล์: {e}")
+            # เปิดปุ่มประมวลผลอัตโนมัติกลับมาแม้เกิดข้อผิดพลาด
+            self.auto_process_button.configure(state="normal")
         
     def _toggle_select_all(self):
         """สลับระหว่างเลือกทั้งหมดและยกเลิกการเลือกทั้งหมด"""
@@ -938,6 +1059,15 @@ class MainWindow(ctk.CTk):
         if not selected:
             messagebox.showwarning("ไม่มีไฟล์", "กรุณาเลือกไฟล์ที่ต้องการอัปโหลด")
             return
+        
+        # ตรวจสอบการเชื่อมต่อฐานข้อมูล
+        success, message = self.db_service.check_connection()
+        if not success:
+            messagebox.showerror(
+                "ข้อผิดพลาด", 
+                f"ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้:\n{message}\n\nกรุณาตรวจสอบการตั้งค่าฐานข้อมูลก่อน"
+            )
+            return
             
         answer = messagebox.askyesno(
             "ยืนยันการอัปโหลด",
@@ -951,6 +1081,7 @@ class MainWindow(ctk.CTk):
             self.upload_button.configure(state="disabled")
             self.folder_btn.configure(state="disabled")
             self.check_btn.configure(state="disabled")
+            self.auto_process_button.configure(state="disabled")
             self.file_list.disable_all_checkboxes()
             thread = threading.Thread(target=self._upload_selected_files, args=(selected,))
             thread.start()
@@ -966,10 +1097,15 @@ class MainWindow(ctk.CTk):
         
         total_types = len(files_by_type)
         completed_types = 0
+        total_files = sum(len(files) for files in files_by_type.values())
+        processed_files = 0
         
         # เก็บรายการไฟล์ที่อัปโหลดสำเร็จและ logic_type
         successfully_uploaded_files = []
         successfully_uploaded_types = []
+        
+        # แสดงสถานะเริ่มต้น
+        self.progress_bar.set_status("เริ่มการอัปโหลด", f"พบไฟล์ {total_files} ไฟล์ จาก {total_types} ประเภท")
         
         for logic_type, files in files_by_type.items():
             try:
@@ -977,12 +1113,19 @@ class MainWindow(ctk.CTk):
                 
                 # อัปเดต Progress Bar ตามความคืบหน้า
                 progress = completed_types / total_types
-                self.progress_bar.update(progress)
+                self.progress_bar.update(progress, f"กำลังประมวลผลประเภท {logic_type}", f"ประเภทที่ {completed_types + 1} จาก {total_types}")
                 
                 # รวมข้อมูลจากทุกไฟล์ในประเภทเดียวกัน
                 all_dfs = []
                 for file_path, chk in files:
                     try:
+                        processed_files += 1
+                        # คำนวณ progress ที่ถูกต้อง (0.0 - 1.0)
+                        file_progress = (processed_files - 1) / total_files  # เริ่มจาก 0
+                        
+                        # อัปเดตความคืบหน้าระดับไฟล์
+                        self.progress_bar.update(file_progress, f"กำลังอ่านไฟล์: {os.path.basename(file_path)}", f"ไฟล์ที่ {processed_files} จาก {total_files}")
+                        
                         # อ่านไฟล์ Excel
                         success, result = self.file_service.read_excel_file(file_path, logic_type)
                         if not success:
@@ -1010,10 +1153,25 @@ class MainWindow(ctk.CTk):
                 # รวม DataFrame ทั้งหมด
                 combined_df = pd.concat(all_dfs, ignore_index=True)
                 
+                # แสดงสถานะการรวมข้อมูล
+                self.progress_bar.update(file_progress, f"กำลังรวมข้อมูลประเภท {logic_type}", f"รวม {len(all_dfs)} ไฟล์ เป็น {len(combined_df)} แถว")
+                
                 # ใช้ dtype ที่ถูกต้อง
                 required_cols = self.file_service.get_required_dtypes(logic_type)
                 
+                # ตรวจสอบว่า required_cols ไม่ว่างเปล่า
+                if not required_cols:
+                    self.log(f"❌ ไม่พบการตั้งค่าประเภทข้อมูลสำหรับ {logic_type}")
+                    continue
+                
+                # ตรวจสอบว่าข้อมูลไม่ว่างเปล่า
+                if combined_df.empty:
+                    self.log(f"❌ ไม่มีข้อมูลที่ถูกต้องจากไฟล์ประเภท {logic_type}")
+                    continue
+                
                 # อัปโหลดข้อมูล
+                self.progress_bar.update(file_progress, f"กำลังอัปโหลดข้อมูลประเภท {logic_type}", f"ส่งข้อมูล {len(combined_df)} แถว ไปยัง SQL Server")
+                self.log(f"📊 กำลังอัปโหลดข้อมูล {len(combined_df)} แถว สำหรับประเภท {logic_type}")
                 success, message = self.db_service.upload_data(combined_df, logic_type, required_cols, log_func=self.log)
                 if success:
                     self.log(f"✅ {message}")
@@ -1021,30 +1179,37 @@ class MainWindow(ctk.CTk):
                         self.file_list.disable_checkbox(chk)
                         self.file_list.set_file_uploaded(file_path)
                         # ย้ายไฟล์ทันทีหลังอัปโหลดสำเร็จ
-                        move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
-                        if move_success:
-                            for original_path, new_path in move_result:
-                                self.log(f"📦 ย้ายไฟล์ไปยัง: {os.path.basename(new_path)}")
-                        else:
-                            self.log(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
+                        try:
+                            move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
+                            if move_success:
+                                for original_path, new_path in move_result:
+                                    self.log(f"📦 ย้ายไฟล์ไปยัง: {os.path.basename(new_path)}")
+                            else:
+                                self.log(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
+                        except Exception as move_error:
+                            self.log(f"❌ เกิดข้อผิดพลาดในการย้ายไฟล์: {move_error}")
                         successfully_uploaded_files.append(file_path)
                         successfully_uploaded_types.append(logic_type)
                 else:
                     self.log(f"❌ {message}")
+                    # ลองตรวจสอบ error เพิ่มเติม
+                    self.log(f"🔍 ตรวจสอบข้อมูล: แถว {len(combined_df)}, คอลัมน์ {list(combined_df.columns)}")
                 
                 completed_types += 1
                 
             except Exception as e:
                 self.log(f"❌ เกิดข้อผิดพลาดขณะอัปโหลดไฟล์ประเภท {logic_type}: {e}")
-        # เมื่อเสร็จสิ้น ให้แสดง 100%
-        self.progress_bar.update(1.0)
+        
+        # อัปเดต progress เป็น 100% เมื่อเสร็จสิ้น
+        self.progress_bar.update(1.0, "การอัปโหลดเสร็จสิ้น", f"สำเร็จ {len(successfully_uploaded_files)} ไฟล์ จาก {total_files} ไฟล์")
         self.log("--- 🏁 การอัปโหลดเสร็จสิ้น ---")
+        
+        # เปิดปุ่มทั้งหมดกลับมา
         self.select_all_button.configure(state="normal")
         self.upload_button.configure(state="normal")
         self.folder_btn.configure(state="normal")
-    
-
         self.check_btn.configure(state="normal")
+        self.auto_process_button.configure(state="normal")
         self.file_list.enable_all_checkboxes()
         
     def check_sql_connection(self):

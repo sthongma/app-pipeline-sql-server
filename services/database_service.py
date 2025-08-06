@@ -112,12 +112,35 @@ class DatabaseService:
             messagebox.showwarning("การสร้าง Schema", error_msg)
             return False, error_msg
 
+    def _fix_text_columns_to_nvarchar_max(self, table_name, required_cols, schema_name='bronze', log_func=None):
+        """แก้ไขคอลัมน์ที่เป็น Text() ให้เป็น NVARCHAR(MAX) ใน SQL Server"""
+        from sqlalchemy.types import Text
+        
+        try:
+            with self.engine.begin() as conn:
+                for col_name, dtype in required_cols.items():
+                    if isinstance(dtype, Text):
+                        alter_sql = f"ALTER TABLE {schema_name}.{table_name} ALTER COLUMN [{col_name}] NVARCHAR(MAX)"
+                        if log_func:
+                            log_func(f"🔧 แก้ไขคอลัมน์ '{col_name}' เป็น NVARCHAR(MAX)")
+                        conn.execute(text(alter_sql))
+        except Exception as e:
+            if log_func:
+                log_func(f"⚠️ ไม่สามารถแก้ไขคอลัมน์ Text() ได้: {e}")
+
     def upload_data(self, df, logic_type, required_cols, schema_name='bronze', log_func=None):
         """อัปโหลดข้อมูลไปยังฐานข้อมูล: สร้างตารางใหม่ตาม config, insert เฉพาะคอลัมน์ที่ตั้งค่าไว้, ถ้า schema DB ไม่ตรงให้ drop และสร้างตารางใหม่"""
         try:
             import json
             from datetime import datetime
             from sqlalchemy.types import DateTime
+            
+            # ตรวจสอบข้อมูลเบื้องต้น
+            if df is None or df.empty:
+                return False, "ข้อมูลว่างเปล่า"
+            
+            if not required_cols:
+                return False, "ไม่พบการตั้งค่าประเภทข้อมูล"
             
             # เพิ่มคอลัมน์ timestamp
             current_time = datetime.now()
@@ -137,18 +160,42 @@ class DatabaseService:
                 table_name = logic_type
 
             # ตรวจสอบและสร้าง schema หากยังไม่มี
-            self.ensure_schemas_exist([schema_name])
+            schema_result = self.ensure_schemas_exist([schema_name])
+            if not schema_result[0]:
+                return False, f"ไม่สามารถสร้าง schema ได้: {schema_result[1]}"
 
             # ตรวจสอบ schema DB ว่าตรงกับ required_cols หรือไม่
             from sqlalchemy import inspect
+            from sqlalchemy.types import Text
             insp = inspect(self.engine)
+            needs_recreate = False
+            
             if insp.has_table(table_name, schema=schema_name):
                 db_cols = [col['name'] for col in insp.get_columns(table_name, schema=schema_name)]
+                db_col_types = {col['name']: str(col['type']).upper() for col in insp.get_columns(table_name, schema=schema_name)}
                 config_cols = list(required_cols.keys())
+                
+                # ตรวจสอบคอลัมน์
                 if set(db_cols) != set(config_cols):
-                    msg = f"❌ Schema ของตาราง {schema_name}.{table_name} ใน DB ไม่ตรงกับ config: {config_cols} กำลังลบและสร้างตารางใหม่"
+                    msg = f"❌ คอลัมน์ของตาราง {schema_name}.{table_name} ไม่ตรงกับ config"
+                    needs_recreate = True
+                else:
+                    # ตรวจสอบ data types โดยเฉพาะ Text() (NVARCHAR(MAX))
+                    for col_name, expected_dtype in required_cols.items():
+                        db_type = db_col_types.get(col_name, '')
+                        
+                        if isinstance(expected_dtype, Text):
+                            # สำหรับ Text() ต้องเป็น NVARCHAR(MAX) หรือ TEXT
+                            if 'NVARCHAR(MAX)' not in db_type and 'TEXT' not in db_type:
+                                msg = f"❌ คอลัมน์ '{col_name}' ควรเป็น NVARCHAR(MAX) แต่เป็น {db_type}"
+                                if log_func:
+                                    log_func(msg)
+                                needs_recreate = True
+                                break
+                
+                if needs_recreate:
                     if log_func:
-                        log_func(msg)
+                        log_func(f"{msg} กำลังลบและสร้างตารางใหม่")
                     # Drop และสร้างตารางใหม่
                     df.head(0)[list(required_cols.keys())].to_sql(
                         name=table_name,
@@ -158,6 +205,8 @@ class DatabaseService:
                         index=False,
                         dtype=required_cols
                     )
+                    # แก้ไขคอลัมน์ที่เป็น Text() ให้เป็น NVARCHAR(MAX)
+                    self._fix_text_columns_to_nvarchar_max(table_name, required_cols, schema_name, log_func)
                 else:
                     # ล้างข้อมูลเดิม
                     with self.engine.begin() as conn:
@@ -172,6 +221,9 @@ class DatabaseService:
                     index=False,
                     dtype=required_cols
                 )
+                # แก้ไขคอลัมน์ที่เป็น Text() ให้เป็น NVARCHAR(MAX)
+                self._fix_text_columns_to_nvarchar_max(table_name, required_cols, schema_name, log_func)
+            
             # แปลงคอลัมน์วันที่ให้เป็นรูปแบบที่ SQL Server รองรับ
             for col, dtype in required_cols.items():
                 dtype_str = str(dtype).lower()
@@ -181,15 +233,50 @@ class DatabaseService:
                         df[col] = df[col].dt.strftime("%Y-%m-%d")
                     elif "datetime" in dtype_str:
                         df[col] = df[col].dt.strftime("%Y-%m-%d %H:%M:%S")
-            # เพิ่มข้อมูลทั้งหมด เฉพาะคอลัมน์ที่ตั้งค่าไว้ (รวม timestamp)
-            df[list(required_cols.keys())].to_sql(
-                name=table_name,
-                con=self.engine,
-                schema=schema_name,
-                if_exists='append',
-                index=False,
-                dtype=required_cols
-            )
-            return True, f" {schema_name}.{table_name} อัปโหลดข้อมูล {df.shape[0]} แถวสำเร็จ"
+            
+            # ตรวจสอบว่าข้อมูลไม่ว่างเปล่าหลังการแปลง
+            if df.empty:
+                return False, "ข้อมูลว่างเปล่าหลังการแปลง"
+            
+            # อัปโหลดข้อมูลแบบ chunked สำหรับไฟล์ใหญ่
+            if len(df) > 10000:  # ถ้าไฟล์ใหญ่กว่า 10,000 แถว
+                if log_func:
+                    log_func(f"📊 ไฟล์ขนาดใหญ่ ({len(df):,} แถว) - อัปโหลดแบบ chunked")
+                
+                chunk_size = 5000
+                total_chunks = (len(df) + chunk_size - 1) // chunk_size
+                uploaded_rows = 0
+                
+                for i in range(0, len(df), chunk_size):
+                    chunk = df.iloc[i:i+chunk_size]
+                    chunk[list(required_cols.keys())].to_sql(
+                        name=table_name,
+                        con=self.engine,
+                        schema=schema_name,
+                        if_exists='append',
+                        index=False,
+                        dtype=required_cols
+                    )
+                    uploaded_rows += len(chunk)
+                    
+                    chunk_num = (i // chunk_size) + 1
+                    if log_func:
+                        log_func(f"📤 อัปโหลด chunk {chunk_num}/{total_chunks}: {len(chunk):,} แถว")
+                
+                return True, f" {schema_name}.{table_name} อัปโหลดข้อมูล {uploaded_rows:,} แถวสำเร็จ (แบบ chunked)"
+            else:
+                # อัปโหลดแบบปกติสำหรับไฟล์เล็ก
+                df[list(required_cols.keys())].to_sql(
+                    name=table_name,
+                    con=self.engine,
+                    schema=schema_name,
+                    if_exists='append',
+                    index=False,
+                    dtype=required_cols
+                )
+                return True, f" {schema_name}.{table_name} อัปโหลดข้อมูล {df.shape[0]} แถวสำเร็จ"
         except Exception as e:
-            return False, f"เกิดข้อผิดพลาด: {e}"
+            error_msg = f"เกิดข้อผิดพลาด: {e}"
+            if log_func:
+                log_func(f"❌ {error_msg}")
+            return False, error_msg
