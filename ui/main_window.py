@@ -9,8 +9,10 @@ from ui.components.progress_bar import ProgressBar
 from ui.components.status_bar import StatusBar
 from services.file_service import FileService
 from services.database_service import DatabaseService
+from services.file_management_service import FileManagementService
 from config.database import DatabaseConfig
 import pandas as pd
+from tkinter import filedialog, simpledialog
 
 class MainWindow(ctk.CTk):
     def __init__(self):
@@ -50,6 +52,7 @@ class MainWindow(ctk.CTk):
         # สร้างบริการ
         self.file_service = FileService()
         self.db_service = DatabaseService()
+        self.file_mgmt_service = FileManagementService()
         
         # Initialize UI variables
         self.file_type_tabs = {}
@@ -613,6 +616,242 @@ class MainWindow(ctk.CTk):
             command=self._confirm_upload
         )
         self.upload_button.pack(side="left", padx=5)
+
+        # ปุ่มประมวลผลอัตโนมัติ
+        self.auto_process_button = ctk.CTkButton(
+            button_frame,
+            text="🤖 ประมวลผลอัตโนมัติ",
+            command=self._start_auto_process,
+            width=160,
+            fg_color="#FF6B35",
+            hover_color="#E55A2B"
+        )
+        self.auto_process_button.pack(side="left", padx=5)
+
+    def _start_auto_process(self):
+        """เริ่มการประมวลผลอัตโนมัติ (รวม ZIP, ประมวลผลไฟล์, ย้ายไฟล์เก่า)"""
+        # ตรวจสอบว่ามีโฟลเดอร์ต้นทางหรือไม่
+        last_path = self._load_last_path()
+        if not last_path or not os.path.isdir(last_path):
+            messagebox.showerror(
+                "ข้อผิดพลาด", 
+                f"โฟลเดอร์ต้นทางไม่ถูกต้อง: {last_path}\n\nกรุณาเลือกโฟลเดอร์ต้นทางก่อน"
+            )
+            return
+        
+        # ยืนยันการทำงาน
+        result = messagebox.askyesno(
+            "ยืนยันการประมวลผลอัตโนมัติ",
+            f"จะดำเนินการประมวลผลอัตโนมัติในโฟลเดอร์:\n{last_path}\n\n"
+            "ขั้นตอนการทำงาน:\n"
+            "1. รวมไฟล์ Excel จากไฟล์ ZIP\n"
+            "2. ประมวลผลและอัปโหลดไฟล์ทั้งหมด\n"
+            "3. ย้ายไฟล์เก่ามากว่า 90 วันไปถังขยะ\n\n"
+            "ต้องการดำเนินการหรือไม่?"
+        )
+        
+        if not result:
+            return
+        
+        # เริ่มการทำงานใน thread แยก
+        thread = threading.Thread(target=self._run_auto_process, daemon=True)
+        thread.start()
+
+    def _run_auto_process(self):
+        """รันการประมวลผลอัตโนมัติใน thread แยก"""
+        try:
+            # ปิดปุ่มต่างๆ ระหว่างการทำงาน
+            self.after(0, lambda: self.auto_process_button.configure(state="disabled"))
+            self.after(0, lambda: self.check_btn.configure(state="disabled"))
+            self.after(0, lambda: self.upload_button.configure(state="disabled"))
+            self.after(0, lambda: self.folder_btn.configure(state="disabled"))
+            
+            last_path = self._load_last_path()
+            self.log("🤖 เริ่มการประมวลผลอัตโนมัติ")
+            self.log(f"📂 โฟลเดอร์ต้นทาง: {last_path}")
+            
+            # === ขั้นตอนที่ 1: รวมไฟล์ ZIP ===
+            self.log("=== ขั้นตอนที่ 1: รวมไฟล์ ZIP ===")
+            self._auto_process_zip_merger(last_path)
+            
+            # === ขั้นตอนที่ 2: ประมวลผลไฟล์หลัก ===
+            self.log("=== ขั้นตอนที่ 2: ประมวลผลไฟล์หลัก ===")
+            self._auto_process_main_files(last_path)
+            
+            # === ขั้นตอนที่ 3: ย้ายไฟล์เก่า ===
+            self.log("=== ขั้นตอนที่ 3: ย้ายไฟล์เก่าไปถังขยะ ===")
+            self._auto_process_archive_old_files(last_path)
+            
+            self.log("=== 🏁 การประมวลผลอัตโนมัติเสร็จสิ้น ===")
+            self.after(0, lambda: messagebox.showinfo("สำเร็จ", "การประมวลผลอัตโนมัติเสร็จสิ้นแล้ว"))
+            
+        except Exception as e:
+            self.log(f"❌ เกิดข้อผิดพลาดในการประมวลผลอัตโนมัติ: {e}")
+            self.after(0, lambda: messagebox.showerror("ข้อผิดพลาด", f"เกิดข้อผิดพลาด: {e}"))
+        finally:
+            # เปิดปุ่มกลับมา
+            self.after(0, lambda: self.auto_process_button.configure(state="normal"))
+            self.after(0, lambda: self.check_btn.configure(state="normal"))
+            self.after(0, lambda: self.upload_button.configure(state="normal"))
+            self.after(0, lambda: self.folder_btn.configure(state="normal"))
+
+    def _auto_process_zip_merger(self, folder_path):
+        """ขั้นตอนที่ 1: รวมไฟล์ ZIP อัตโนมัติ"""
+        try:
+            # ค้นหาไฟล์ ZIP ในโฟลเดอร์ (รวม subfolder)
+            zip_files = []
+            for root, dirs, files in os.walk(folder_path):
+                for file in files:
+                    if file.lower().endswith('.zip'):
+                        zip_files.append(os.path.join(root, file))
+            
+            if not zip_files:
+                self.log("ไม่พบไฟล์ ZIP ในโฟลเดอร์ต้นทาง ข้ามขั้นตอนนี้")
+                return
+            
+            self.log(f"พบไฟล์ ZIP {len(zip_files)} ไฟล์ กำลังรวมไฟล์ Excel...")
+            
+            def progress_callback(value, status):
+                self.log(f"ความคืบหน้า: {value*100:.1f}% - {status}")
+            
+            result = self.file_mgmt_service.process_zip_excel_merger(
+                folder_path=folder_path,
+                progress_callback=progress_callback
+            )
+            
+            if result["success"]:
+                self.log("✅ รวมไฟล์ Excel จาก ZIP เสร็จสิ้น")
+                if result["saved_files"]:
+                    for filename, rows in result["saved_files"]:
+                        self.log(f"  บันทึก: {filename} ({rows} แถว)")
+            else:
+                self.log("⚠️ การรวมไฟล์ ZIP ไม่สำเร็จ แต่จะดำเนินการต่อ")
+                
+            if result["errors"]:
+                for error in result["errors"]:
+                    self.log(f"⚠️ ข้อผิดพลาดใน ZIP merger: {error}")
+                    
+        except Exception as e:
+            self.log(f"❌ เกิดข้อผิดพลาดในการรวมไฟล์ ZIP: {e}")
+            self.log("จะดำเนินการต่อด้วยการประมวลผลไฟล์หลัก")
+
+    def _auto_process_main_files(self, folder_path):
+        """ขั้นตอนที่ 2: ประมวลผลไฟล์หลักอัตโนมัติ"""
+        try:
+            # ตั้ง search path ใหม่
+            self.file_service.set_search_path(folder_path)
+            
+            # ค้นหาไฟล์ข้อมูล
+            data_files = self.file_service.find_data_files()
+            
+            if not data_files:
+                self.log("ไม่พบไฟล์ข้อมูลในโฟลเดอร์ต้นทาง")
+                return
+            
+            self.log(f"พบไฟล์ข้อมูล {len(data_files)} ไฟล์ กำลังประมวลผล...")
+            
+            total_files = len(data_files)
+            processed_files = 0
+            successful_uploads = 0
+            
+            for file_path in data_files:
+                try:
+                    processed_files += 1
+                    progress = processed_files / total_files
+                    self.after(0, lambda p=progress: self.progress_bar.update(p))
+                    
+                    self.log(f"📁 กำลังประมวลผล: {os.path.basename(file_path)}")
+                    
+                    # ตรวจหา logic_type
+                    logic_type = self.file_service.detect_file_type(file_path)
+                    if not logic_type:
+                        # ลองเดาจากชื่อไฟล์
+                        filename = os.path.basename(file_path).lower()
+                        for key in self.file_service.column_settings.keys():
+                            if key.lower() in filename:
+                                logic_type = key
+                                break
+                    
+                    if not logic_type:
+                        self.log(f"❌ ไม่สามารถระบุประเภทไฟล์: {os.path.basename(file_path)}")
+                        continue
+                    
+                    self.log(f"📋 ระบุประเภทไฟล์: {logic_type}")
+                    
+                    # อ่านไฟล์
+                    success, result = self.file_service.read_excel_file(file_path, logic_type)
+                    if not success:
+                        self.log(f"❌ ไม่สามารถอ่านไฟล์: {result}")
+                        continue
+                    
+                    df = result
+                    
+                    # ตรวจสอบคอลัมน์
+                    success, result = self.file_service.validate_columns(df, logic_type)
+                    if not success:
+                        self.log(f"❌ คอลัมน์ไม่ถูกต้อง: {result}")
+                        continue
+                    
+                    # อัปโหลดข้อมูล
+                    required_cols = self.file_service.get_required_dtypes(logic_type)
+                    success, message = self.db_service.upload_data(df, logic_type, required_cols, log_func=self.log)
+                    
+                    if success:
+                        self.log(f"✅ อัปโหลดสำเร็จ: {message}")
+                        successful_uploads += 1
+                        
+                        # ย้ายไฟล์หลังอัปโหลดสำเร็จ
+                        move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
+                        if move_success:
+                            for original_path, new_path in move_result:
+                                self.log(f"📦 ย้ายไฟล์ไปยัง: {os.path.basename(new_path)}")
+                        else:
+                            self.log(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
+                    else:
+                        self.log(f"❌ อัปโหลดไม่สำเร็จ: {message}")
+                        
+                except Exception as e:
+                    self.log(f"❌ เกิดข้อผิดพลาดขณะประมวลผล {os.path.basename(file_path)}: {e}")
+            
+            self.after(0, lambda: self.progress_bar.update(1.0))
+            self.log(f"✅ ประมวลผลไฟล์เสร็จสิ้น: {successful_uploads}/{total_files} ไฟล์สำเร็จ")
+            
+        except Exception as e:
+            self.log(f"❌ เกิดข้อผิดพลาดในการประมวลผลไฟล์: {e}")
+
+    def _auto_process_archive_old_files(self, folder_path):
+        """ขั้นตอนที่ 3: ย้ายไฟล์เก่าไปถังขยะอัตโนมัติ"""
+        try:
+            # กำหนดโฟลเดอร์ปลายทางในไดร์ D
+            archive_path = "D:/Archived_Files"
+            
+            self.log(f"กำลังย้ายไฟล์เก่ามากว่า 90 วันจาก {folder_path} ไปยัง {archive_path}")
+            
+            result = self.file_mgmt_service.archive_old_files(
+                source_path=folder_path,
+                archive_path=archive_path,
+                days=90,  # ย้ายไฟล์เก่ามากว่า 90 วัน
+                delete_archive_days=90  # ย้ายไฟล์ใน archive ที่เก่ามากว่า 90 วันไปถังขยะ
+            )
+            
+            # แสดงผลลัพธ์
+            if result["moved_files"]:
+                self.log(f"✅ ย้ายไฟล์ {len(result['moved_files'])} ไฟล์ไปยัง archive")
+                
+            if result["moved_dirs"]:
+                self.log(f"✅ ย้ายโฟลเดอร์ว่าง {len(result['moved_dirs'])} โฟลเดอร์ไปยัง archive")
+                
+            if result["deleted_files"]:
+                self.log(f"🗑️ ย้ายไฟล์เก่า {len(result['deleted_files'])} ไฟล์ไปถังขยะ")
+                
+            if result["errors"]:
+                for error in result["errors"]:
+                    self.log(f"⚠️ ข้อผิดพลาดในการจัดการไฟล์: {error}")
+            
+            self.log("✅ การย้ายไฟล์เก่าเสร็จสิ้น")
+            
+        except Exception as e:
+            self.log(f"❌ เกิดข้อผิดพลาดในการย้ายไฟล์เก่า: {e}")
         
     def log(self, message):
         """เพิ่มข้อความลงในกล่องข้อความพร้อมเวลา"""
@@ -803,6 +1042,8 @@ class MainWindow(ctk.CTk):
         self.select_all_button.configure(state="normal")
         self.upload_button.configure(state="normal")
         self.folder_btn.configure(state="normal")
+    
+
         self.check_btn.configure(state="normal")
         self.file_list.enable_all_checkboxes()
         

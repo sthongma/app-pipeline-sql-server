@@ -1,42 +1,74 @@
-import os
+"""
+File Service สำหรับ PIPELINE_SQLSERVER
+
+จัดการการอ่าน ประมวลผล และตรวจสอบไฟล์ Excel/CSV
+"""
+
 import glob
-import pandas as pd
 import json
+import os
 import re
-import warnings
-from sqlalchemy.types import NVARCHAR, DateTime, SmallInteger, DECIMAL, DATE, Integer, Float, Boolean
-from datetime import datetime
-from dateutil import parser
-from concurrent.futures import ThreadPoolExecutor
 import threading
+import warnings
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import pandas as pd
+from dateutil import parser
+from sqlalchemy.types import (
+    DECIMAL, DATE, Boolean, DateTime, Float, Integer,
+    NVARCHAR, SmallInteger
+)
+
+from constants import FileConstants, PathConstants, RegexPatterns
 
 
 # ปิดการแจ้งเตือนของ openpyxl
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
 class FileService:
-    def __init__(self, search_path=None):
+    """
+    บริการจัดการไฟล์ Excel/CSV สำหรับ PIPELINE_SQLSERVER
+    
+    ให้บริการการค้นหา อ่าน ตรวจสอบ และย้ายไฟล์
+    พร้อมทั้ง cache สำหรับ performance optimization
+    """
+    
+    def __init__(self, search_path: Optional[str] = None) -> None:
+        """
+        เริ่มต้น FileService
+        
+        Args:
+            search_path (Optional[str]): ที่อยู่โฟลเดอร์สำหรับค้นหาไฟล์
+                            ถ้าไม่ระบุ จะใช้ Downloads folder
+        """
         # หากไม่ได้ระบุ path ให้ใช้ Downloads เป็นค่า default
         if search_path:
             self.search_path = search_path
         else:
-            self.search_path = os.path.join(os.path.expanduser("~"), "Downloads")
+            self.search_path = PathConstants.DEFAULT_SEARCH_PATH
         
         # Cache สำหรับการตั้งค่า
-        self._settings_cache = {}
+        self._settings_cache: Dict[str, Any] = {}
         self._cache_lock = threading.Lock()
         self._settings_loaded = False
         
         self.load_settings()
     
-    def load_settings(self):
-        """โหลดการตั้งค่าคอลัมน์และประเภทข้อมูล (ใช้ cache)"""
+    def load_settings(self) -> None:
+        """
+        โหลดการตั้งค่าคอลัมน์และประเภทข้อมูล
+        
+        ใช้ cache เพื่อป้องกันการโหลดซ้ำหากได้โหลดแล้ว
+        ใช้ thread-safe locking เพื่อ concurrent access
+        """
         if self._settings_loaded:
             return
             
         try:
             # โหลดการตั้งค่าคอลัมน์
-            settings_file = "config/column_settings.json"
+            settings_file = PathConstants.COLUMN_SETTINGS_FILE
             if os.path.exists(settings_file):
                 with open(settings_file, 'r', encoding='utf-8') as f:
                     self.column_settings = json.load(f)
@@ -44,7 +76,7 @@ class FileService:
                 self.column_settings = {}
             
             # โหลดการตั้งค่าประเภทข้อมูล
-            dtype_file = "config/dtype_settings.json"
+            dtype_file = PathConstants.DTYPE_SETTINGS_FILE
             if os.path.exists(dtype_file):
                 with open(dtype_file, 'r', encoding='utf-8') as f:
                     self.dtype_settings = json.load(f)

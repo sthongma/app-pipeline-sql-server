@@ -1,33 +1,67 @@
-from sqlalchemy import text, create_engine
-from config.database import DatabaseConfig
-import pandas as pd
-from tkinter import messagebox
+"""
+Database Service สำหรับ PIPELINE_SQLSERVER
+
+จัดการการเชื่อมต่อและอัปโหลดข้อมูลไปยัง SQL Server
+"""
+
 import logging
 import os
+from tkinter import messagebox
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
+from sqlalchemy import create_engine, text
+
+from config.database import DatabaseConfig
+from constants import DatabaseConstants, ErrorMessages, SuccessMessages
 
 class DatabaseService:
-    def __init__(self):
+    """
+    บริการจัดการฐานข้อมูล SQL Server
+    
+    ให้บริการการเชื่อมต่อ อัปโหลดข้อมูล และจัดการ schema
+    """
+    
+    def __init__(self) -> None:
+        """
+        เริ่มต้น DatabaseService
+        
+        สร้าง database config, engine และ logger
+        """
         self.db_config = DatabaseConfig()
         self.engine = self.db_config.get_engine()
         self.logger = logging.getLogger(__name__)
 
-    def check_connection(self):
-        """ตรวจสอบการเชื่อมต่อกับ SQL Server"""
+    def check_connection(self) -> Tuple[bool, str]:
+        """
+        ตรวจสอบการเชื่อมต่อกับ SQL Server
+        
+        Returns:
+            Tuple[bool, str]: (สถานะการเชื่อมต่อ, ข้อความผลลัพธ์)
+        """
         try:
             with self.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            return True, "เชื่อมต่อกับ SQL Server สำเร็จ"
+            return True, SuccessMessages.DB_CONNECTION_SUCCESS
         except Exception as e:
-            error_msg = f"ไม่สามารถเชื่อมต่อกับ SQL Server ได้: {e}"
+            error_msg = f"{ErrorMessages.DB_CONNECTION_FAILED}: {e}"
             self.logger.error(error_msg)
             messagebox.showwarning("การเชื่อมต่อฐานข้อมูล", error_msg)
             return False, error_msg
 
-    def test_connection(self, config):
-        """ทดสอบการเชื่อมต่อกับ SQL Server ด้วย config ที่รับมา"""
+    def test_connection(self, config: Dict[str, Any]) -> bool:
+        """
+        ทดสอบการเชื่อมต่อกับ SQL Server ด้วย config ที่รับมา
+        
+        Args:
+            config (Dict[str, Any]): การตั้งค่าการเชื่อมต่อ
+            
+        Returns:
+            bool: True หากเชื่อมต่อสำเร็จ, False หากล้มเหลว
+        """
         try:
-            driver = "ODBC+Driver+17+for+SQL+Server"
-            if config["auth_type"] == "Windows":
+            driver = DatabaseConstants.DEFAULT_DRIVER
+            if config["auth_type"] == DatabaseConstants.AUTH_WINDOWS:
                 conn_str = (
                     f"mssql+pyodbc://@{config['server']}/{config['database']}?"
                     f"driver={driver}&Trusted_Connection=yes"
@@ -42,7 +76,7 @@ class DatabaseService:
                 conn.execute(text("SELECT 1"))
             return True
         except Exception as e:
-            print(f"Connection error: {e}")
+            self.logger.error(f"Connection error: {e}")
             return False
 
     def update_config(self, server=None, database=None, auth_type=None, username=None, password=None):

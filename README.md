@@ -1,101 +1,287 @@
-# PipelineBronze_App - ระบบ ETL Pipeline สำหรับ Bronze Layer
+# PIPELINE_SQLSERVER
 
-## ภาพรวมโครงการ
+ระบบ ETL (Extract, Transform, Load) ที่ออกแบบเพื่อให้ AI ทำงานได้ง่าย สำหรับประมวลผลและอัปโหลดไฟล์ Excel/CSV ไปยัง SQL Server ด้วย GUI และ CLI
 
-PipelineBronze_App เป็นแอปพลิเคชันสำหรับอัปโหลดไฟล์ Excel ไปยัง Bronze Layer ในฐานข้อมูล โดยใช้สถาปัตยกรรม Medallion Architecture (Bronze → Silver → Gold Layer) เพื่อแปลงข้อมูลดิบให้เป็นข้อมูลที่พร้อมใช้งานสำหรับการวิเคราะห์
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-## โครงสร้างโครงการ
+## จุดเด่นสำหรับ AI Development
+
+🤖 **AI-Friendly Architecture**: โครงสร้างที่ชัดเจน มี type hints ครบถ้วน และ documentation ที่ดี  
+📁 **Modular Design**: แยกส่วนต่างๆ ออกจากกันอย่างชัดเจน (config, services, ui, utils)  
+🔧 **Centralized Configuration**: จัดการการตั้งค่าทั้งหมดจากที่เดียว  
+📊 **Type Safety**: ใช้ Type hints และ dataclass เพื่อความปลอดภัยของข้อมูล  
+🛠️ **Extensible**: ง่ายต่อการขยายและปรับปรุงโดย AI  
+
+## คุณสมบัติหลัก
+
+✅ รองรับไฟล์ Excel (.xlsx) และ CSV  
+✅ การตั้งค่าคอลัมน์และประเภทข้อมูลแบบยืดหยุ่น  
+✅ ตรวจจับประเภทไฟล์อัตโนมัติ  
+✅ อัปโหลดข้อมูลไปยัง SQL Server พร้อม schema validation  
+✅ ย้ายไฟล์ที่ประมวลผลแล้วไปยังโฟลเดอร์ที่จัดระเบียบ  
+✅ GUI ที่ใช้งานง่ายด้วย CustomTkinter  
+✅ CLI สำหรับการประมวลผลแบบ batch  
+✅ Error handling และ logging ที่ครบถ้วน  
+✅ Performance optimization สำหรับไฟล์ขนาดใหญ่
+
+## โครงสร้างโปรเจกต์
 
 ```
-PipelineBronze_App/
-├── config/                    # ไฟล์การกำหนดค่า
-│   ├── column_settings.json   # การแมปคอลัมน์สำหรับแต่ละประเภทไฟล์
-│   ├── database.py           # การเชื่อมต่อฐานข้อมูล
-│   └── last_path.json        # เก็บ path ล่าสุดที่ใช้งาน
-├── services/                  # บริการหลัก
-│   ├── database_service.py   # บริการจัดการฐานข้อมูล
-│   └── file_service.py       # บริการจัดการไฟล์
-├── ui/                       # ส่วนติดต่อผู้ใช้
-│   ├── components/           # องค์ประกอบ UI
-│   │   ├── file_list.py     # รายการไฟล์
-│   │   ├── progress_bar.py  # แถบความคืบหน้า
-│   │   └── status_bar.py    # แถบสถานะ
-│   ├── login_window.py      # หน้าต่างล็อกอิน
-│   └── main_window.py       # หน้าต่างหลัก
-├── pipeline_gui_app.py       # แอปพลิเคชัน GUI
-├── pipeline_cli_app.py       # แอปพลิเคชัน Command Line Interface
-├── move_old_files_cli_app.py # ย้ายไฟล์เก่าไปโฟลเดอร์ backup
-├── requirements.txt          # Dependencies
-└── *.bat                    # ไฟล์ batch สำหรับรันแอปพลิเคชัน
+PIPELINE_SQLSERVER/
+├── __init__.py                    # Main package initialization
+├── constants.py                   # ค่าคงที่ทั้งหมดของระบบ
+├── requirements.txt               # Dependencies
+├── pyproject.toml                # Project configuration
+├── ARCHITECTURE.md               # เอกสารสถาปัตยกรรมโดยละเอียด
+│
+├── config/                       # การตั้งค่าและ configuration
+│   ├── __init__.py
+│   ├── database.py              # การจัดการการเชื่อมต่อฐานข้อมูล
+│   └── settings.py              # Settings manager แบบรวมศูนย์
+│
+├── services/                    # Business logic และ services
+│   ├── __init__.py
+│   ├── database_service.py      # บริการฐานข้อมูล
+│   └── file_service.py          # บริการจัดการไฟล์
+│
+├── ui/                          # User interface
+│   ├── __init__.py
+│   ├── main_window.py           # หน้าต่างหลัก GUI
+│   ├── login_window.py          # หน้าต่างการตั้งค่า
+│   └── components/              # UI components
+│       ├── __init__.py
+│       ├── file_list.py
+│       ├── progress_bar.py
+│       └── status_bar.py
+│
+├── utils/                       # Utility functions
+│   ├── __init__.py
+│   ├── helpers.py              # Helper functions
+│   └── validators.py           # Validation functions
+│
+├── pipeline_cli_app.py         # CLI application entry point
+├── pipeline_gui_app.py         # GUI application entry point
+└── move_old_files_cli_app.py   # File management utility
 ```
 
 ## การติดตั้ง
 
-### 1. ติดตั้ง Dependencies
+### ความต้องการของระบบ
+- Python 3.8+ (แนะนำ 3.9+)
+- SQL Server หรือ SQL Server Express
+- ODBC Driver 17 for SQL Server
+- Windows OS (สำหรับ GUI)
+
+### ขั้นตอนการติดตั้ง
+
+1. **Clone repository**:
 ```bash
+git clone <repository-url>
+cd PIPELINE_SQLSERVER
+```
+
+2. **ติดตั้ง dependencies**:
+```bash
+# แบบปกติ
+pip install -r requirements.txt
+
+# หรือใช้ pip-tools สำหรับ production
+pip install -e .
+
+# หรือใช้ batch file
 install_requirements.bat
 ```
 
-### 2. กำหนดค่าฐานข้อมูล
-แก้ไขไฟล์ `config/database.py`:
-```python
-# การตั้งค่าการเชื่อมต่อฐานข้อมูล
-SERVER = 'your_server_name'
-DATABASE = 'DWH_EP'
-USERNAME = 'your_username'
-PASSWORD = 'your_password'
+3. **ติดตั้ง development dependencies** (optional):
+```bash
+pip install -e ".[dev]"
 ```
 
-## วิธีใช้งาน
+## การใช้งาน
 
 ### GUI Application
+
 ```bash
+# รันผ่าน Python
+python pipeline_gui_app.py
+
+# หรือใช้ batch file
 run_pipeline_gui.bat
 ```
 
 ### CLI Application
+
 ```bash
+# รันผ่าน Python
+python pipeline_cli_app.py
+
+# หรือใช้ batch file
 run_pipeline_cli.bat
 ```
 
-### ย้ายไฟล์เก่า
-```bash
-run_move_old_files.bat
+### การตั้งค่าการเชื่อมต่อฐานข้อมูล
+
+1. **Windows Authentication** (แนะนำ):
+```json
+{
+    "server": "localhost\\SQLEXPRESS",
+    "database": "your_database",
+    "auth_type": "Windows",
+    "username": "",
+    "password": ""
+}
 ```
 
-## ประเภทข้อมูลที่รองรับ
+2. **SQL Server Authentication**:
+```json
+{
+    "server": "localhost\\SQLEXPRESS", 
+    "database": "your_database",
+    "auth_type": "SQL",
+    "username": "your_username",
+    "password": "your_password"
+}
+```
 
-### แพลตฟอร์มการขาย
-- **JST (Just Sell It):** order, inprocess, loading, release, return, sku_set, sku_single
-- **Lazada:** order, status
-- **Shopee:** order, status  
-- **TikTok:** order, status
+## การกำหนดค่าไฟล์ข้อมูล
 
-### รายงานอื่นๆ
-- **DHL Report:** รายงานการจัดส่ง DHL
-- **Ship Plan Report:** แผนการจัดส่ง
+### Column Settings (config/column_settings.json)
+```json
+{
+    "sales_data": {
+        "Date": "date",
+        "Product": "product_name",
+        "Amount": "amount",
+        "Customer": "customer_name"
+    },
+    "inventory_data": {
+        "ItemCode": "item_code",
+        "Quantity": "quantity",
+        "Location": "location"
+    }
+}
+```
 
-## การกำหนดค่า
+### Data Type Settings (config/dtype_settings.json)
+```json
+{
+    "sales_data": {
+        "Date": "DATE",
+        "Product": "NVARCHAR(255)",
+        "Amount": "DECIMAL(18,2)",
+        "Customer": "NVARCHAR(500)"
+    },
+    "inventory_data": {
+        "ItemCode": "NVARCHAR(100)",
+        "Quantity": "INT",
+        "Location": "NVARCHAR(255)"
+    }
+}
+```
 
-### Column Settings
-แก้ไขไฟล์ `config/column_settings.json` เพื่อกำหนดการแมปคอลัมน์สำหรับแต่ละประเภทไฟล์
+## สำหรับนักพัฒนา AI
 
-### Database Settings
-แก้ไขไฟล์ `config/database.py` เพื่อกำหนดการเชื่อมต่อฐานข้อมูล
+### โครงสร้างที่เป็นมิตรกับ AI
 
-## ข้อกำหนดระบบ
+1. **Type Hints ครบถ้วน**: ทุกฟังก์ชันมี type annotations
+2. **Docstrings มาตรฐาน**: อธิบายพารามิเตอร์และ return values
+3. **Constants แยกออกมา**: ค่าคงที่ทั้งหมดอยู่ใน `constants.py`
+4. **Error Messages มาตรฐาน**: ข้อความแสดงข้อผิดพลาดแบบ centralized
+5. **Configuration Management**: จัดการการตั้งค่าแบบรวมศูนย์
 
-- **Database:** SQL Server 2016+
-- **Python:** 3.8+
-- **OS:** Windows (สำหรับ batch files)
-- **Libraries:** pandas, openpyxl, customtkinter, pyodbc
+### การเพิ่มฟีเจอร์ใหม่
 
-## การแก้ไขปัญหาเบื้องต้น
+1. **เพิ่มประเภทไฟล์ใหม่**:
+```python
+from config.settings import settings_manager
 
-1. **ไม่สามารถเชื่อมต่อฐานข้อมูล:** ตรวจสอบการตั้งค่าใน `config/database.py`
-2. **ไฟล์ Excel อ่านไม่ได้:** ตรวจสอบรูปแบบและ encoding
-3. **Dependencies ขาดหาย:** รัน `install_requirements.bat` ใหม่
+# เพิ่ม logic type ใหม่
+settings_manager.add_logic_type(
+    "new_data_type",
+    column_mapping={"OldCol": "new_col"},
+    dtype_mapping={"OldCol": "NVARCHAR(255)"}
+)
+```
 
-## ผู้พัฒนา
+2. **เพิ่ม Validation Rule**:
+```python
+from utils.validators import validate_dataframe
 
-โครงการนี้พัฒนาสำหรับ ST-415 Data Warehouse EP 
+def custom_validation(df, logic_type):
+    # Custom validation logic
+    return True, "Valid"
+```
+
+3. **เพิ่ม UI Component**:
+```python
+# ui/components/new_component.py
+import customtkinter as ctk
+
+class NewComponent(ctk.CTkFrame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        # Component implementation
+```
+
+### Testing
+
+```bash
+# รัน tests
+pytest tests/
+
+# รัน tests พร้อม coverage
+pytest --cov=. tests/
+
+# ตรวจสอบ code style
+black .
+flake8 .
+mypy .
+```
+
+## Performance Features
+
+- **Chunking**: สำหรับไฟล์ขนาดใหญ่ (>50MB)
+- **Threading**: การย้ายไฟล์หลายไฟล์พร้อมกัน
+- **Caching**: Settings และ dtype conversions
+- **Batch Operations**: Database inserts แบบ batch
+- **Memory Management**: การจัดการหน่วยความจำที่มีประสิทธิภาพ
+
+## Troubleshooting
+
+### ปัญหาการเชื่อมต่อฐานข้อมูล
+1. ตรวจสอบว่า SQL Server กำลังทำงาน
+2. ตรวจสอบ ODBC Driver 17 for SQL Server
+3. ตรวจสอบ firewall settings
+4. ทดสอบการเชื่อมต่อด้วย SQL Server Management Studio
+
+### ปัญหาการอ่านไฟล์
+1. ตรวจสอบว่าไฟล์ไม่ถูกเปิดในโปรแกรมอื่น
+2. ตรวจสอบสิทธิ์การเข้าถึงไฟล์
+3. ตรวจสอบรูปแบบของไฟล์ (Excel/CSV)
+
+### ปัญหา Performance
+1. ใช้ chunking สำหรับไฟล์ขนาดใหญ่
+2. ปิดโปรแกรมอื่นที่ไม่จำเป็น
+3. ตรวจสอบ disk space
+
+## Contributing
+
+1. Fork the repository
+2. สร้าง feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit การเปลี่ยนแปลง (`git commit -m 'Add some AmazingFeature'`)
+4. Push ไปยัง branch (`git push origin feature/AmazingFeature`)
+5. เปิด Pull Request
+
+## License
+
+โครงการนี้ใช้ license MIT - ดูรายละเอียดใน [LICENSE](LICENSE) file
+
+## Architecture
+
+สำหรับข้อมูลโดยละเอียดเกี่ยวกับสถาปัตยกรรมของระบบ โปรดดู [ARCHITECTURE.md](ARCHITECTURE.md)
+
+---
+
+**หมายเหตุ**: โครงการนี้ออกแบบมาเพื่อให้ AI สามารถเข้าใจ ปรับปรุง และขยายได้ง่าย ด้วยโครงสร้างที่ชัดเจนและ documentation ที่ครบถ้วน
