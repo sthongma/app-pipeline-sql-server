@@ -674,7 +674,9 @@ class FileService:
     def _print_conversion_report(self, log):
         """แสดงรายงานการแปลงข้อมูล"""
         if log['successful_conversions']:
-            self.log_callback(f"✅ แปลงข้อมูลสำเร็จ: {', '.join(log['successful_conversions'])}")
+            # แสดงเฉพาะจำนวนคอลัมน์ที่แปลงสำเร็จ ไม่แสดงรายชื่อทั้งหมด
+            success_count = len(log['successful_conversions'])
+            self.log_callback(f"✅ แปลงข้อมูลสำเร็จ: {success_count} คอลัมน์")
         
         if log['failed_conversions']:
             self.log_callback("\n❌ พบปัญหาการแปลงข้อมูล:")

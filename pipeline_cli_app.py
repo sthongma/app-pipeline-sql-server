@@ -215,7 +215,7 @@ def validate_source_path() -> Optional[str]:
 
 def process_zip_files_step(source_path: str) -> None:
     """
-    ขั้นตอนที่ 1: รวมไฟล์ Excel จากไฟล์ ZIP
+    ขั้นตอนที่ 1: รวมไฟล์ ZIP อัตโนมัติ (เหมือน _auto_process_zip_merger ใน GUI)
     
     Args:
         source_path (str): โฟลเดอร์ต้นทางที่จะค้นหาไฟล์ ZIP
@@ -224,83 +224,154 @@ def process_zip_files_step(source_path: str) -> None:
     try:
         file_mgmt_service = FileManagementService()
         
-        # ค้นหาไฟล์ ZIP ในโฟลเดอร์ต้นทาง (รวมถึง subfolder)
+        # ค้นหาไฟล์ ZIP ในโฟลเดอร์ (รวม subfolder) เหมือน GUI
         zip_files = []
         for root, dirs, files in os.walk(source_path):
             for file in files:
                 if file.lower().endswith('.zip'):
                     zip_files.append(os.path.join(root, file))
         
-        if zip_files:
-            logging.info(f"พบไฟล์ ZIP {len(zip_files)} ไฟล์ จะทำการรวมไฟล์ Excel")
-            
-            def progress_callback(value: float, status: str) -> None:
-                logging.info(f"ความคืบหน้า: {value*100:.1f}% - {status}")
-            
-            result = file_mgmt_service.process_zip_excel_merger(
-                folder_path=source_path,
-                progress_callback=progress_callback
-            )
-            
-            if result["success"]:
-                logging.info("✅ รวมไฟล์ Excel จาก ZIP เสร็จสิ้น")
-                if result["saved_files"]:
-                    for filename, rows in result["saved_files"]:
-                        logging.info(f"  บันทึก: {filename} ({rows} แถว)")
-            else:
-                logging.warning("⚠️ การรวมไฟล์ ZIP ไม่สำเร็จ แต่จะดำเนินการต่อ")
-                
-            if result["errors"]:
-                for error in result["errors"]:
-                    logging.warning(f"ข้อผิดพลาดใน ZIP merger: {error}")
-        else:
+        if not zip_files:
             logging.info("ไม่พบไฟล์ ZIP ในโฟลเดอร์ต้นทาง ข้ามขั้นตอนนี้")
+            return
+        
+        logging.info(f"พบไฟล์ ZIP {len(zip_files)} ไฟล์ กำลังรวมไฟล์ Excel...")
+        
+        def progress_callback(value: float, status: str) -> None:
+            logging.info(f"ความคืบหน้า: {value*100:.1f}% - {status}")
+        
+        result = file_mgmt_service.process_zip_excel_merger(
+            folder_path=source_path,
+            progress_callback=progress_callback
+        )
+        
+        if result["success"]:
+            logging.info("✅ รวมไฟล์ Excel จาก ZIP เสร็จสิ้น")
+            if result["saved_files"]:
+                for filename, rows in result["saved_files"]:
+                    logging.info(f"  บันทึก: {filename} ({rows} แถว)")
+        else:
+            logging.info("⚠️ การรวมไฟล์ ZIP ไม่สำเร็จ แต่จะดำเนินการต่อ")
             
+        if result["errors"]:
+            for error in result["errors"]:
+                logging.info(f"⚠️ ข้อผิดพลาดใน ZIP merger: {error}")
+                
     except Exception as e:
-        logging.error(f"เกิดข้อผิดพลาดในการรวมไฟล์ ZIP: {e}")
+        logging.error(f"❌ เกิดข้อผิดพลาดในการรวมไฟล์ ZIP: {e}")
         logging.info("จะดำเนินการต่อด้วยการประมวลผลไฟล์หลัก")
 
 
 def process_main_files_step(source_path: str) -> None:
     """
-    ขั้นตอนที่ 2: ประมวลผลไฟล์หลัก (Excel/CSV)
+    ขั้นตอนที่ 2: ประมวลผลไฟล์หลักอัตโนมัติ (เหมือน _auto_process_main_files ใน GUI)
     
     Args:
         source_path (str): โฟลเดอร์ต้นทางที่จะค้นหาไฟล์
     """
     logging.info("=== ขั้นตอนที่ 2: ประมวลผลไฟล์หลัก ===")
     
-    # ใช้ logging.info เป็น log_callback สำหรับ CLI
-    file_service = FileService(search_path=source_path, log_callback=logging.info)
-    db_service = DatabaseService()
-
-    # ตรวจสอบการเชื่อมต่อฐานข้อมูลก่อน
-    is_connected, message = db_service.check_connection()
-    if not is_connected:
-        logging.error(f"Database connection failed: {message}. Exiting.")
-        return
-
-    logging.info(f"Database connection successful. Searching for files in: {file_service.search_path}")
-
     try:
+        # ใช้ logging.info เป็น log_callback สำหรับ CLI (เหมือน GUI)
+        file_service = FileService(search_path=source_path, log_callback=logging.info)
+        db_service = DatabaseService()
+
+        # ค้นหาไฟล์ข้อมูล
         data_files = file_service.find_data_files()
-
-        if not data_files:
-            logging.info("No data files found in the specified path.")
-        else:
-            logging.info(f"Found {len(data_files)} files to process.")
-            for file_path in data_files:
-                process_file(file_path, file_service, db_service)
         
-        logging.info("✅ การประมวลผลไฟล์หลักเสร็จสิ้น")
-
+        if not data_files:
+            logging.info("ไม่พบไฟล์ข้อมูลในโฟลเดอร์ต้นทาง")
+            return
+        
+        logging.info(f"พบไฟล์ข้อมูล {len(data_files)} ไฟล์ กำลังประมวลผล...")
+        
+        total_files = len(data_files)
+        processed_files = 0
+        successful_uploads = 0
+        
+        for file_path in data_files:
+            try:
+                processed_files += 1
+                
+                logging.info(f"📁 กำลังประมวลผล: {os.path.basename(file_path)} ({processed_files}/{total_files})")
+                
+                # ตรวจหา logic_type (เหมือน GUI)
+                logic_type = file_service.detect_file_type(file_path)
+                if not logic_type:
+                    # ลองเดาจากชื่อไฟล์ (เหมือน GUI)
+                    filename = os.path.basename(file_path).lower()
+                    for key in file_service.column_settings.keys():
+                        if key.lower() in filename:
+                            logic_type = key
+                            break
+                
+                if not logic_type:
+                    logging.info(f"❌ ไม่สามารถระบุประเภทไฟล์: {os.path.basename(file_path)}")
+                    continue
+                
+                logging.info(f"📋 ระบุประเภทไฟล์: {logic_type}")
+                
+                # อ่านไฟล์ (เหมือน GUI)
+                success, result = file_service.read_excel_file(file_path, logic_type)
+                if not success:
+                    logging.info(f"❌ ไม่สามารถอ่านไฟล์: {result}")
+                    continue
+                
+                df = result
+                
+                # ตรวจสอบคอลัมน์ (เหมือน GUI)
+                success, result = file_service.validate_columns(df, logic_type)
+                if not success:
+                    logging.info(f"❌ คอลัมน์ไม่ถูกต้อง: {result}")
+                    continue
+                
+                # อัปโหลดข้อมูล (เหมือน GUI)
+                required_cols = file_service.get_required_dtypes(logic_type)
+                
+                # ตรวจสอบว่า required_cols ไม่ว่างเปล่า
+                if not required_cols:
+                    logging.info(f"❌ ไม่พบการตั้งค่าประเภทข้อมูลสำหรับ {logic_type}")
+                    continue
+                
+                # ตรวจสอบว่าข้อมูลไม่ว่างเปล่า
+                if df.empty:
+                    logging.info(f"❌ ไฟล์ {os.path.basename(file_path)} ไม่มีข้อมูล")
+                    continue
+                
+                logging.info(f"📊 กำลังอัปโหลดข้อมูล {len(df)} แถว สำหรับประเภท {logic_type}")
+                success, message = db_service.upload_data(df, logic_type, required_cols, log_func=logging.info)
+                
+                if success:
+                    logging.info(f"✅ อัปโหลดสำเร็จ: {message}")
+                    successful_uploads += 1
+                    
+                    # ย้ายไฟล์หลังอัปโหลดสำเร็จ (เหมือน GUI)
+                    try:
+                        move_success, move_result = file_service.move_uploaded_files([file_path], [logic_type])
+                        if move_success:
+                            for original_path, new_path in move_result:
+                                logging.info(f"📦 ย้ายไฟล์ไปยัง: {os.path.basename(new_path)}")
+                        else:
+                            logging.info(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
+                    except Exception as move_error:
+                        logging.info(f"❌ เกิดข้อผิดพลาดในการย้ายไฟล์: {move_error}")
+                else:
+                    logging.info(f"❌ อัปโหลดไม่สำเร็จ: {message}")
+                    # ลองตรวจสอบ error เพิ่มเติม (เหมือน GUI)
+                    logging.info(f"🔍 ตรวจสอบข้อมูล: แถว {len(df)}, คอลัมน์ {list(df.columns)}")
+                    
+            except Exception as e:
+                logging.info(f"❌ เกิดข้อผิดพลาดขณะประมวลผล {os.path.basename(file_path)}: {e}")
+        
+        logging.info(f"✅ ประมวลผลไฟล์เสร็จสิ้น: {successful_uploads}/{total_files} ไฟล์สำเร็จ")
+        
     except Exception as e:
-        logging.error(f"An error occurred during file processing: {e}", exc_info=True)
+        logging.error(f"❌ เกิดข้อผิดพลาดในการประมวลผลไฟล์: {e}", exc_info=True)
 
 
 def archive_old_files_step(source_path: str) -> None:
     """
-    ขั้นตอนที่ 3: ย้ายไฟล์เก่าไปเก็บ archive
+    ขั้นตอนที่ 3: ย้ายไฟล์เก่าไปถังขยะอัตโนมัติ (เหมือน _auto_process_archive_old_files ใน GUI)
     
     Args:
         source_path (str): โฟลเดอร์ต้นทางที่จะค้นหาไฟล์เก่า
@@ -310,19 +381,19 @@ def archive_old_files_step(source_path: str) -> None:
     try:
         file_mgmt_service = FileManagementService()
         
-        # กำหนดโฟลเดอร์ปลายทางในไดร์ D
-        archive_path = PathConstants.DEFAULT_ARCHIVE_PATH
+        # กำหนดโฟลเดอร์ปลายทางในไดร์ D (เหมือน GUI)
+        archive_path = "D:/Archived_Files"
         
-        logging.info(f"กำลังย้ายไฟล์เก่ามากว่า {AppConstants.DEFAULT_ARCHIVE_DAYS} วันจาก {source_path} ไปยัง {archive_path}")
+        logging.info(f"กำลังย้ายไฟล์เก่ามากว่า 30 วันจาก {source_path} ไปยัง {archive_path}")
         
         result = file_mgmt_service.archive_old_files(
             source_path=source_path,
             archive_path=archive_path,
-            days=AppConstants.DEFAULT_ARCHIVE_DAYS,
-            delete_archive_days=AppConstants.DEFAULT_DELETE_ARCHIVE_DAYS
+            days=30,  # ย้ายไฟล์เก่ามากว่า 30 วัน (เหมือน GUI)
+            delete_archive_days=90  # ย้ายไฟล์ใน archive ที่เก่ามากว่า 90 วันไปถังขยะ (เหมือน GUI)
         )
         
-        # แสดงผลลัพธ์
+        # แสดงผลลัพธ์ (เหมือน GUI)
         if result["moved_files"]:
             logging.info(f"✅ ย้ายไฟล์ {len(result['moved_files'])} ไฟล์ไปยัง archive")
             
@@ -334,36 +405,50 @@ def archive_old_files_step(source_path: str) -> None:
             
         if result["errors"]:
             for error in result["errors"]:
-                logging.warning(f"ข้อผิดพลาดในการจัดการไฟล์: {error}")
+                logging.info(f"⚠️ ข้อผิดพลาดในการจัดการไฟล์: {error}")
         
         logging.info("✅ การย้ายไฟล์เก่าเสร็จสิ้น")
         
     except Exception as e:
-        logging.error(f"เกิดข้อผิดพลาดในการย้ายไฟล์เก่า: {e}", exc_info=True)
+        logging.error(f"❌ เกิดข้อผิดพลาดในการย้ายไฟล์เก่า: {e}", exc_info=True)
 
 
 def main_cli() -> None:
     """
-    ฟังก์ชันหลักสำหรับ CLI application
+    ฟังก์ชันหลักสำหรับ CLI application - ประมวลผลอัตโนมัติเหมือน GUI
     
-    รันตามลำดับ:
-    1. รวมไฟล์ ZIP ก่อน
-    2. รันส่วนของโปรแกรมหลัก
-    3. ย้ายไฟล์เก่ามากว่า {AppConstants.DEFAULT_ARCHIVE_DAYS} วันไปถังขยะ
+    รันตามลำดับขั้นตอนเดียวกับปุ่ม "ประมวลผลอัตโนมัติ":
+    1. รวมไฟล์ Excel จากไฟล์ ZIP
+    2. ประมวลผลและอัปโหลดไฟล์ทั้งหมด  
+    3. ย้ายไฟล์เก่ามากว่า 30 วันไปถังขยะ (เหมือน GUI)
     """
-    logging.info("Starting CLI application for file processing.")
+    logging.info("🤖 เริ่มการประมวลผลอัตโนมัติ")
 
     # ตรวจสอบและโหลด path ต้นทาง
     source_path = validate_source_path()
     if not source_path:
         return
-
-    # ดำเนินการตามลำดับขั้นตอน
-    process_zip_files_step(source_path)
-    process_main_files_step(source_path)
-    archive_old_files_step(source_path)
     
-    logging.info("=== 🏁 การดำเนินการทั้งหมดเสร็จสิ้น ===")
+    logging.info(f"📂 โฟลเดอร์ต้นทาง: {source_path}")
+    
+    # ตรวจสอบการเชื่อมต่อฐานข้อมูลก่อน (เหมือน GUI)
+    db_service = DatabaseService()
+    is_connected, message = db_service.check_connection()
+    if not is_connected:
+        logging.error(f"ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้: {message}")
+        logging.error("กรุณาตรวจสอบการตั้งค่าฐานข้อมูลก่อน")
+        return
+
+    try:
+        # ดำเนินการตามลำดับขั้นตอนเหมือน GUI
+        process_zip_files_step(source_path)
+        process_main_files_step(source_path)  
+        archive_old_files_step(source_path)
+        
+        logging.info("=== 🏁 การประมวลผลอัตโนมัติเสร็จสิ้น ===")
+        
+    except Exception as e:
+        logging.error(f"❌ เกิดข้อผิดพลาดในการประมวลผลอัตโนมัติ: {e}", exc_info=True)
 
 
 def main():
