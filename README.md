@@ -62,8 +62,7 @@ PIPELINE_SQLSERVER/
 │   └── validators.py           # Validation functions
 │
 ├── pipeline_cli_app.py         # CLI application entry point
-├── pipeline_gui_app.py         # GUI application entry point
-└── move_old_files_cli_app.py   # File management utility
+└── pipeline_gui_app.py         # GUI application entry point
 ```
 
 ## การติดตั้ง

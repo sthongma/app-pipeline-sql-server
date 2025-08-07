@@ -95,59 +95,7 @@ def process_file(file_path: str, file_service: FileService, db_service: Database
         logging.error(f"An unexpected error occurred while processing {file_path}: {e}", exc_info=True)
 
 
-def archive_old_files_cli(args) -> None:
-    """
-    ฟังก์ชันสำหรับการย้ายไฟล์เก่าไปเก็บ archive
-    
-    Args:
-        args: arguments จาก argparse
-    """
-    logging.info("Starting file archiving process.")
-    
-    file_mgmt_service = FileManagementService()
-    
-    # ใช้ path จาก args หรือ default path
-    source_path = args.src or os.path.join(os.getcwd(), 'Uploaded_Files')
-    archive_path = args.dest or os.path.join('D:\\', 'Archived_Files')
-    
-    if not os.path.exists(source_path):
-        logging.error(f"Source path does not exist: {source_path}")
-        return
-    
-    logging.info(f"Archiving files older than {args.days} days from {source_path} to {archive_path}")
-    
-    try:
-        result = file_mgmt_service.archive_old_files(
-            source_path=source_path,
-            archive_path=archive_path,
-            days=args.days,
-            delete_archive_days=args.delete_days
-        )
-        
-        # แสดงผลลัพธ์
-        if result["moved_files"]:
-            logging.info(f"Moved {len(result['moved_files'])} files to archive")
-            for src, dst in result["moved_files"]:
-                logging.info(f"  {src} -> {dst}")
-        
-        if result["moved_dirs"]:
-            logging.info(f"Moved {len(result['moved_dirs'])} empty directories to archive")
-            for src, dst in result["moved_dirs"]:
-                logging.info(f"  {src} -> {dst}")
-        
-        if result["deleted_files"]:
-            logging.info(f"Deleted {len(result['deleted_files'])} old files from archive")
-            for file_path in result["deleted_files"]:
-                logging.info(f"  Deleted: {file_path}")
-        
-        if result["errors"]:
-            for error in result["errors"]:
-                logging.error(f"Error during archiving: {error}")
-        
-        logging.info("File archiving process completed.")
-        
-    except Exception as e:
-        logging.error(f"An error occurred during file archiving: {e}", exc_info=True)
+
 
 
 def merge_zip_excel_cli(args) -> None:
@@ -369,58 +317,16 @@ def process_main_files_step(source_path: str) -> None:
         logging.error(f"❌ เกิดข้อผิดพลาดในการประมวลผลไฟล์: {e}", exc_info=True)
 
 
-def archive_old_files_step(source_path: str) -> None:
-    """
-    ขั้นตอนที่ 3: ย้ายไฟล์เก่าไปถังขยะอัตโนมัติ (เหมือน _auto_process_archive_old_files ใน GUI)
-    
-    Args:
-        source_path (str): โฟลเดอร์ต้นทางที่จะค้นหาไฟล์เก่า
-    """
-    logging.info("=== ขั้นตอนที่ 3: ย้ายไฟล์เก่าไปถังขยะ ===")
-    
-    try:
-        file_mgmt_service = FileManagementService()
-        
-        # กำหนดโฟลเดอร์ปลายทางในไดร์ D (เหมือน GUI)
-        archive_path = "D:/Archived_Files"
-        
-        logging.info(f"กำลังย้ายไฟล์เก่ามากว่า 30 วันจาก {source_path} ไปยัง {archive_path}")
-        
-        result = file_mgmt_service.archive_old_files(
-            source_path=source_path,
-            archive_path=archive_path,
-            days=30,  # ย้ายไฟล์เก่ามากว่า 30 วัน (เหมือน GUI)
-            delete_archive_days=90  # ย้ายไฟล์ใน archive ที่เก่ามากว่า 90 วันไปถังขยะ (เหมือน GUI)
-        )
-        
-        # แสดงผลลัพธ์ (เหมือน GUI)
-        if result["moved_files"]:
-            logging.info(f"✅ ย้ายไฟล์ {len(result['moved_files'])} ไฟล์ไปยัง archive")
-            
-        if result["moved_dirs"]:
-            logging.info(f"✅ ย้ายโฟลเดอร์ว่าง {len(result['moved_dirs'])} โฟลเดอร์ไปยัง archive")
-            
-        if result["deleted_files"]:
-            logging.info(f"🗑️ ย้ายไฟล์เก่า {len(result['deleted_files'])} ไฟล์ไปถังขยะ")
-            
-        if result["errors"]:
-            for error in result["errors"]:
-                logging.info(f"⚠️ ข้อผิดพลาดในการจัดการไฟล์: {error}")
-        
-        logging.info("✅ การย้ายไฟล์เก่าเสร็จสิ้น")
-        
-    except Exception as e:
-        logging.error(f"❌ เกิดข้อผิดพลาดในการย้ายไฟล์เก่า: {e}", exc_info=True)
+
 
 
 def main_cli() -> None:
     """
     ฟังก์ชันหลักสำหรับ CLI application - ประมวลผลอัตโนมัติเหมือน GUI
     
-    รันตามลำดับขั้นตอนเดียวกับปุ่ม "ประมวลผลอัตโนมัติ":
+    รันตามลำดับขั้นตอน:
     1. รวมไฟล์ Excel จากไฟล์ ZIP
-    2. ประมวลผลและอัปโหลดไฟล์ทั้งหมด  
-    3. ย้ายไฟล์เก่ามากว่า 30 วันไปถังขยะ (เหมือน GUI)
+    2. ประมวลผลและอัปโหลดไฟล์ทั้งหมด
     """
     logging.info("🤖 เริ่มการประมวลผลอัตโนมัติ")
 
@@ -440,10 +346,9 @@ def main_cli() -> None:
         return
 
     try:
-        # ดำเนินการตามลำดับขั้นตอนเหมือน GUI
+        # ดำเนินการตามลำดับขั้นตอน
         process_zip_files_step(source_path)
-        process_main_files_step(source_path)  
-        archive_old_files_step(source_path)
+        process_main_files_step(source_path)
         
         logging.info("=== 🏁 การประมวลผลอัตโนมัติเสร็จสิ้น ===")
         
@@ -462,9 +367,6 @@ def main():
   # ประมวลผลไฟล์ปกติ (default)
   python pipeline_cli_app.py
 
-  # ย้ายไฟล์เก่าไปเก็บ archive
-  python pipeline_cli_app.py archive --days 30 --src ./Uploaded_Files --dest D:/Archived_Files
-
   # รวมไฟล์ Excel จาก ZIP files
   python pipeline_cli_app.py merge-zip --folder ./path/to/zip/folder
         """
@@ -473,33 +375,7 @@ def main():
     # สร้าง subcommands
     subparsers = parser.add_subparsers(dest='command', help='คำสั่งที่ต้องการใช้')
     
-    # Subcommand สำหรับ archive files
-    archive_parser = subparsers.add_parser(
-        'archive', 
-        help='ย้ายไฟล์เก่าไปเก็บ archive และลบไฟล์เก่าใน archive'
-    )
-    archive_parser.add_argument(
-        '--days', 
-        type=int, 
-        default=30, 
-        help='จำนวนวันสำหรับไฟล์ที่จะย้าย (default: 30)'
-    )
-    archive_parser.add_argument(
-        '--src', 
-        type=str, 
-        help='โฟลเดอร์ต้นทาง (default: ./Uploaded_Files)'
-    )
-    archive_parser.add_argument(
-        '--dest', 
-        type=str, 
-        help='โฟลเดอร์ปลายทาง (default: D:/Archived_Files)'
-    )
-    archive_parser.add_argument(
-        '--delete-days', 
-        type=int, 
-        default=AppConstants.DEFAULT_DELETE_ARCHIVE_DAYS, 
-        help=f'จำนวนวันสำหรับการลบไฟล์ใน archive (default: {AppConstants.DEFAULT_DELETE_ARCHIVE_DAYS})'
-    )
+
     
     # Subcommand สำหรับ ZIP Excel merger
     merge_parser = subparsers.add_parser(
@@ -516,9 +392,7 @@ def main():
     args = parser.parse_args()
     
     # เรียกใช้ฟังก์ชันตาม command ที่เลือก
-    if args.command == 'archive':
-        archive_old_files_cli(args)
-    elif args.command == 'merge-zip':
+    if args.command == 'merge-zip':
         merge_zip_excel_cli(args)
     else:
         # ถ้าไม่มี command หรือ command ไม่ถูกต้อง ให้รันแบบปกติ
