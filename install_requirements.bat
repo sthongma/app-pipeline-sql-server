@@ -28,7 +28,6 @@ echo Installation completed successfully!
 echo You can now run the application using:
 echo - run_pipeline_gui.bat (for GUI version)
 echo - run_pipeline_cli.bat (for CLI version)
-echo - run_move_old_files.bat (for moving and cleaning old files)
 echo.
 echo Press any key to exit...
 pause >nul
