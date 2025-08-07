@@ -75,7 +75,12 @@ class FileService:
             self.data_processor._reset_log_flags()
             
             # อ่านไฟล์ด้วย Performance Optimizer
-            file_type = 'csv' if file_path.lower().endswith('.csv') else 'excel'
+            if file_path.lower().endswith('.csv'):
+                file_type = 'csv'
+            elif file_path.lower().endswith('.xls'):
+                file_type = 'excel_xls'
+            else:
+                file_type = 'excel'
             
             success, df = self.performance_optimizer.read_large_file_chunked(file_path, file_type)
             if not success:

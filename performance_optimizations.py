@@ -38,7 +38,7 @@ class PerformanceOptimizer:
         
         Args:
             file_path: ที่อยู่ไฟล์
-            file_type: ประเภทไฟล์ ('excel' หรือ 'csv')
+            file_type: ประเภทไฟล์ ('excel', 'excel_xls', หรือ 'csv')
             
         Returns:
             Tuple[bool, pd.DataFrame]: (สำเร็จหรือไม่, DataFrame)
@@ -65,6 +65,8 @@ class PerformanceOptimizer:
         try:
             if file_type == 'csv':
                 df = pd.read_csv(file_path, header=0, encoding='utf-8')
+            elif file_type == 'excel_xls':
+                df = pd.read_excel(file_path, header=0, sheet_name=0, engine='xlrd')
             else:
                 df = pd.read_excel(file_path, header=0, sheet_name=0, engine='openpyxl')
             
@@ -104,7 +106,50 @@ class PerformanceOptimizer:
                     if (i + 1) % 10 == 0:
                         gc.collect()
                         
-            else:  # Excel file
+            elif file_type == 'excel_xls':  # .xls file
+                # สำหรับ .xls ไฟล์ใหญ่ ใช้ xlrd
+                import xlrd
+                
+                workbook = xlrd.open_workbook(file_path)
+                worksheet = workbook.sheet_by_index(0)
+                
+                # อ่าน header
+                headers = []
+                for col_idx in range(worksheet.ncols):
+                    cell_value = worksheet.cell_value(0, col_idx)
+                    headers.append(cell_value)
+                
+                # อ่านข้อมูลแบบ chunk
+                chunk_data = []
+                for row_idx in range(1, worksheet.nrows):
+                    if self.cancellation_token.is_set():
+                        self.log_callback("❌ การทำงานถูกยกเลิก")
+                        return False, pd.DataFrame()
+                    
+                    row_data = []
+                    for col_idx in range(worksheet.ncols):
+                        cell_value = worksheet.cell_value(row_idx, col_idx)
+                        row_data.append(cell_value)
+                    
+                    chunk_data.append(row_data)
+                    
+                    # สร้าง chunk ทุก chunk_size แถว
+                    if len(chunk_data) >= self.chunk_size:
+                        chunk_df = pd.DataFrame(chunk_data, columns=headers)
+                        chunks.append(chunk_df)
+                        chunk_data = []
+                        
+                        self.log_callback(f"📖 อ่าน chunk {len(chunks)}: {len(chunk_df):,} แถว")
+                        
+                        # ปล่อย memory
+                        gc.collect()
+                
+                # เพิ่มข้อมูลที่เหลือสำหรับ .xls
+                if chunk_data:
+                    chunk_df = pd.DataFrame(chunk_data, columns=headers)
+                    chunks.append(chunk_df)
+                        
+            else:  # Excel .xlsx file
                 # สำหรับ Excel ไฟล์ใหญ่ ให้อ่านแบบ chunk ด้วย openpyxl
                 import openpyxl
                 from openpyxl.utils import get_column_letter
@@ -148,7 +193,8 @@ class PerformanceOptimizer:
                     chunk_df = pd.DataFrame(chunk_data, columns=headers)
                     chunks.append(chunk_df)
                 
-                workbook.close()
+                if file_type != 'excel_xls':
+                    workbook.close()
             
             # รวม chunks
             if chunks:

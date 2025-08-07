@@ -86,10 +86,11 @@ class FileReaderService:
         self.search_path = path
 
     def find_data_files(self):
-        """ค้นหาไฟล์ Excel และ CSV ใน path ที่กำหนด (ปรับปรุงประสิทธิภาพ)"""
+        """ค้นหาไฟล์ Excel (.xlsx, .xls) และ CSV ใน path ที่กำหนด (ปรับปรุงประสิทธิภาพ)"""
         try:
             # ใช้ os.scandir แทน glob เพื่อความเร็ว
             xlsx_files = []
+            xls_files = []
             csv_files = []
             
             with os.scandir(self.search_path) as entries:
@@ -98,15 +99,18 @@ class FileReaderService:
                         name_lower = entry.name.lower()
                         if name_lower.endswith('.xlsx'):
                             xlsx_files.append(entry.path)
+                        elif name_lower.endswith('.xls'):
+                            xls_files.append(entry.path)
                         elif name_lower.endswith('.csv'):
                             csv_files.append(entry.path)
             
-            return xlsx_files + csv_files
+            return xlsx_files + xls_files + csv_files
         except Exception:
             # Fallback ใช้ glob แบบเดิม
             xlsx_files = glob.glob(os.path.join(self.search_path, '*.xlsx'))
+            xls_files = glob.glob(os.path.join(self.search_path, '*.xls'))
             csv_files = glob.glob(os.path.join(self.search_path, '*.csv'))
-            return xlsx_files + csv_files
+            return xlsx_files + xls_files + csv_files
 
     def standardize_column_name(self, col_name):
         """แปลงชื่อคอลัมน์ให้เป็นรูปแบบมาตรฐาน"""
@@ -129,7 +133,7 @@ class FileReaderService:
         return str(col).strip().lower().replace(' ', '').replace('\u200b', '')
 
     def detect_file_type(self, file_path):
-        """ตรวจสอบประเภทของไฟล์ (แบบ dynamic, normalize header) รองรับทั้ง xlsx/csv"""
+        """ตรวจสอบประเภทของไฟล์ (แบบ dynamic, normalize header) รองรับทั้ง xlsx/xls/csv"""
         try:
             if not self.column_settings:
                 return None
@@ -137,7 +141,11 @@ class FileReaderService:
             # ใช้วิธีเดิมที่ทำงานได้ดี แต่เพิ่ม cache เล็กน้อย
             if file_path.lower().endswith('.csv'):
                 df_peek = pd.read_csv(file_path, header=None, nrows=2, encoding='utf-8')
+            elif file_path.lower().endswith('.xls'):
+                # สำหรับไฟล์ .xls ใช้ xlrd engine
+                df_peek = pd.read_excel(file_path, header=None, nrows=2, engine='xlrd')
             else:
+                # สำหรับไฟล์ .xlsx
                 df_peek = pd.read_excel(file_path, header=None, nrows=2)
                 
             for logic_type in self.column_settings.keys():
@@ -152,11 +160,11 @@ class FileReaderService:
 
     def read_file_basic(self, file_path, file_type='auto'):
         """
-        อ่านไฟล์ Excel หรือ CSV แบบพื้นฐาน (ไม่ทำการประมวลผล)
+        อ่านไฟล์ Excel (.xlsx, .xls) หรือ CSV แบบพื้นฐาน (ไม่ทำการประมวลผล)
         
         Args:
             file_path: ที่อยู่ไฟล์
-            file_type: ประเภทไฟล์ ('excel', 'csv', 'auto')
+            file_type: ประเภทไฟล์ ('excel', 'excel_xls', 'csv', 'auto')
             
         Returns:
             Tuple[bool, Union[pd.DataFrame, str]]: (สำเร็จ, DataFrame หรือข้อความข้อผิดพลาด)
@@ -168,12 +176,21 @@ class FileReaderService:
             
             # Auto-detect file type
             if file_type == 'auto':
-                file_type = 'csv' if file_path.lower().endswith('.csv') else 'excel'
+                if file_path.lower().endswith('.csv'):
+                    file_type = 'csv'
+                elif file_path.lower().endswith('.xls'):
+                    file_type = 'excel_xls'
+                else:
+                    file_type = 'excel'
             
             # อ่านไฟล์
             if file_type == 'csv':
                 df = pd.read_csv(file_path, encoding='utf-8')
+            elif file_type == 'excel_xls':
+                # สำหรับไฟล์ .xls ใช้ xlrd engine
+                df = pd.read_excel(file_path, sheet_name=0, engine='xlrd')
             else:
+                # สำหรับไฟล์ .xlsx
                 df = pd.read_excel(file_path, sheet_name=0)
             
             if df.empty:
@@ -236,11 +253,18 @@ class FileReaderService:
             if not os.path.exists(file_path):
                 return {"error": f"ไม่พบไฟล์: {file_path}"}
             
-            file_type = 'csv' if file_path.lower().endswith('.csv') else 'excel'
+            if file_path.lower().endswith('.csv'):
+                file_type = 'csv'
+            elif file_path.lower().endswith('.xls'):
+                file_type = 'excel_xls'
+            else:
+                file_type = 'excel'
             
             # อ่านแค่ส่วนบน
             if file_type == 'csv':
                 df = pd.read_csv(file_path, nrows=num_rows, encoding='utf-8')
+            elif file_type == 'excel_xls':
+                df = pd.read_excel(file_path, sheet_name=0, nrows=num_rows, engine='xlrd')
             else:
                 df = pd.read_excel(file_path, sheet_name=0, nrows=num_rows)
             
@@ -284,15 +308,24 @@ class FileReaderService:
                 return {"error": f"ไม่พบไฟล์: {file_path}"}
             
             file_stats = os.stat(file_path)
-            file_type = 'csv' if file_path.lower().endswith('.csv') else 'excel'
+            if file_path.lower().endswith('.csv'):
+                file_type = 'csv'
+            elif file_path.lower().endswith('.xls'):
+                file_type = 'excel_xls'
+            else:
+                file_type = 'excel'
             
             # นับจำนวนแถวโดยประมาณ (สำหรับไฟล์ใหญ่)
             try:
                 if file_type == 'csv':
                     with open(file_path, 'r', encoding='utf-8') as f:
                         row_count = sum(1 for line in f) - 1  # ลบ header
+                elif file_type == 'excel_xls':
+                    # สำหรับ Excel .xls ใช้ xlrd engine
+                    df_shape = pd.read_excel(file_path, sheet_name=0, engine='xlrd').shape
+                    row_count = df_shape[0]
                 else:
-                    # สำหรับ Excel ใช้ pandas อ่าน shape
+                    # สำหรับ Excel .xlsx
                     df_shape = pd.read_excel(file_path, sheet_name=0).shape
                     row_count = df_shape[0]
             except:

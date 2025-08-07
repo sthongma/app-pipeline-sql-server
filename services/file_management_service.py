@@ -118,11 +118,22 @@ class FileManagementService:
             print(f"เกิดข้อผิดพลาดในการแปลงคอลัมน์: {e}")
             return series
     
-    def read_excel_safely(self, file_path: str) -> Optional[pd.DataFrame]:
-        """อ่านไฟล์ Excel อย่างปลอดภัย"""
+    def read_file_safely(self, file_path: str) -> Optional[pd.DataFrame]:
+        """อ่านไฟล์ Excel (.xlsx, .xls) หรือ CSV อย่างปลอดภัย"""
         try:
-            df = pd.read_excel(file_path, sheet_name=0)
+            file_ext = os.path.splitext(file_path)[1].lower()
             
+            if file_ext == '.csv':
+                df = pd.read_csv(file_path, encoding='utf-8')
+            elif file_ext == '.xls':
+                df = pd.read_excel(file_path, sheet_name=0, engine='xlrd')
+            elif file_ext == '.xlsx':
+                df = pd.read_excel(file_path, sheet_name=0, engine='openpyxl')
+            else:
+                print(f"ไม่รองรับนามสกุลไฟล์: {file_ext}")
+                return None
+            
+            # แปลงคอลัมน์อย่างปลอดภัย
             for col in df.columns:
                 df[col] = self.safe_convert_column(df[col])
             
@@ -130,6 +141,10 @@ class FileManagementService:
         except Exception as e:
             print(f"ไม่สามารถอ่านไฟล์ {file_path}: {e}")
             return None
+    
+    def read_excel_safely(self, file_path: str) -> Optional[pd.DataFrame]:
+        """เก่า method เพื่อ backward compatibility - ใช้ read_file_safely แทน"""
+        return self.read_file_safely(file_path)
     
     def create_organized_folder_structure(self, base_folder: str, file_type: str) -> str:
         """สร้างโครงสร้างโฟลเดอร์ตามรูปแบบ ZipExcelMerger/ปี-เดือน-วัน"""
@@ -170,7 +185,7 @@ class FileManagementService:
     
     def process_zip_excel_merger(self, folder_path: str, progress_callback=None) -> Dict[str, Any]:
         """
-        ประมวลผลการรวมไฟล์ Excel จาก ZIP files
+        ประมวลผลการรวมไฟล์ข้อมูล (Excel, CSV) จาก ZIP files
         
         Args:
             folder_path: โฟลเดอร์ที่มีไฟล์ ZIP
@@ -193,7 +208,7 @@ class FileManagementService:
                 result["errors"].append("ไม่พบไฟล์ ZIP ในโฟลเดอร์ที่เลือก")
                 return result
             
-            all_excel_files = []
+            all_data_files = []  # เปลี่ยนชื่อจาก all_excel_files
             temp_dirs = []
             
             if progress_callback:
@@ -204,25 +219,29 @@ class FileManagementService:
                 zip_path = os.path.join(folder_path, zip_name)
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                     file_list = zip_ref.namelist()
-                    xlsx_files = [f for f in file_list if f.endswith('.xlsx') and not f.startswith('__MACOSX')]
+                    # รองรับไฟล์ .xlsx, .xls, และ .csv
+                    supported_files = [f for f in file_list 
+                                     if (f.endswith('.xlsx') or f.endswith('.xls') or f.endswith('.csv')) 
+                                     and not f.startswith('__MACOSX')
+                                     and not f.startswith('.')]
                     
-                    if not xlsx_files:
+                    if not supported_files:
                         continue
                     
                     temp_dir = os.path.join(folder_path, f"temp_extract_{zip_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
                     os.makedirs(temp_dir, exist_ok=True)
                     temp_dirs.append(temp_dir)
                     
-                    for j, file in enumerate(xlsx_files):
+                    for j, file in enumerate(supported_files):
                         if progress_callback:
-                            progress = 0.05 + 0.3 * (i + (j + 1) / len(xlsx_files)) / len(zip_files)
-                            progress_callback(progress, f"แตก {zip_name}: {j+1}/{len(xlsx_files)}")
+                            progress = 0.05 + 0.3 * (i + (j + 1) / len(supported_files)) / len(zip_files)
+                            progress_callback(progress, f"แตก {zip_name}: {j+1}/{len(supported_files)}")
                         
                         zip_ref.extract(file, temp_dir)
-                        all_excel_files.append(os.path.join(temp_dir, file))
+                        all_data_files.append(os.path.join(temp_dir, file))
             
-            if not all_excel_files:
-                result["errors"].append("ไม่พบไฟล์ Excel (.xlsx) ใน ZIP ใดๆ")
+            if not all_data_files:
+                result["errors"].append("ไม่พบไฟล์ข้อมูล (.xlsx, .xls, .csv) ใน ZIP ใดๆ")
                 return result
             
             if progress_callback:
@@ -232,13 +251,26 @@ class FileManagementService:
             group_dict = {}
             header_map = {}
             
-            for file_path in all_excel_files:
+            for file_path in all_data_files:
                 try:
-                    df_header = pd.read_excel(file_path, sheet_name=0, nrows=1)
+                    # อ่าน header ตามประเภทไฟล์
+                    file_ext = os.path.splitext(file_path)[1].lower()
+                    if file_ext == '.csv':
+                        df_header = pd.read_csv(file_path, nrows=1, encoding='utf-8')
+                    elif file_ext == '.xls':
+                        df_header = pd.read_excel(file_path, sheet_name=0, nrows=1, engine='xlrd')
+                    else:  # .xlsx
+                        df_header = pd.read_excel(file_path, sheet_name=0, nrows=1, engine='openpyxl')
+                    
                     header_tuple = tuple(df_header.columns)
                     
                     base = os.path.basename(file_path)
-                    prefix = ''.join([c for c in base if c.isalpha()])
+                    # ดึง prefix จากชื่อไฟล์ และรวมประเภทไฟล์
+                    file_ext = os.path.splitext(base)[1].lower()
+                    name_without_ext = os.path.splitext(base)[0]
+                    prefix = ''.join([c for c in name_without_ext if c.isalpha()])
+                    if not prefix:
+                        prefix = f"Group_{file_ext.replace('.', '').upper()}"
                     
                     if header_tuple in header_map:
                         group_name = header_map[header_tuple]
@@ -263,7 +295,7 @@ class FileManagementService:
             file_type = self.get_file_type_from_filename(zip_files[0])
             saved_files = []
             
-            # รวมไฟล์แต่ละกลุ่ม
+            # รวมไฟล์ข้อมูลแต่ละกลุ่ม
             for idx, (group_name, files) in enumerate(group_dict.items()):
                 if progress_callback:
                     progress = 0.4 + 0.5 * (idx + 1) / len(group_dict)
@@ -272,7 +304,7 @@ class FileManagementService:
                 merged_data = []
                 for file_path in files:
                     try:
-                        df = self.read_excel_safely(file_path)
+                        df = self.read_file_safely(file_path)
                         if df is not None:
                             merged_data.append(df)
                     except Exception as e:
@@ -285,7 +317,7 @@ class FileManagementService:
                 # รวมข้อมูล
                 final_df = pd.concat(merged_data, ignore_index=True)
                 
-                # บันทึกไฟล์
+                # บันทึกไฟล์ (เป็น Excel เสมอ)
                 output_filename = f"{group_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
                 output_path = os.path.join(folder_path, output_filename)
                 
@@ -302,7 +334,7 @@ class FileManagementService:
                                 if cell.value and isinstance(cell.value, str) and self.is_large_number(cell.value):
                                     cell.number_format = '@'
                 
-                saved_files.append((output_filename, len(final_df)))
+                saved_files.append((output_filename, len(final_df), len(files)))  # เพิ่มจำนวนไฟล์ที่รวม
             
             # ลบไฟล์ temp
             for temp_dir in temp_dirs:
@@ -315,7 +347,8 @@ class FileManagementService:
             organized_folder, moved_files = self.move_zip_files(folder_path, zip_files, file_type)
             
             if progress_callback:
-                progress_callback(1.0, f"สำเร็จ! บันทึกไฟล์ {len(saved_files)} กลุ่ม")
+                total_files_processed = sum(count for _, _, count in saved_files)
+                progress_callback(1.0, f"สำเร็จ! รวม {total_files_processed} ไฟล์เป็น {len(saved_files)} กลุ่ม")
             
             result.update({
                 "success": True,
@@ -386,6 +419,77 @@ class FileManagementService:
     # ========================
     # Helper Functions
     # ========================
+    
+    def get_supported_file_extensions(self) -> List[str]:
+        """รายการนามสกุลไฟล์ที่รองรับ"""
+        return ['.xlsx', '.xls', '.csv']
+    
+    def is_supported_file(self, file_path: str) -> bool:
+        """ตรวจสอบว่าไฟล์ได้รับการรองรับหรือไม่"""
+        file_ext = os.path.splitext(file_path)[1].lower()
+        return file_ext in self.get_supported_file_extensions()
+    
+    def get_file_type_info(self, file_path: str) -> Dict[str, str]:
+        """ดึงข้อมูลประเภทไฟล์"""
+        file_ext = os.path.splitext(file_path)[1].lower()
+        file_types = {
+            '.xlsx': {'type': 'Excel (New)', 'engine': 'openpyxl'},
+            '.xls': {'type': 'Excel (Legacy)', 'engine': 'xlrd'},
+            '.csv': {'type': 'CSV', 'engine': 'pandas'}
+        }
+        return file_types.get(file_ext, {'type': 'Unknown', 'engine': 'none'})
+    
+    def group_files_by_type(self, file_paths: List[str]) -> Dict[str, List[str]]:
+        """จัดกลุ่มไฟล์ตามประเภท"""
+        grouped = {ext: [] for ext in self.get_supported_file_extensions()}
+        grouped['unsupported'] = []
+        
+        for file_path in file_paths:
+            file_ext = os.path.splitext(file_path)[1].lower()
+            if file_ext in grouped:
+                grouped[file_ext].append(file_path)
+            else:
+                grouped['unsupported'].append(file_path)
+        
+        # ลบกลุ่มที่ว่าง
+        return {k: v for k, v in grouped.items() if v}
+    
+    def validate_mixed_file_compatibility(self, file_paths: List[str]) -> Tuple[bool, List[str]]:
+        """
+        ตรวจสอบความเข้ากันได้ของไฟล์หลายประเภท
+        
+        Returns:
+            Tuple[bool, List[str]]: (เข้ากันได้หรือไม่, รายการข้อผิดพลาด)
+        """
+        errors = []
+        
+        # ตรวจสอบว่าทุกไฟล์ได้รับการรองรับ
+        unsupported = []
+        for file_path in file_paths:
+            if not self.is_supported_file(file_path):
+                unsupported.append(os.path.basename(file_path))
+        
+        if unsupported:
+            errors.append(f"ไฟล์ที่ไม่รองรับ: {', '.join(unsupported)}")
+        
+        # ตรวจสอบ header compatibility (อ่าน header ไฟล์แรกของแต่ละประเภท)
+        try:
+            sample_headers = []
+            for file_path in file_paths[:3]:  # ตรวจแค่ 3 ไฟล์แรก
+                if self.is_supported_file(file_path):
+                    df_sample = self.read_file_safely(file_path)
+                    if df_sample is not None and not df_sample.empty:
+                        sample_headers.append(tuple(df_sample.columns))
+            
+            # ตรวจสอบว่า header เหมือนกันหรือไม่
+            unique_headers = set(sample_headers)
+            if len(unique_headers) > 1:
+                errors.append("ไฟล์มี header ที่แตกต่างกัน - อาจไม่สามารถรวมได้")
+                
+        except Exception as e:
+            errors.append(f"ไม่สามารถตรวจสอบความเข้ากันได้: {str(e)}")
+        
+        return len(errors) == 0, errors
     
     # ========================
     # Settings Management
