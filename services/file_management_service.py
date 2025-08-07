@@ -1,19 +1,24 @@
 """
 File Management Service สำหรับ PIPELINE_SQLSERVER
 
-รวมฟังชั่นการจัดการไฟล์:
-- การรวมไฟล์ Excel จาก ZIP files (จาก ZipExcelMerger)
+รับผิดชอบการจัดการไฟล์:
+- การรวมไฟล์ Excel จาก ZIP files 
+- การย้ายไฟล์ที่ประมวลผลแล้ว
+- การจัดระเบียบโฟลเดอร์
+- การจัดการ settings
 """
 
 import os
 import json
 import shutil
 import zipfile
-import pandas as pd
-import warnings
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
+from concurrent.futures import ThreadPoolExecutor
+
+import pandas as pd
+import warnings
 from openpyxl.utils import get_column_letter
 
 
@@ -23,7 +28,15 @@ warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
 
 class FileManagementService:
-    """บริการจัดการไฟล์รวม"""
+    """
+    บริการจัดการไฟล์
+    
+    รับผิดชอบ:
+    - การรวมไฟล์ Excel จาก ZIP files
+    - การย้ายไฟล์ที่ประมวลผลแล้ว
+    - การจัดระเบียบโฟลเดอร์
+    - การจัดการ settings
+    """
     
     def __init__(self, base_path: Optional[str] = None):
         """
@@ -315,6 +328,60 @@ class FileManagementService:
             result["errors"].append(f"เกิดข้อผิดพลาด: {str(e)}")
         
         return result
+    
+    # ========================
+    # File Movement Functions
+    # ========================
+    
+    def move_uploaded_files(self, file_paths, logic_types=None, search_path=None):
+        """ย้ายไฟล์ที่อัปโหลดแล้วไปยังโฟลเดอร์ Uploaded_Files"""
+        try:
+            if not search_path:
+                search_path = self.base_path
+                
+            moved_files = []
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            
+            # ใช้ ThreadPoolExecutor สำหรับการย้ายไฟล์หลายไฟล์
+            def move_single_file(args):
+                idx, file_path = args
+                try:
+                    logic_type = logic_types[idx] if logic_types else "Unknown"
+                    
+                    # สร้างโฟลเดอร์
+                    uploaded_folder = os.path.join(search_path, "Uploaded_Files", logic_type, current_date)
+                    os.makedirs(uploaded_folder, exist_ok=True)
+                    
+                    # สร้างชื่อไฟล์ใหม่
+                    file_name = os.path.basename(file_path)
+                    name, ext = os.path.splitext(file_name)
+                    timestamp = datetime.now().strftime("%H%M%S")
+                    new_name = f"{name}_{timestamp}{ext}"
+                    destination = os.path.join(uploaded_folder, new_name)
+                    
+                    shutil.move(file_path, destination)
+                    return (file_path, destination)
+                    
+                except Exception as e:
+                    print(f"ไม่สามารถย้ายไฟล์ {file_path}: {str(e)}")
+                    return None
+            
+            # ถ้ามีไฟล์น้อยกว่า 5 ไฟล์ ทำทีละไฟล์
+            if len(file_paths) < 5:
+                for idx, file_path in enumerate(file_paths):
+                    result = move_single_file((idx, file_path))
+                    if result:
+                        moved_files.append(result)
+            else:
+                # ใช้ ThreadPoolExecutor สำหรับไฟล์เยอะ
+                with ThreadPoolExecutor(max_workers=3) as executor:
+                    results = executor.map(move_single_file, enumerate(file_paths))
+                    moved_files = [r for r in results if r is not None]
+            
+            return True, moved_files
+            
+        except Exception as e:
+            return False, str(e)
     
     # ========================
     # Helper Functions
