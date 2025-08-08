@@ -128,8 +128,18 @@ class DatabaseService:
             if log_func:
                 log_func(f"⚠️ ไม่สามารถแก้ไขคอลัมน์ Text() ได้: {e}")
 
-    def upload_data(self, df, logic_type, required_cols, schema_name='bronze', log_func=None):
-        """อัปโหลดข้อมูลไปยังฐานข้อมูล: สร้างตารางใหม่ตาม config, insert เฉพาะคอลัมน์ที่ตั้งค่าไว้, ถ้า schema DB ไม่ตรงให้ drop และสร้างตารางใหม่"""
+    def upload_data(self, df, logic_type, required_cols, schema_name='bronze', log_func=None, force_recreate=False):
+        """
+        อัปโหลดข้อมูลไปยังฐานข้อมูล: สร้างตารางใหม่ตาม config, insert เฉพาะคอลัมน์ที่ตั้งค่าไว้, ถ้า schema DB ไม่ตรงให้ drop และสร้างตารางใหม่
+        
+        Args:
+            df: DataFrame ที่จะอัปโหลด
+            logic_type: ประเภทไฟล์
+            required_cols: คอลัมน์และชนิดข้อมูลที่ต้องการ
+            schema_name: ชื่อ schema ในฐานข้อมูล
+            log_func: ฟังก์ชันสำหรับ log
+            force_recreate: บังคับสร้างตารางใหม่ (ใช้เมื่อมีการปรับปรุงชนิดข้อมูลอัตโนมัติ)
+        """
         try:
             import json
             from datetime import datetime
@@ -168,9 +178,9 @@ class DatabaseService:
             from sqlalchemy import inspect
             from sqlalchemy.types import Text
             insp = inspect(self.engine)
-            needs_recreate = False
+            needs_recreate = force_recreate  # บังคับสร้างใหม่ถ้า auto-fix ทำงาน
             
-            if insp.has_table(table_name, schema=schema_name):
+            if insp.has_table(table_name, schema=schema_name) and not force_recreate:
                 db_cols = [col['name'] for col in insp.get_columns(table_name, schema=schema_name)]
                 db_col_types = {col['name']: str(col['type']).upper() for col in insp.get_columns(table_name, schema=schema_name)}
                 config_cols = list(required_cols.keys())
@@ -192,27 +202,16 @@ class DatabaseService:
                                     log_func(msg)
                                 needs_recreate = True
                                 break
-                
-                if needs_recreate:
-                    if log_func:
-                        log_func(f"{msg} กำลังลบและสร้างตารางใหม่")
-                    # Drop และสร้างตารางใหม่
-                    df.head(0)[list(required_cols.keys())].to_sql(
-                        name=table_name,
-                        con=self.engine,
-                        schema=schema_name,
-                        if_exists='replace',
-                        index=False,
-                        dtype=required_cols
-                    )
-                    # แก้ไขคอลัมน์ที่เป็น Text() ให้เป็น NVARCHAR(MAX)
-                    self._fix_text_columns_to_nvarchar_max(table_name, required_cols, schema_name, log_func)
-                else:
-                    # ล้างข้อมูลเดิม
-                    with self.engine.begin() as conn:
-                        conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
-            else:
-                # สร้างตารางใหม่ตาม config
+            
+            if needs_recreate or not insp.has_table(table_name, schema=schema_name):
+                if force_recreate and log_func:
+                    log_func(f"🔄 มีการปรับปรุงชนิดข้อมูลอัตโนมัติ - สร้างตาราง {schema_name}.{table_name} ใหม่")
+                elif needs_recreate and log_func:
+                    log_func(f"❌ Schema ไม่ตรงกัน - สร้างตาราง {schema_name}.{table_name} ใหม่")
+                elif log_func:
+                    log_func(f"📋 สร้างตารางใหม่ {schema_name}.{table_name}")
+                    
+                # Drop และสร้างตารางใหม่
                 df.head(0)[list(required_cols.keys())].to_sql(
                     name=table_name,
                     con=self.engine,
@@ -223,6 +222,12 @@ class DatabaseService:
                 )
                 # แก้ไขคอลัมน์ที่เป็น Text() ให้เป็น NVARCHAR(MAX)
                 self._fix_text_columns_to_nvarchar_max(table_name, required_cols, schema_name, log_func)
+            else:
+                # ล้างข้อมูลเดิม
+                if log_func:
+                    log_func(f"🗑️ ล้างข้อมูลเดิมในตาราง {schema_name}.{table_name}")
+                with self.engine.begin() as conn:
+                    conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
             
             # แปลงคอลัมน์วันที่ให้เป็นรูปแบบที่ SQL Server รองรับ
             for col, dtype in required_cols.items():
