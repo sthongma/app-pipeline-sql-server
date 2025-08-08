@@ -105,7 +105,7 @@ class PathConstants:
     CONFIG_DIR = "config"
     COLUMN_SETTINGS_FILE = os.path.join(CONFIG_DIR, "column_settings.json")
     DTYPE_SETTINGS_FILE = os.path.join(CONFIG_DIR, "dtype_settings.json")
-    SQL_CONFIG_FILE = "sql_config.json"
+    SQL_CONFIG_FILE = os.path.join(CONFIG_DIR, "sql_config.json")
     LAST_PATH_FILE = os.path.join(CONFIG_DIR, "last_path.json")
     
     # Default search path

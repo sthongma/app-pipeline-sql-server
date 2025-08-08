@@ -4,6 +4,7 @@ import json
 import os
 from services.database_service import DatabaseService
 from ui.main_window import MainWindow
+from constants import PathConstants
 
 class LoginWindow(ctk.CTk):
     def __init__(self):
@@ -90,8 +91,8 @@ class LoginWindow(ctk.CTk):
     def _load_saved_settings(self):
         """โหลดการตั้งค่าที่บันทึกไว้"""
         try:
-            if os.path.exists("sql_config.json"):
-                with open("sql_config.json", "r") as f:
+            if os.path.exists(PathConstants.SQL_CONFIG_FILE):
+                with open(PathConstants.SQL_CONFIG_FILE, "r") as f:
                     config = json.load(f)
                     
                 self.server_entry.insert(0, config.get("server", ""))
@@ -117,7 +118,7 @@ class LoginWindow(ctk.CTk):
             }
             
             try:
-                with open("sql_config.json", "w") as f:
+                with open(PathConstants.SQL_CONFIG_FILE, "w") as f:
                     json.dump(config, f, indent=4)
             except Exception as e:
                 print(f"Error saving settings: {e}")
