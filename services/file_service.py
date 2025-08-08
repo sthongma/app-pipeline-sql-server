@@ -28,6 +28,7 @@ from .file_reader_service import FileReaderService
 from .data_processor_service import DataProcessorService  
 from .file_management_service import FileManagementService
 from performance_optimizations import PerformanceOptimizer
+from config.settings import settings_manager
 
 
 class FileService:
@@ -55,11 +56,21 @@ class FileService:
         self.data_processor = DataProcessorService(log_callback)
         self.file_manager = FileManagementService(search_path)
         
+        # อัปเดตข้อมูลจาก SettingsManager
+        self.file_reader.column_settings = settings_manager.column_settings
+        self.file_reader.dtype_settings = settings_manager.dtype_settings
+        self.file_reader._settings_loaded = True
+        
+        self.data_processor.column_settings = settings_manager.column_settings  
+        self.data_processor.dtype_settings = settings_manager.dtype_settings
+        self.data_processor._settings_loaded = True
+        
         # สร้าง performance optimizer
         self.performance_optimizer = PerformanceOptimizer(log_callback)
         
         # เก็บ reference สำหรับ backward compatibility
         self.search_path = self.file_reader.search_path
+        self.column_settings = settings_manager.column_settings
 
     # ========================
     # Main Interface Methods
@@ -218,9 +229,21 @@ class FileService:
         return self.file_reader.normalize_col(col)
 
     def load_settings(self):
-        """โหลดการตั้งค่า (legacy)"""
-        self.file_reader.load_settings()
-        self.data_processor.load_settings()
+        """โหลดการตั้งค่าใหม่จาก SettingsManager"""
+        # โหลดการตั้งค่าใหม่จาก SettingsManager
+        settings_manager.load_all_settings()
+        
+        # อัปเดตข้อมูลใน file_reader และ data_processor
+        self.file_reader.column_settings = settings_manager.column_settings
+        self.file_reader.dtype_settings = settings_manager.dtype_settings
+        self.file_reader._settings_loaded = True
+        
+        self.data_processor.column_settings = settings_manager.column_settings  
+        self.data_processor.dtype_settings = settings_manager.dtype_settings
+        self.data_processor._settings_loaded = True
+        
+        # อัปเดต reference ใน FileService
+        self.column_settings = settings_manager.column_settings
 
     def _process_dataframe_in_chunks(self, df, process_func, logic_type, chunk_size=5000):
         """ประมวลผล DataFrame แบบ chunk (legacy wrapper)"""
