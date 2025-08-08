@@ -24,75 +24,6 @@ logging.basicConfig(
     format=AppConstants.LOG_FORMAT
 )
 
-def load_last_path() -> Optional[str]:
-    """
-    โหลด search path ล่าสุดจากไฟล์ last_path.json (เหมือนกับ GUI)
-    
-    Returns:
-        Optional[str]: search path หรือ None ถ้าไม่มี
-    """
-    try:
-        import json
-        with open('config/last_path.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get('last_path', None)
-    except (FileNotFoundError, json.JSONDecodeError, KeyError):
-        return None
-
-def process_file(file_path: str, file_service: FileService, db_service: DatabaseService) -> None:
-    """
-    ประมวลผลไฟล์เดียว: อ่าน แปลง อัปโหลด และย้าย (เหมือน GUI)
-    
-    Args:
-        file_path: ที่อยู่ไฟล์ที่ต้องการประมวลผล
-        file_service: บริการจัดการไฟล์
-        db_service: บริการฐานข้อมูล
-    """
-    try:
-        logging.info(f"Processing file: {file_path}")
-        # 1. พยายามตรวจ logic_type จาก header ก่อน (เหมือน GUI)
-        logic_type = file_service.detect_file_type(file_path)
-        # 2. ถ้าไม่ได้ ให้ fallback เดาจากชื่อไฟล์
-        if not logic_type:
-            filename = os.path.basename(file_path)
-            if hasattr(file_service, 'column_settings'):
-                for key in file_service.column_settings.keys():
-                    if key.lower() in filename.lower():
-                        logic_type = key
-                        break
-        if not logic_type:
-            logging.warning(f"ไม่สามารถระบุประเภทไฟล์ (logic_type) สำหรับ {os.path.basename(file_path)} ได้ ข้ามไฟล์นี้")
-            return
-        logging.info(f"Determined file type as: {logic_type}")
-        # 3. อ่านไฟล์ (เหมือน GUI)
-        success, df_or_msg = file_service.read_excel_file(file_path, logic_type)
-        if not success:
-            logging.error(f"{df_or_msg}")
-            return
-        df = df_or_msg
-        # 4. ตรวจสอบคอลัมน์ (เหมือน GUI)
-        success, result = file_service.validate_columns(df, logic_type)
-        if not success:
-            logging.error(f"{result}")
-            return
-        required_cols = file_service.get_required_dtypes(logic_type)
-        # 5. อัปโหลดข้อมูล
-        success, message = db_service.upload_data(df, logic_type, required_cols)
-        if success:
-            logging.info(f"Successfully uploaded data from {file_path} to table for logic type {logic_type}.")
-            # Move file after upload (เหมือน GUI)
-            move_success, move_result = file_service.move_uploaded_files([file_path], [logic_type])
-            if move_success:
-                for original_path, new_path in move_result:
-                    logging.info(f"Moved file: {original_path} -> {new_path}")
-            else:
-                logging.error(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
-        else:
-            logging.error(f"Failed to upload data for {file_path}. Reason: {message}")
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while processing {file_path}: {e}", exc_info=True)
-
-
 def validate_source_path() -> Optional[str]:
     """
     ตรวจสอบและโหลด path ต้นทางจาก last_path.json
@@ -112,23 +43,6 @@ def validate_source_path() -> Optional[str]:
     
     logging.info(f"✅ ใช้ source path: {path}")
     return path
-
-
-def upload_files_auto_cli(args):
-    """
-    ฟังก์ชันสำหรับการอัปโหลดไฟล์อัตโนมัติผ่าน CLI
-    
-    Args:
-        args (argparse.Namespace): arguments จาก command line  
-    """
-    logging.info("Starting CLI auto upload process.")
-    
-    source_path = args.source
-    if not source_path or not os.path.isdir(source_path):
-        logging.error(f"Invalid source path: {source_path}")
-        return
-    
-    logging.info(f"Source path: {source_path}")
 
 
 def process_main_files_step(source_path: str) -> None:

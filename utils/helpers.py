@@ -134,33 +134,6 @@ def format_error_message(error: Exception, context: str = "") -> str:
         return f"❌ เกิดข้อผิดพลาด: {error_msg}"
 
 
-def create_backup_filename(original_path: str, backup_dir: str = "backups") -> str:
-    """
-    สร้างชื่อไฟล์สำรองพร้อม timestamp
-    
-    Args:
-        original_path: ที่อยู่ไฟล์ต้นฉบับ
-        backup_dir: โฟลเดอร์สำรอง
-        
-    Returns:
-        str: ที่อยู่ไฟล์สำรองใหม่
-    """
-    # สร้างโฟลเดอร์สำรองถ้ายังไม่มี
-    os.makedirs(backup_dir, exist_ok=True)
-    
-    # แยกชื่อไฟล์และ extension
-    base_name = os.path.basename(original_path)
-    name, ext = os.path.splitext(base_name)
-    
-    # สร้าง timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    # สร้างชื่อไฟล์ใหม่
-    backup_filename = f"{name}_backup_{timestamp}{ext}"
-    
-    return os.path.join(backup_dir, backup_filename)
-
-
 def safe_json_load(file_path: str, default: dict = None) -> dict:
     """
     โหลดไฟล์ JSON อย่างปลอดภัย
@@ -229,18 +202,3 @@ def get_file_size_mb(file_path: str) -> float:
         return 0.0
 
 
-def truncate_string(text: str, max_length: int = 100, suffix: str = "...") -> str:
-    """
-    ตัดข้อความให้สั้นลงตามความยาวที่กำหนด
-    
-    Args:
-        text: ข้อความต้นฉบับ
-        max_length: ความยาวสูงสุด
-        suffix: ข้อความต่อท้าย
-        
-    Returns:
-        str: ข้อความที่ตัดแล้ว
-    """
-    if len(text) <= max_length:
-        return text
-    return text[:max_length - len(suffix)] + suffix

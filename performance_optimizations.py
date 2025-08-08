@@ -16,8 +16,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple, Callable, Any
 import pandas as pd
-import numpy as np
-from pathlib import Path
 
 class PerformanceOptimizer:
     """คลาสสำหรับการปรับปรุง Performance"""
