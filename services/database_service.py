@@ -37,9 +37,11 @@ class DatabaseService:
     def _get_permission_checker(self, log_callback=None):
         """สร้างหรือคืนค่า PermissionCheckerService"""
         if self.permission_checker is None:
+            # ใช้ silent callback เป็นค่าเริ่มต้นสำหรับ GUI
+            default_callback = log_callback or (lambda msg: None)
             self.permission_checker = PermissionCheckerService(
                 engine=self.engine, 
-                log_callback=log_callback or print
+                log_callback=default_callback
             )
         return self.permission_checker
 
@@ -49,12 +51,14 @@ class DatabaseService:
         
         Args:
             schema_name: ชื่อ schema ที่ต้องการตรวจสอบ
-            log_callback: ฟังก์ชันสำหรับแสดง log
+            log_callback: ฟังก์ชันสำหรับแสดง log (None = ไม่แสดง log)
             
         Returns:
             Dict: ผลการตรวจสอบสิทธิ์
         """
-        checker = self._get_permission_checker(log_callback)
+        # สำหรับ GUI ไม่ต้องแสดง log ใน CLI
+        silent_callback = lambda msg: None  # ฟังก์ชันเงียบ
+        checker = self._get_permission_checker(silent_callback if log_callback is None else log_callback)
         return checker.check_all_permissions(schema_name)
 
     def generate_permission_report(self, schema_name: str = 'bronze') -> str:

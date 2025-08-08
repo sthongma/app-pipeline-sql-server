@@ -31,10 +31,11 @@ class PermissionCheckerService:
         
         Args:
             engine: SQLAlchemy engine (ถ้าไม่มีจะสร้างใหม่)
-            log_callback: ฟังก์ชันสำหรับแสดง log
+            log_callback: ฟังก์ชันสำหรับแสดง log (None = silent mode)
         """
         self.engine = engine
-        self.log_callback = log_callback if log_callback else print
+        # ใช้ silent callback เป็นค่าเริ่มต้น (ไม่แสดง log ใน CLI)
+        self.log_callback = log_callback if log_callback else (lambda msg: None)
         self.logger = logging.getLogger(__name__)
         
         # กำหนดสิทธิ์ที่จำเป็น

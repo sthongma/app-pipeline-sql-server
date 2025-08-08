@@ -4,6 +4,7 @@ import json
 import os
 from services.database_service import DatabaseService
 from ui.main_window import MainWindow
+from ui.loading_dialog import LoadingDialog
 from constants import PathConstants
 
 class LoginWindow(ctk.CTk):
@@ -147,9 +148,42 @@ class LoginWindow(ctk.CTk):
         
         # ทดสอบการเชื่อมต่อและสิทธิ์
         try:
-            if self.db_service.test_connection(config):
-                # ตรวจสอบสิทธิ์ที่จำเป็น
-                permission_results = self.db_service.check_permissions('bronze')
+            # แสดง loading dialog สำหรับการเชื่อมต่อ
+            loading_dialog = LoadingDialog(
+                self, 
+                "กำลังเชื่อมต่อ", 
+                "กำลังทดสอบการเชื่อมต่อกับฐานข้อมูล..."
+            )
+            
+            # รันการทดสอบการเชื่อมต่อใน background
+            loading_dialog.run_task(self.db_service.test_connection, config)
+            
+            # รอผลลัพธ์
+            self.wait_window(loading_dialog)
+            
+            if loading_dialog.error:
+                messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(loading_dialog.error)}")
+                return
+                
+            if loading_dialog.result:
+                # แสดง loading dialog สำหรับการตรวจสอบสิทธิ์
+                permission_dialog = LoadingDialog(
+                    self,
+                    "กำลังตรวจสอบสิทธิ์",
+                    "กำลังตรวจสอบสิทธิ์การใช้งานฐานข้อมูล..."
+                )
+                
+                # รันการตรวจสอบสิทธิ์ใน background
+                permission_dialog.run_task(self.db_service.check_permissions, 'bronze')
+                
+                # รอผลลัพธ์
+                self.wait_window(permission_dialog)
+                
+                if permission_dialog.error:
+                    messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(permission_dialog.error)}")
+                    return
+                
+                permission_results = permission_dialog.result
                 if not permission_results.get('success', False):
                     missing_permissions = permission_results.get('missing_critical', [])
                     recommendations = permission_results.get('recommendations', [])
