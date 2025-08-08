@@ -198,8 +198,29 @@ class DataProcessorService:
                 
                 try:
                     if 'DATE' in dtype_str:
-                        # ใช้ vectorized operation สำหรับ datetime
-                        df[col] = df[col].astype(str).apply(parse_datetime_safe)
+                        # ใช้การแปลงข้อมูลวันที่ที่เข้มงวดและปลอดภัยขึ้น
+                        def parse_datetime_safe_strict(val):
+                            try:
+                                if pd.isna(val) or val == '' or str(val).lower() in ['nan', 'null', 'none']:
+                                    return pd.NaT
+                                
+                                # ลองแปลงด้วย pandas
+                                converted_date = parser.parse(str(val), dayfirst=dayfirst)
+                                
+                                # ตรวจสอบช่วงปีที่ SQL Server รองรับ
+                                if converted_date.year < 1753 or converted_date.year > 9999:
+                                    return pd.NaT
+                                
+                                # ตรวจสอบปีที่สมเหตุสมผล (1900-2100)
+                                if converted_date.year < 1900 or converted_date.year > 2100:
+                                    return pd.NaT
+                                
+                                return converted_date
+                                
+                            except (ValueError, OverflowError, TypeError):
+                                return pd.NaT
+                        
+                        df[col] = df[col].astype(str).apply(parse_datetime_safe_strict)
                         new_null_count = df[col].isnull().sum()
                         failed_count = new_null_count - original_null_count
                         
@@ -213,11 +234,12 @@ class DataProcessorService:
                                 'expected_type': dtype_str,
                                 'failed_count': failed_count,
                                 'examples': failed_examples.tolist(),
-                                'error_type': 'Invalid date format'
+                                'error_type': 'Invalid date format or out of SQL Server range'
                             }
                             
-                            if failed_count > len(df) * 0.1:  # มากกว่า 10%
-                                conversion_log['warnings'].append(f"คอลัมน์ '{col}' มีข้อมูลวันที่ผิดมากกว่า 10%")
+                            # เพิ่มความเข้มงวด: ถ้ามีข้อมูลวันที่ผิดมากกว่า 5% ให้เตือน
+                            if failed_count > len(df) * 0.05:
+                                conversion_log['warnings'].append(f"คอลัมน์ '{col}' มีข้อมูลวันที่ผิดมากกว่า 5% - ควรเปลี่ยนเป็น STRING")
                         else:
                             conversion_log['successful_conversions'].append(f"{col} ({dtype_str})")
                             
@@ -284,6 +306,89 @@ class DataProcessorService:
             
         except Exception as e:
             self.log_callback(f"❌ เกิดข้อผิดพลาดในการแปลงประเภทข้อมูล: {e}")
+            return df
+
+    def clean_and_validate_datetime_columns(self, df, file_type):
+        """ทำความสะอาดและตรวจสอบข้อมูลคอลัมน์วันที่"""
+        if not file_type or file_type not in self.dtype_settings:
+            return df
+            
+        try:
+            for col, dtype_str in self.dtype_settings[file_type].items():
+                if col not in df.columns:
+                    continue
+                    
+                dtype_str_upper = str(dtype_str).upper()
+                if 'DATE' in dtype_str_upper:
+                    
+                    # ตรวจสอบและทำความสะอาดข้อมูลวันที่
+                    original_count = len(df)
+                    problematic_values = []
+                    
+                    def clean_datetime_value(val):
+                        try:
+                            if pd.isna(val) or val == '' or str(val).lower() in ['nan', 'null', 'none', '0']:
+                                return None
+                            
+                            val_str = str(val).strip()
+                            
+                            # ตรวจสอบรูปแบบที่ผิดปกติ
+                            if len(val_str) < 4:  # วันที่ต้องมีอย่างน้อย 4 ตัวอักษร
+                                problematic_values.append(val_str)
+                                return None
+                                
+                            # ตรวจสอบปีที่เป็นไปไม่ได้
+                            if val_str.isdigit() and len(val_str) == 4:
+                                year = int(val_str)
+                                if year < 1753 or year > 9999:
+                                    problematic_values.append(val_str)
+                                    return None
+                            
+                            # ลองแปลงเป็นวันที่
+                            try:
+                                converted_date = pd.to_datetime(val_str, errors='raise')
+                                
+                                # ตรวจสอบช่วงปีที่ SQL Server รองรับ
+                                if converted_date.year < 1753 or converted_date.year > 9999:
+                                    problematic_values.append(val_str)
+                                    return None
+                                    
+                                # ตรวจสอบปีที่สมเหตุสมผล
+                                if converted_date.year < 1900 or converted_date.year > 2100:
+                                    problematic_values.append(val_str)
+                                    return None
+                                
+                                return val_str
+                                
+                            except (ValueError, OverflowError, TypeError):
+                                problematic_values.append(val_str)
+                                return None
+                                
+                        except Exception:
+                            return None
+                    
+                    # ทำความสะอาดข้อมูล
+                    df[col] = df[col].apply(clean_datetime_value)
+                    
+                    # รายงานผล
+                    cleaned_count = df[col].isnull().sum()
+                    if cleaned_count > 0:
+                        problem_percentage = (cleaned_count / original_count) * 100
+                        unique_problems = list(set(problematic_values[:5]))  # แสดงตัวอย่าง 5 ค่า
+                        
+                        if not hasattr(self, f'_datetime_clean_log_{col}'):
+                            self.log_callback(f"   🧹 ทำความสะอาด '{col}': ลบข้อมูลวันที่ที่ไม่ถูกต้อง {cleaned_count:,} แถว ({problem_percentage:.1f}%)")
+                            if unique_problems:
+                                self.log_callback(f"      ตัวอย่างข้อมูลที่ลบ: {unique_problems}")
+                            setattr(self, f'_datetime_clean_log_{col}', True)
+                        
+                        # ถ้าข้อมูลผิดมากกว่า 30% ให้แนะนำเปลี่ยนเป็น string
+                        if problem_percentage > 30:
+                            self.log_callback(f"   ⚠️ คำแนะนำ: คอลัมน์ '{col}' มีข้อมูลวันที่ผิดมาก ({problem_percentage:.1f}%) - ควรเปลี่ยนเป็น NVARCHAR")
+                    
+            return df
+        except Exception as e:
+            self.log_callback(f"เกิดข้อผิดพลาดในการ clean ข้อมูลวันที่: {e}")
             return df
 
     def clean_numeric_columns(self, df, file_type):
@@ -708,7 +813,8 @@ class DataProcessorService:
         for attr in dir(self):
             if attr.startswith(('_truncation_log_shown', '_text_skip_log_', '_truncate_log_', 
                                '_no_truncation_log_shown', '_truncation_summary_shown',
-                               '_dtype_conversion_log_', '_conversion_report_shown', '_chunk_log_shown')):
+                               '_dtype_conversion_log_', '_conversion_report_shown', '_chunk_log_shown',
+                               '_datetime_clean_log_')):
                 if hasattr(self, attr):
                     delattr(self, attr)
 
@@ -794,15 +900,39 @@ class DataProcessorService:
                     if len(valid_numeric) > 0 and (valid_numeric % 1 != 0).any():
                         return 'DECIMAL(18,4)'
                         
-            # ตรวจสอบข้อมูลวันที่
+            # ตรวจสอบข้อมูลวันที่ - เพิ่มการตรวจสอบที่เข้มงวดขึ้น
             elif 'DATE' in expected_dtype:
-                date_data = pd.to_datetime(sample_data, errors='coerce')
-                invalid_count = date_data.isna().sum()
+                valid_dates = 0
+                total_non_null = len(sample_data)
                 
-                # ถ้าข้อมูลไม่ใช่วันที่มากกว่า 30% ให้เปลี่ยนเป็น string
-                if invalid_count > len(sample_data) * 0.3:
+                for value in sample_data:
+                    if pd.isna(value) or value == '':
+                        continue
+                        
+                    try:
+                        # ลองแปลงด้วย pandas
+                        converted_date = pd.to_datetime(str(value), errors='raise')
+                        
+                        # ตรวจสอบว่าวันที่อยู่ในช่วงที่ SQL Server รองรับ (1753-01-01 ถึง 9999-12-31)
+                        if converted_date.year < 1753 or converted_date.year > 9999:
+                            continue
+                            
+                        # ตรวจสอบรูปแบบวันที่ที่แปลกประหลาด
+                        if converted_date.year < 1900 or converted_date.year > 2100:
+                            continue
+                            
+                        valid_dates += 1
+                        
+                    except (ValueError, pd._libs.tslibs.parsing.DateParseError, OverflowError):
+                        continue
+                
+                # ถ้าข้อมูลวันที่ที่ถูกต้องน้อยกว่า 70% ให้เปลี่ยนเป็น string
+                valid_percentage = valid_dates / total_non_null if total_non_null > 0 else 0
+                if valid_percentage < 0.7:
                     max_length = sample_data.astype(str).str.len().max()
-                    return self._suggest_string_type(max_length)
+                    suggested_type = self._suggest_string_type(max_length)
+                    self.log_callback(f"   ⚠️ คอลัมน์ '{col_name}': วันที่ถูกต้องเพียง {valid_percentage:.1%} → เปลี่ยนเป็น {suggested_type}")
+                    return suggested_type
                     
             # ตรวจสอบข้อมูล string
             elif expected_dtype.startswith('NVARCHAR'):
@@ -815,7 +945,8 @@ class DataProcessorService:
                     
             return expected_dtype
             
-        except Exception:
+        except Exception as e:
+            self.log_callback(f"   ⚠️ ไม่สามารถวิเคราะห์คอลัมน์ '{col_name}': {e}")
             return expected_dtype
 
     def _suggest_string_type(self, max_length):
@@ -899,11 +1030,13 @@ class DataProcessorService:
             
             # ทำความสะอาดและแปลงข้อมูล
             df = self.process_dataframe_in_chunks(df, self.clean_numeric_columns, logic_type)
+            df = self.process_dataframe_in_chunks(df, self.clean_and_validate_datetime_columns, logic_type)
             df = self.process_dataframe_in_chunks(df, self.truncate_long_strings, logic_type)
             df = self.process_dataframe_in_chunks(df, self.apply_dtypes, logic_type)
             
             processing_report['processing_steps'].extend([
                 "ทำความสะอาดข้อมูลตัวเลข",
+                "ทำความสะอาดข้อมูลวันที่",
                 "ตัดข้อมูล string ที่ยาวเกิน", 
                 "แปลงชนิดข้อมูล"
             ])

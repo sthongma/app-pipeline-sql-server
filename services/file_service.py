@@ -132,6 +132,9 @@ class FileService:
                 self.log_callback(f"🧹 ทำความสะอาดข้อมูลตัวเลข...")
                 df = self.data_processor.process_dataframe_in_chunks(df, self.data_processor.clean_numeric_columns, logic_type)
                 
+                self.log_callback(f"📅 ทำความสะอาดข้อมูลวันที่...")
+                df = self.data_processor.process_dataframe_in_chunks(df, self.data_processor.clean_and_validate_datetime_columns, logic_type)
+                
                 # ตัดข้อมูล string ที่ยาวเกิน
                 df = self.data_processor.process_dataframe_in_chunks(df, self.data_processor.truncate_long_strings, logic_type)
                 
