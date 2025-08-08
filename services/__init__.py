@@ -14,11 +14,13 @@ from .file_service import FileService
 from .file_reader_service import FileReaderService
 from .data_processor_service import DataProcessorService
 from .file_management_service import FileManagementService
+from .permission_checker_service import PermissionCheckerService
 
 __all__ = [
     'DatabaseService', 
     'FileService',
     'FileReaderService',
     'DataProcessorService', 
-    'FileManagementService'
+    'FileManagementService',
+    'PermissionCheckerService'
 ]

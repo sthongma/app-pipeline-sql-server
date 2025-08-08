@@ -267,6 +267,21 @@ def auto_upload_cli(args) -> None:
     
     logging.info("✅ เชื่อมต่อฐานข้อมูลสำเร็จ")
     
+    # ตรวจสอบสิทธิ์ฐานข้อมูล
+    logging.info("🔐 ตรวจสอบสิทธิ์ฐานข้อมูล...")
+    permission_results = db_service.check_permissions('bronze', logging.info)
+    
+    if not permission_results.get('success', False):
+        logging.error("❌ ไม่สามารถดำเนินการได้เนื่องจากสิทธิ์ไม่เพียงพอ")
+        logging.info("📋 รายงานสิทธิ์:")
+        report = db_service.generate_permission_report('bronze')
+        for line in report.split('\n'):
+            if line.strip():
+                logging.info(line)
+        return
+    
+    logging.info("✅ สิทธิ์ฐานข้อมูลถูกต้อง")
+    
     try:
         # ขั้นตอนหลัก: ประมวลผลไฟล์
         process_main_files_step(source_path)

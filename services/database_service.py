@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, text
 
 from config.database import DatabaseConfig
 from constants import DatabaseConstants, ErrorMessages, SuccessMessages
+from .permission_checker_service import PermissionCheckerService
 
 class DatabaseService:
     """
@@ -31,6 +32,43 @@ class DatabaseService:
         self.db_config = DatabaseConfig()
         self.engine = self.db_config.get_engine()
         self.logger = logging.getLogger(__name__)
+        self.permission_checker = None  # จะสร้างตอนต้องใช้งาน
+
+    def _get_permission_checker(self, log_callback=None):
+        """สร้างหรือคืนค่า PermissionCheckerService"""
+        if self.permission_checker is None:
+            self.permission_checker = PermissionCheckerService(
+                engine=self.engine, 
+                log_callback=log_callback or print
+            )
+        return self.permission_checker
+
+    def check_permissions(self, schema_name: str = 'bronze', log_callback=None) -> Dict:
+        """
+        ตรวจสอบสิทธิ์ SQL Server ที่จำเป็นสำหรับการทำงาน
+        
+        Args:
+            schema_name: ชื่อ schema ที่ต้องการตรวจสอบ
+            log_callback: ฟังก์ชันสำหรับแสดง log
+            
+        Returns:
+            Dict: ผลการตรวจสอบสิทธิ์
+        """
+        checker = self._get_permission_checker(log_callback)
+        return checker.check_all_permissions(schema_name)
+
+    def generate_permission_report(self, schema_name: str = 'bronze') -> str:
+        """
+        สร้างรายงานสิทธิ์แบบละเอียด
+        
+        Args:
+            schema_name: ชื่อ schema ที่ต้องการตรวจสอบ
+            
+        Returns:
+            str: รายงานสิทธิ์
+        """
+        checker = self._get_permission_checker()
+        return checker.generate_permission_report(schema_name)
 
     def check_connection(self) -> Tuple[bool, str]:
         """
@@ -140,6 +178,30 @@ class DatabaseService:
             log_func: ฟังก์ชันสำหรับ log
             force_recreate: บังคับสร้างตารางใหม่ (ใช้เมื่อมีการปรับปรุงชนิดข้อมูลอัตโนมัติ)
         """
+        # ตรวจสอบสิทธิ์ก่อนดำเนินการ
+        if log_func:
+            log_func("🔐 ตรวจสอบสิทธิ์การเข้าถึงฐานข้อมูล...")
+        
+        permission_results = self.check_permissions(schema_name, log_func)
+        
+        if not permission_results.get('success', False):
+            # มีสิทธิ์ที่จำเป็นขาดหายไป
+            missing_permissions = permission_results.get('missing_critical', [])
+            error_msg = f"ไม่สามารถดำเนินการได้ เนื่องจากขาดสิทธิ์ที่จำเป็น: {', '.join(missing_permissions)}"
+            
+            if log_func:
+                log_func(f"❌ {error_msg}")
+                log_func("💡 คำแนะนำการแก้ไข:")
+                recommendations = permission_results.get('recommendations', [])
+                for rec in recommendations:
+                    log_func(rec)
+            
+            return False, error_msg
+        
+        # สิทธิ์ผ่าน ดำเนินการอัปโหลดปกติ
+        if log_func:
+            log_func("✅ สิทธิ์การเข้าถึงฐานข้อมูลถูกต้อง")
+        
         try:
             import json
             from datetime import datetime
