@@ -144,10 +144,27 @@ class LoginWindow(ctk.CTk):
         # บันทึกการตั้งค่า
         self._save_settings()
         
-        # ทดสอบการเชื่อมต่อ
+        # ทดสอบการเชื่อมต่อและสิทธิ์
         try:
             if self.db_service.test_connection(config):
-                # messagebox.showinfo("Success", "เชื่อมต่อสำเร็จ")  # ไม่ต้องแจ้งเตือนถ้าสำเร็จ
+                # ตรวจสอบสิทธิ์ที่จำเป็น
+                permission_results = self.db_service.check_permissions('bronze')
+                if not permission_results.get('success', False):
+                    missing_permissions = permission_results.get('missing_critical', [])
+                    recommendations = permission_results.get('recommendations', [])
+                    
+                    # สร้างข้อความแสดงรายละเอียด
+                    detail_msg = f"ขาดสิทธิ์ที่จำเป็น: {', '.join(missing_permissions)}\n\n"
+                    if recommendations:
+                        detail_msg += "คำแนะนำการแก้ไข:\n" + "\n".join(recommendations[:3])  # แสดง 3 บรรทัดแรก
+                    
+                    messagebox.showerror(
+                        "สิทธิ์ไม่เพียงพอ", 
+                        f"เชื่อมต่อสำเร็จ แต่ไม่สามารถใช้งานได้เนื่องจากสิทธิ์ฐานข้อมูลไม่เพียงพอ\n\n{detail_msg}"
+                    )
+                    return
+                
+                # เชื่อมต่อและสิทธิ์ผ่าน
                 self.withdraw()
                 main_window = MainWindow()
                 main_window.protocol("WM_DELETE_WINDOW", lambda: self._on_main_window_close(main_window))

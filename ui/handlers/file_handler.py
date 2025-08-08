@@ -106,39 +106,7 @@ class FileHandler:
             )
             return
             
-        # ตรวจสอบสิทธิ์ฐานข้อมูล
-        permission_results = self.db_service.check_permissions('bronze')
-        if not permission_results.get('success', False):
-            missing_permissions = permission_results.get('missing_critical', [])
-            recommendations = permission_results.get('recommendations', [])
             
-            # สร้างข้อความแสดงรายละเอียด
-            detail_msg = f"ขาดสิทธิ์ที่จำเป็น: {', '.join(missing_permissions)}\n\n"
-            if recommendations:
-                detail_msg += "คำแนะนำการแก้ไข:\n" + "\n".join(recommendations[:5])  # แสดง 5 บรรทัดแรก
-            
-            messagebox.showerror(
-                "สิทธิ์ไม่เพียงพอ", 
-                f"ไม่สามารถดำเนินการประมวลผลอัตโนมัติได้เนื่องจากสิทธิ์ฐานข้อมูลไม่เพียงพอ\n\n{detail_msg}"
-            )
-            return
-            
-        # ตรวจสอบสิทธิ์ฐานข้อมูล
-        permission_results = self.db_service.check_permissions('bronze')
-        if not permission_results.get('success', False):
-            missing_permissions = permission_results.get('missing_critical', [])
-            recommendations = permission_results.get('recommendations', [])
-            
-            # สร้างข้อความแสดงรายละเอียด
-            detail_msg = f"ขาดสิทธิ์ที่จำเป็น: {', '.join(missing_permissions)}\n\n"
-            if recommendations:
-                detail_msg += "คำแนะนำการแก้ไข:\n" + "\n".join(recommendations[:5])  # แสดง 5 บรรทัดแรก
-            
-            messagebox.showerror(
-                "สิทธิ์ไม่เพียงพอ", 
-                f"ไม่สามารถดำเนินการได้เนื่องจากสิทธิ์ฐานข้อมูลไม่เพียงพอ\n\n{detail_msg}"
-            )
-            return
             
         answer = messagebox.askyesno(
             "ยืนยันการอัปโหลด",
@@ -288,22 +256,6 @@ class FileHandler:
             )
             return
             
-        # ตรวจสอบสิทธิ์ฐานข้อมูล
-        permission_results = self.db_service.check_permissions('bronze')
-        if not permission_results.get('success', False):
-            missing_permissions = permission_results.get('missing_critical', [])
-            recommendations = permission_results.get('recommendations', [])
-            
-            # สร้างข้อความแสดงรายละเอียด
-            detail_msg = f"ขาดสิทธิ์ที่จำเป็น: {', '.join(missing_permissions)}\n\n"
-            if recommendations:
-                detail_msg += "คำแนะนำการแก้ไข:\n" + "\n".join(recommendations[:5])  # แสดง 5 บรรทัดแรก
-            
-            messagebox.showerror(
-                "สิทธิ์ไม่เพียงพอ", 
-                f"ไม่สามารถดำเนินการประมวลผลอัตโนมัติได้เนื่องจากสิทธิ์ฐานข้อมูลไม่เพียงพอ\n\n{detail_msg}"
-            )
-            return
         
         # ตรวจสอบการตั้งค่าประเภทไฟล์
         if not column_settings:
