@@ -28,8 +28,7 @@
 - สร้างรายงานการตรวจสอบ
 
 ### 📁 FileManagementService (`file_management_service.py`)
-**หน้าที่:** การจัดการไฟล์และ ZIP operations
-- รวมไฟล์ Excel จาก ZIP files (ZipExcelMerger)
+**หน้าที่:** การจัดการไฟล์
 - ย้ายไฟล์ที่ประมวลผลแล้ว
 - จัดระเบียบโฟลเดอร์
 - จัดการการตั้งค่า
@@ -71,9 +70,9 @@ success, df = reader.read_file_basic("data.xlsx")
 processor = DataProcessorService()
 validation = processor.comprehensive_data_validation(df, "sales_data")
 
-# จัดการไฟล์ ZIP
+# จัดการไฟล์
 manager = FileManagementService()
-result = manager.process_zip_excel_merger("/path/to/zip/folder")
+result = manager.move_processed_files("/path/to/processed/files")
 ```
 
 ## การเปลี่ยนแปลง

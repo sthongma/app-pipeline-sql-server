@@ -7,17 +7,52 @@ echo.
 REM Change working directory to the script folder
 cd /d "%~dp0"
 
-REM Set Python executable to Microsoft Store version
-set "PYTHON_EXE=%LOCALAPPDATA%\Microsoft\WindowsApps\python.exe"
+REM Set Python executable variable
+set "PYTHON_EXE="
 
-REM Check if Microsoft Store Python exists
-if not exist "%PYTHON_EXE%" (
-    echo Error: Python from Microsoft Store not found
-    echo Please install Python from Microsoft Store
-    echo Expected location: %PYTHON_EXE%
-    pause
-    exit /b 1
+REM Try to find Python in common locations
+REM First try system PATH
+python --version >nul 2>&1
+if not errorlevel 1 (
+    set "PYTHON_EXE=python"
+    goto :python_found
 )
+
+REM Try py launcher (Windows Python Launcher)
+py --version >nul 2>&1
+if not errorlevel 1 (
+    set "PYTHON_EXE=py"
+    goto :python_found
+)
+
+REM Try common installation paths
+for %%i in (
+    "%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+    "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    "%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+    "%LOCALAPPDATA%\Programs\Python\Python39\python.exe"
+    "C:\Python313\python.exe"
+    "C:\Python311\python.exe"
+    "C:\Python310\python.exe"
+    "C:\Python39\python.exe"
+) do (
+    if exist "%%i" (
+        set "PYTHON_EXE=%%i"
+        goto :python_found
+    )
+)
+
+REM If still not found, show error
+echo Error: Python not found in system
+echo Please install Python or add Python to PATH
+echo.
+echo Common installation locations checked:
+echo - System PATH
+echo - Python Launcher (py)
+echo - %LOCALAPPDATA%\Programs\Python\
+echo - C:\Python*\
+pause
+exit /b 1
 
 :python_found
 echo Python found

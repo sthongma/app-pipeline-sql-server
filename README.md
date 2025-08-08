@@ -19,10 +19,13 @@
 ✅ รองรับไฟล์ Excel (.xlsx) และ CSV  
 ✅ การตั้งค่าคอลัมน์และประเภทข้อมูลแบบยืดหยุ่น  
 ✅ ตรวจจับประเภทไฟล์อัตโนมัติ  
+✅ การตรวจสอบและทำความสะอาดข้อมูลอัตโนมัติ  
+✅ การตรวจสอบและแก้ไขชนิดข้อมูลอัตโนมัติ  
 ✅ อัปโหลดข้อมูลไปยัง SQL Server พร้อม schema validation  
 ✅ ย้ายไฟล์ที่ประมวลผลแล้วไปยังโฟลเดอร์ที่จัดระเบียบ  
 ✅ GUI ที่ใช้งานง่ายด้วย CustomTkinter  
 ✅ CLI สำหรับการประมวลผลแบบ batch  
+✅ การตรวจสอบสิทธิ์และความปลอดภัย  
 ✅ Error handling และ logging ที่ครบถ้วน  
 ✅ Performance optimization สำหรับไฟล์ขนาดใหญ่
 
@@ -44,7 +47,11 @@ PIPELINE_SQLSERVER/
 ├── services/                    # Business logic และ services
 │   ├── __init__.py
 │   ├── database_service.py      # บริการฐานข้อมูล
-│   └── file_service.py          # บริการจัดการไฟล์
+│   ├── file_service.py          # บริการจัดการไฟล์หลัก
+│   ├── file_reader_service.py   # บริการอ่านและตรวจจับไฟล์
+│   ├── data_processor_service.py # บริการประมวลผลข้อมูล
+│   ├── file_management_service.py # บริการจัดการไฟล์
+│   └── README.md                # เอกสาร services โดยละเอียด
 │
 ├── ui/                          # User interface
 │   ├── __init__.py

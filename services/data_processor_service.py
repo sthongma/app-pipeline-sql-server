@@ -49,6 +49,22 @@ class DataProcessorService:
         
         self.load_settings()
     
+    def log_with_time(self, message: str, show_time: bool = True) -> None:
+        """
+        แสดง log พร้อมเวลา
+        
+        Args:
+            message (str): ข้อความที่ต้องการแสดง
+            show_time (bool): แสดงเวลาหรือไม่ (default: True)
+        """
+        if show_time:
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            formatted_message = f"[{timestamp}] {message}"
+        else:
+            formatted_message = message
+            
+        self.log_callback(formatted_message)
+    
     def load_settings(self) -> None:
         """โหลดการตั้งค่าคอลัมน์และประเภทข้อมูล"""
         if self._settings_loaded:
@@ -184,7 +200,7 @@ class DataProcessorService:
             
             # แสดง log เฉพาะครั้งแรก (ไม่ซ้ำในแต่ละ chunk)
             if not hasattr(self, f'_dtype_conversion_log_{file_type}'):
-                self.log_callback(f"\n🔄 กำลังแปลงประเภทข้อมูลสำหรับไฟล์ประเภท: {file_type}")
+                self.log_with_time(f"\n🔄 กำลังแปลงประเภทข้อมูลสำหรับไฟล์ประเภท: {file_type}")
                 self.log_callback("-" * 50)
                 setattr(self, f'_dtype_conversion_log_{file_type}', True)
             
@@ -305,7 +321,7 @@ class DataProcessorService:
             return df
             
         except Exception as e:
-            self.log_callback(f"❌ เกิดข้อผิดพลาดในการแปลงประเภทข้อมูล: {e}")
+            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการแปลงประเภทข้อมูล: {e}")
             return df
 
     def clean_and_validate_datetime_columns(self, df, file_type):
@@ -377,18 +393,18 @@ class DataProcessorService:
                         unique_problems = list(set(problematic_values[:5]))  # แสดงตัวอย่าง 5 ค่า
                         
                         if not hasattr(self, f'_datetime_clean_log_{col}'):
-                            self.log_callback(f"   🧹 ทำความสะอาด '{col}': ลบข้อมูลวันที่ที่ไม่ถูกต้อง {cleaned_count:,} แถว ({problem_percentage:.1f}%)")
+                            self.log_with_time(f"   🧹 ทำความสะอาด '{col}': ลบข้อมูลวันที่ที่ไม่ถูกต้อง {cleaned_count:,} แถว ({problem_percentage:.1f}%)")
                             if unique_problems:
                                 self.log_callback(f"      ตัวอย่างข้อมูลที่ลบ: {unique_problems}")
                             setattr(self, f'_datetime_clean_log_{col}', True)
                         
                         # ถ้าข้อมูลผิดมากกว่า 30% ให้แนะนำเปลี่ยนเป็น string
                         if problem_percentage > 30:
-                            self.log_callback(f"   ⚠️ คำแนะนำ: คอลัมน์ '{col}' มีข้อมูลวันที่ผิดมาก ({problem_percentage:.1f}%) - ควรเปลี่ยนเป็น NVARCHAR")
+                            self.log_with_time(f"   ⚠️ คำแนะนำ: คอลัมน์ '{col}' มีข้อมูลวันที่ผิดมาก ({problem_percentage:.1f}%) - ควรเปลี่ยนเป็น NVARCHAR")
                     
             return df
         except Exception as e:
-            self.log_callback(f"เกิดข้อผิดพลาดในการ clean ข้อมูลวันที่: {e}")
+            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการ clean ข้อมูลวันที่: {e}")
             return df
 
     def clean_numeric_columns(self, df, file_type):
@@ -423,7 +439,7 @@ class DataProcessorService:
                     
             return df
         except Exception as e:
-            self.log_callback(f"เกิดข้อผิดพลาดในการ clean ข้อมูลตัวเลข: {e}")
+            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการ clean ข้อมูลตัวเลข: {e}")
             return df
 
     def truncate_long_strings(self, df, logic_type):
@@ -439,7 +455,7 @@ class DataProcessorService:
         
         # แสดง log เฉพาะครั้งแรก (ไม่ซ้ำในแต่ละ chunk)
         if not hasattr(self, '_truncation_log_shown'):
-            self.log_callback(f"\n✂️ ตรวจสอบและตัดข้อมูล string ที่ยาวเกิน...")
+            self.log_with_time(f"\n✂️ ตรวจสอบและตัดข้อมูล string ที่ยาวเกิน...")
             self._truncation_log_shown = True
         
         for col, dtype in dtypes.items():
@@ -450,7 +466,7 @@ class DataProcessorService:
             if isinstance(dtype, Text):
                 # แสดง log เฉพาะครั้งแรก
                 if not hasattr(self, f'_text_skip_log_{col}'):
-                    self.log_callback(f"   ✅ ข้าม '{col}': เป็น Text() (NVARCHAR(MAX)) ไม่จำกัดความยาว")
+                    self.log_with_time(f"   ✅ ข้าม '{col}': เป็น Text() (NVARCHAR(MAX)) ไม่จำกัดความยาว")
                     setattr(self, f'_text_skip_log_{col}', True)
                 continue
                 
@@ -487,16 +503,16 @@ class DataProcessorService:
                     
                     # แสดง log เฉพาะครั้งแรกสำหรับคอลัมน์นี้
                     if not hasattr(self, f'_truncate_log_{col}'):
-                        self.log_callback(f"   ✂️ ตัดข้อมูลคอลัมน์ '{col}': {too_long_count:,} แถว (เหลือ {max_length} ตัวอักษร)")
+                        self.log_with_time(f"   ✂️ ตัดข้อมูลคอลัมน์ '{col}': {too_long_count:,} แถว (เหลือ {max_length} ตัวอักษร)")
                         setattr(self, f'_truncate_log_{col}', True)
         
         # แสดงสรุปเฉพาะครั้งสุดท้าย (เมื่อไม่มีข้อมูลที่ต้องตัด)
         if truncation_report['total_truncated'] == 0 and not hasattr(self, '_no_truncation_log_shown'):
-            self.log_callback("   ✅ ไม่พบข้อมูล string ที่ยาวเกินกำหนด")
+            self.log_with_time(f"   ✅ ไม่พบข้อมูล string ที่ยาวเกินกำหนด")
             self._no_truncation_log_shown = True
         elif truncation_report['total_truncated'] > 0 and not hasattr(self, '_truncation_summary_shown'):
-            self.log_callback(f"\n⚠️ สรุป: ตัดข้อมูลทั้งหมด {truncation_report['total_truncated']:,} แถว ใน {len(truncation_report['truncated_columns'])} คอลัมน์")
-            self.log_callback("   📝 ข้อมูลที่ตัดจะยังคงอยู่ใน DataFrame แต่จะถูกย่อให้เข้ากับฐานข้อมูล")
+            self.log_with_time(f"\n⚠️ สรุป: ตัดข้อมูลทั้งหมด {truncation_report['total_truncated']:,} แถว ใน {len(truncation_report['truncated_columns'])} คอลัมน์")
+            self.log_with_time(f"   📝 ข้อมูลที่ตัดจะยังคงอยู่ใน DataFrame แต่จะถูกย่อให้เข้ากับฐานข้อมูล")
             self._truncation_summary_shown = True
             
         return df
@@ -790,10 +806,10 @@ class DataProcessorService:
         if log['successful_conversions']:
             # แสดงเฉพาะจำนวนคอลัมน์ที่แปลงสำเร็จ ไม่แสดงรายชื่อทั้งหมด
             success_count = len(log['successful_conversions'])
-            self.log_callback(f"✅ แปลงข้อมูลสำเร็จ: {success_count} คอลัมน์")
+            self.log_with_time(f"✅ แปลงข้อมูลสำเร็จ: {success_count} คอลัมน์")
         
         if log['failed_conversions']:
-            self.log_callback("\n❌ พบปัญหาการแปลงข้อมูล:")
+            self.log_with_time(f"\n❌ พบปัญหาการแปลงข้อมูล:")
             for col, details in log['failed_conversions'].items():
                 self.log_callback(f"   🔸 คอลัมน์ '{col}':")
                 self.log_callback(f"      - ชนิดข้อมูลที่ต้องการ: {details['expected_type']}")
@@ -805,7 +821,7 @@ class DataProcessorService:
                     self.log_callback(f"      - ข้อผิดพลาด: {details['error']}")
         
         if log['warnings']:
-            self.log_callback(f"\n⚠️  คำเตือน: {', '.join(log['warnings'])}")
+            self.log_with_time(f"\n⚠️ คำเตือน: {', '.join(log['warnings'])}")
 
     def _reset_log_flags(self):
         """รีเซ็ต log flags เพื่อให้แสดง log ใหม่ในไฟล์ถัดไป"""
@@ -839,7 +855,7 @@ class DataProcessorService:
         if not logic_type or logic_type not in self.dtype_settings:
             return df, changes_made, change_details
             
-        self.log_callback(f"\n🤖 เริ่มการตรวจสอบและแก้ไขชนิดข้อมูลอัตโนมัติ...")
+        self.log_with_time(f"\n🤖 เริ่มการตรวจสอบและแก้ไขชนิดข้อมูลอัตโนมัติ...")
         
         for col, expected_dtype_str in self.dtype_settings[logic_type].items():
             if col.startswith('_') or col not in df.columns:
@@ -869,7 +885,7 @@ class DataProcessorService:
                         'reason': self._get_change_reason(sample_data, original_dtype, suggested_dtype)
                     }
                     
-                    self.log_callback(f"   🔄 แก้ไข '{col}': {original_dtype} → {suggested_dtype}")
+                    self.log_with_time(f"   🔄 แก้ไข '{col}': {original_dtype} → {suggested_dtype}")
                     
             except Exception as e:
                 change_details['warnings'].append(f"ไม่สามารถวิเคราะห์คอลัมน์ '{col}': {e}")
@@ -877,7 +893,7 @@ class DataProcessorService:
         if changes_made:
             # บันทึกการตั้งค่าใหม่
             self._save_updated_dtype_settings(logic_type)
-            self.log_callback(f"\n💾 บันทึกการตั้งค่าใหม่สำเร็จ")
+            self.log_with_time(f"\n💾 บันทึกการตั้งค่าใหม่สำเร็จ")
             
         return df, changes_made, change_details
 
@@ -931,7 +947,7 @@ class DataProcessorService:
                 if valid_percentage < 0.7:
                     max_length = sample_data.astype(str).str.len().max()
                     suggested_type = self._suggest_string_type(max_length)
-                    self.log_callback(f"   ⚠️ คอลัมน์ '{col_name}': วันที่ถูกต้องเพียง {valid_percentage:.1%} → เปลี่ยนเป็น {suggested_type}")
+                    self.log_with_time(f"   ⚠️ คอลัมน์ '{col_name}': วันที่ถูกต้องเพียง {valid_percentage:.1%} → เปลี่ยนเป็น {suggested_type}")
                     return suggested_type
                     
             # ตรวจสอบข้อมูล string
@@ -946,7 +962,7 @@ class DataProcessorService:
             return expected_dtype
             
         except Exception as e:
-            self.log_callback(f"   ⚠️ ไม่สามารถวิเคราะห์คอลัมน์ '{col_name}': {e}")
+            self.log_with_time(f"   ⚠️ ไม่สามารถวิเคราะห์คอลัมน์ '{col_name}': {e}")
             return expected_dtype
 
     def _suggest_string_type(self, max_length):
@@ -990,7 +1006,7 @@ class DataProcessorService:
             with open(dtype_file, 'w', encoding='utf-8') as f:
                 json.dump(self.dtype_settings, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            self.log_callback(f"❌ ไม่สามารถบันทึกการตั้งค่าได้: {e}")
+            self.log_with_time(f"❌ ไม่สามารถบันทึกการตั้งค่าได้: {e}")
 
     def process_with_auto_fix(self, df, logic_type):
         """
@@ -1011,7 +1027,7 @@ class DataProcessorService:
         
         try:
             # ขั้นตอนที่ 1: ตรวจสอบและแก้ไขชนิดข้อมูลอัตโนมัติ
-            self.log_callback(f"🔍 ขั้นตอนที่ 1: ตรวจสอบความเข้ากันได้ของชนิดข้อมูล")
+            self.log_with_time(f"🔍 ขั้นตอนที่ 1: ตรวจสอบความเข้ากันได้ของชนิดข้อมูล")
             df, changes_made, change_details = self.auto_detect_and_fix_data_types(df, logic_type)
             
             if changes_made:
@@ -1023,7 +1039,7 @@ class DataProcessorService:
                 self._notify_user_about_changes(change_details)
             
             # ขั้นตอนที่ 2: ประมวลผลข้อมูลแบบปกติ
-            self.log_callback(f"🔄 ขั้นตอนที่ 2: ประมวลผลข้อมูล")
+            self.log_with_time(f"🔄 ขั้นตอนที่ 2: ประมวลผลข้อมูล")
             
             # โหลดการตั้งค่าใหม่ (หลังจากอัพเดท)
             self.load_settings()
@@ -1044,7 +1060,7 @@ class DataProcessorService:
             return df, processing_report
             
         except Exception as e:
-            self.log_callback(f"❌ เกิดข้อผิดพลาดในการประมวลผลอัตโนมัติ: {e}")
+            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการประมวลผลอัตโนมัติ: {e}")
             return df, processing_report
 
     def _notify_user_about_changes(self, change_details):
@@ -1052,7 +1068,7 @@ class DataProcessorService:
         if not change_details['modified_columns']:
             return
             
-        self.log_callback(f"\n🚨 แจ้งเตือน: ระบบได้ปรับปรุงการตั้งค่าชนิดข้อมูลอัตโนมัติ")
+        self.log_with_time(f"\n🚨 แจ้งเตือน: ระบบได้ปรับปรุงการตั้งค่าชนิดข้อมูลอัตโนมัติ")
         self.log_callback(f"═" * 60)
         
         for col, details in change_details['modified_columns'].items():
@@ -1062,8 +1078,8 @@ class DataProcessorService:
             self.log_callback(f"   • เหตุผล: {details['reason']}")
             self.log_callback(f"─" * 40)
             
-        self.log_callback(f"💡 การตั้งค่าใหม่จะถูกใช้ในการสร้างตารางฐานข้อมูล")
-        self.log_callback(f"📁 ไฟล์การตั้งค่า: {PathConstants.DTYPE_SETTINGS_FILE}")
+        self.log_with_time(f"💡 การตั้งค่าใหม่จะถูกใช้ในการสร้างตารางฐานข้อมูล")
+        self.log_with_time(f"📁 ไฟล์การตั้งค่า: {PathConstants.DTYPE_SETTINGS_FILE}")
         self.log_callback(f"═" * 60)
 
     def process_dataframe_in_chunks(self, df, process_func, logic_type, chunk_size=5000):
@@ -1074,7 +1090,7 @@ class DataProcessorService:
             
             # แสดง log เฉพาะครั้งแรก
             if not hasattr(self, '_chunk_log_shown'):
-                self.log_callback(f"📊 ประมวลผลแบบ chunk ({chunk_size:,} แถวต่อ chunk)")
+                self.log_with_time(f"📊 ประมวลผลแบบ chunk ({chunk_size:,} แถวต่อ chunk)")
                 self._chunk_log_shown = True
                 
             chunks = []
@@ -1089,7 +1105,7 @@ class DataProcessorService:
                 
                 # แสดง progress เฉพาะบางครั้ง (ทุก 5 chunks หรือ chunk สุดท้าย)
                 if chunk_num % 5 == 0 or chunk_num == total_chunks:
-                    self.log_callback(f"📊 ประมวลผล chunk {chunk_num}/{total_chunks}")
+                    self.log_with_time(f"📊 ประมวลผล chunk {chunk_num}/{total_chunks}")
                 
                 # ปล่อย memory ทุก 5 chunks
                 if chunk_num % 5 == 0:
@@ -1105,5 +1121,5 @@ class DataProcessorService:
             return result
             
         except Exception as e:
-            self.log_callback(f"❌ เกิดข้อผิดพลาดในการประมวลผลแบบ chunk: {e}")
+            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการประมวลผลแบบ chunk: {e}")
             return df

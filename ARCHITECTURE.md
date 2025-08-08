@@ -13,39 +13,43 @@ PIPELINE_SQLSERVER เป็นระบบ ETL (Extract, Transform, Load) ท�
 ```
 PIPELINE_SQLSERVER/
 ├── __init__.py                 # Main package initialization
-├── constants.py               # ค่าคงที่ทั้งหมดของระบบ
-├── requirements.txt           # Dependencies
-├── pyproject.toml            # Project configuration
-├── ARCHITECTURE.md           # เอกสารสถาปัตยกรรม
+├── constants.py                # ค่าคงที่ทั้งหมดของระบบ
+├── requirements.txt            # Dependencies
+├── pyproject.toml              # Project configuration
+├── ARCHITECTURE.md             # เอกสารสถาปัตยกรรม
 │
-├── config/                   # การตั้งค่าและ configuration
+├── config/                     # การตั้งค่าและ configuration
 │   ├── __init__.py
-│   ├── database.py          # การจัดการการเชื่อมต่อฐานข้อมูล
-│   └── settings.py          # Settings manager แบบรวมศูนย์
+│   ├── database.py             # การจัดการการเชื่อมต่อฐานข้อมูล
+│   └── settings.py             # Settings manager แบบรวมศูนย์
 │
-├── services/                # Business logic และ services
+├── services/                   # Business logic และ services
 │   ├── __init__.py
-│   ├── database_service.py  # บริการฐานข้อมูล
-│   └── file_service.py      # บริการจัดการไฟล์
+│   ├── database_service.py     # บริการฐานข้อมูล
+│   ├── file_service.py         # บริการจัดการไฟล์หลัก (orchestrator)
+│   ├── file_reader_service.py  # บริการอ่านและตรวจจับไฟล์
+│   ├── data_processor_service.py # บริการประมวลผลและตรวจสอบข้อมูล
+│   ├── file_management_service.py # บริการจัดการไฟล์
+│   └── README.md               # เอกสาร services โดยละเอียด
 │
-├── ui/                      # User interface
+├── ui/                         # User interface
 │   ├── __init__.py
-│   ├── main_window.py       # หน้าต่างหลัก GUI
-│   ├── login_window.py      # หน้าต่างการตั้งค่า
-│   └── components/          # UI components
+│   ├── main_window.py          # หน้าต่างหลัก GUI
+│   ├── login_window.py         # หน้าต่างการตั้งค่า
+│   └── components/             # UI components
 │       ├── __init__.py
 │       ├── file_list.py
 │       ├── progress_bar.py
 │       └── status_bar.py
 │
-├── utils/                   # Utility functions
+├── utils/                      # Utility functions
 │   ├── __init__.py
-│   ├── helpers.py          # Helper functions
-│   └── validators.py       # Validation functions
+│   ├── helpers.py              # Helper functions
+│   └── validators.py           # Validation functions
 │
-├── pipeline_cli_app.py     # CLI application entry point
-├── pipeline_gui_app.py     # GUI application entry point
-└── move_old_files_cli_app.py # File management utility
+├── pipeline_cli_app.py         # CLI application entry point
+├── pipeline_gui_app.py         # GUI application entry point
+└── move_old_files_cli_app.py   # File management utility
 ```
 
 ## ส่วนประกอบหลัก
@@ -80,9 +84,24 @@ Business logic หลักของระบบ:
 - จัดการ schema และตาราง
 
 #### FileService (services/file_service.py)
-- อ่านและประมวลผลไฟล์ Excel/CSV
-- ตรวจสอบและแปลงชนิดข้อมูล
-- จัดการการย้ายไฟล์
+- Orchestrator หลักที่ประสานงานระหว่าง services ต่างๆ
+- ให้ interface เดียวกันกับระบบเดิม (backward compatible)
+- การอ่านและประมวลผลไฟล์แบบครบวงจร
+
+#### FileReaderService (services/file_reader_service.py)
+- ค้นหาและอ่านไฟล์ Excel/CSV
+- ตรวจจับประเภทไฟล์อัตโนมัติ
+- จัดการ column mapping และตรวจสอบโครงสร้างไฟล์
+
+#### DataProcessorService (services/data_processor_service.py)
+- ตรวจสอบความถูกต้องของข้อมูล (validation)
+- แปลงประเภทข้อมูล (data type conversion)
+- ทำความสะอาดข้อมูล และตัดข้อมูลที่ยาวเกิน
+- สร้างรายงานการตรวจสอบ
+
+#### FileManagementService (services/file_management_service.py)
+- ย้ายไฟล์ที่ประมวลผลแล้ว
+- จัดระเบียบโฟลเดอร์และจัดการการตั้งค่า
 
 ### 4. User Interface (ui/)
 ส่วนติดต่อผู้ใช้:
