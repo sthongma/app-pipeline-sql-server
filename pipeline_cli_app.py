@@ -4,8 +4,6 @@ CLI Application สำหรับ PIPELINE_SQLSERVER
 แอปพลิเคชัน command line สำหรับประมวลผลไฟล์แบบ batch
 """
 
-"""CLI Application สำหรับ PIPELINE_SQLSERVER"""
-
 import argparse
 import logging
 import os
@@ -95,129 +93,52 @@ def process_file(file_path: str, file_service: FileService, db_service: Database
         logging.error(f"An unexpected error occurred while processing {file_path}: {e}", exc_info=True)
 
 
-
-
-
-def merge_zip_excel_cli(args) -> None:
-    """
-    ฟังก์ชันสำหรับการรวมไฟล์ Excel จาก ZIP files
-    
-    Args:
-        args: arguments จาก argparse
-    """
-    logging.info("Starting ZIP Excel merger process.")
-    
-    file_mgmt_service = FileManagementService()
-    
-    if not os.path.exists(args.folder):
-        logging.error(f"Folder does not exist: {args.folder}")
-        return
-    
-    def progress_callback(value, status):
-        """Callback สำหรับแสดงความคืบหน้า"""
-        logging.info(f"Progress: {value*100:.1f}% - {status}")
-    
-    try:
-        result = file_mgmt_service.process_zip_excel_merger(
-            folder_path=args.folder,
-            progress_callback=progress_callback
-        )
-        
-        if result["success"]:
-            logging.info("ZIP Excel merger completed successfully!")
-            
-            if result["saved_files"]:
-                logging.info(f"Saved {len(result['saved_files'])} merged files:")
-                for filename, rows in result["saved_files"]:
-                    logging.info(f"  {filename}: {rows} rows")
-            
-            if result["organized_folder"] and result["moved_files"]:
-                logging.info(f"Moved {len(result['moved_files'])} ZIP files to: {result['organized_folder']}")
-        else:
-            logging.error("ZIP Excel merger failed.")
-            
-        if result["errors"]:
-            for error in result["errors"]:
-                logging.error(f"Error during ZIP Excel merger: {error}")
-        
-    except Exception as e:
-        logging.error(f"An error occurred during ZIP Excel merger: {e}", exc_info=True)
-
-
 def validate_source_path() -> Optional[str]:
     """
     ตรวจสอบและโหลด path ต้นทางจาก last_path.json
     
     Returns:
-        Optional[str]: path ต้นทางหากถูกต้อง, None หากไม่ถูกต้อง
+        Optional[str]: path ที่ถูกต้อง หรือ None
     """
-    last_path = load_last_path()
-    if not last_path or not os.path.isdir(last_path):
-        logging.error(f"โฟลเดอร์ต้นทางไม่ถูกต้องใน last_path.json: {last_path}")
-        logging.error("กรุณาตั้งค่าโฟลเดอร์ต้นทางใน config/last_path.json")
+    path = load_last_path()
+    if not path:
+        logging.error("❌ ไม่พบ source path ใน config/last_path.json")
+        logging.info("💡 กรุณาเปิด GUI ก่อนเพื่อตั้งค่า source path หรือใช้ --source ระบุ path")
         return None
     
-    logging.info(f"ใช้โฟลเดอร์ต้นทางจาก last_path.json: {last_path}")
-    return last_path
+    if not os.path.isdir(path):
+        logging.error(f"❌ Source path ไม่ถูกต้อง: {path}")
+        return None
+    
+    logging.info(f"✅ ใช้ source path: {path}")
+    return path
 
 
-def process_zip_files_step(source_path: str) -> None:
+def upload_files_auto_cli(args):
     """
-    ขั้นตอนที่ 1: รวมไฟล์ ZIP อัตโนมัติ (เหมือน _auto_process_zip_merger ใน GUI)
+    ฟังก์ชันสำหรับการอัปโหลดไฟล์อัตโนมัติผ่าน CLI
     
     Args:
-        source_path (str): โฟลเดอร์ต้นทางที่จะค้นหาไฟล์ ZIP
+        args (argparse.Namespace): arguments จาก command line  
     """
-    logging.info("=== ขั้นตอนที่ 1: รวมไฟล์ ZIP ===")
-    try:
-        file_mgmt_service = FileManagementService()
-        
-        # ค้นหาไฟล์ ZIP ในโฟลเดอร์ (รวม subfolder) เหมือน GUI
-        zip_files = []
-        for root, dirs, files in os.walk(source_path):
-            for file in files:
-                if file.lower().endswith('.zip'):
-                    zip_files.append(os.path.join(root, file))
-        
-        if not zip_files:
-            logging.info("ไม่พบไฟล์ ZIP ในโฟลเดอร์ต้นทาง ข้ามขั้นตอนนี้")
-            return
-        
-        logging.info(f"พบไฟล์ ZIP {len(zip_files)} ไฟล์ กำลังรวมไฟล์ Excel...")
-        
-        def progress_callback(value: float, status: str) -> None:
-            logging.info(f"ความคืบหน้า: {value*100:.1f}% - {status}")
-        
-        result = file_mgmt_service.process_zip_excel_merger(
-            folder_path=source_path,
-            progress_callback=progress_callback
-        )
-        
-        if result["success"]:
-            logging.info("✅ รวมไฟล์ Excel จาก ZIP เสร็จสิ้น")
-            if result["saved_files"]:
-                for filename, rows in result["saved_files"]:
-                    logging.info(f"  บันทึก: {filename} ({rows} แถว)")
-        else:
-            logging.info("⚠️ การรวมไฟล์ ZIP ไม่สำเร็จ แต่จะดำเนินการต่อ")
-            
-        if result["errors"]:
-            for error in result["errors"]:
-                logging.info(f"⚠️ ข้อผิดพลาดใน ZIP merger: {error}")
-                
-    except Exception as e:
-        logging.error(f"❌ เกิดข้อผิดพลาดในการรวมไฟล์ ZIP: {e}")
-        logging.info("จะดำเนินการต่อด้วยการประมวลผลไฟล์หลัก")
+    logging.info("Starting CLI auto upload process.")
+    
+    source_path = args.source
+    if not source_path or not os.path.isdir(source_path):
+        logging.error(f"Invalid source path: {source_path}")
+        return
+    
+    logging.info(f"Source path: {source_path}")
 
 
 def process_main_files_step(source_path: str) -> None:
     """
-    ขั้นตอนที่ 2: ประมวลผลไฟล์หลักอัตโนมัติ (เหมือน _auto_process_main_files ใน GUI)
+    ประมวลผลไฟล์หลักอัตโนมัติ
     
     Args:
         source_path (str): โฟลเดอร์ต้นทางที่จะค้นหาไฟล์
     """
-    logging.info("=== ขั้นตอนที่ 2: ประมวลผลไฟล์หลัก ===")
+    logging.info("=== กำลังประมวลผลไฟล์ ===")
     
     try:
         # ใช้ logging.info เป็น log_callback สำหรับ CLI (เหมือน GUI)
@@ -259,8 +180,8 @@ def process_main_files_step(source_path: str) -> None:
                 
                 logging.info(f"📋 ระบุประเภทไฟล์: {logic_type}")
                 
-                # อ่านไฟล์ (เหมือน GUI)
-                success, result = file_service.read_excel_file(file_path, logic_type)
+                # อ่านไฟล์พร้อมระบบแก้ไขอัตโนมัติ
+                success, result = file_service.read_excel_file(file_path, logic_type, use_auto_fix=True)
                 if not success:
                     logging.info(f"❌ ไม่สามารถอ่านไฟล์: {result}")
                     continue
@@ -273,7 +194,7 @@ def process_main_files_step(source_path: str) -> None:
                     logging.info(f"❌ คอลัมน์ไม่ถูกต้อง: {result}")
                     continue
                 
-                # อัปโหลดข้อมูล (เหมือน GUI)
+                # อัปโหลดข้อมูลพร้อม auto schema update
                 required_cols = file_service.get_required_dtypes(logic_type)
                 
                 # ตรวจสอบว่า required_cols ไม่ว่างเปล่า
@@ -287,7 +208,12 @@ def process_main_files_step(source_path: str) -> None:
                     continue
                 
                 logging.info(f"📊 กำลังอัปโหลดข้อมูล {len(df)} แถว สำหรับประเภท {logic_type}")
-                success, message = db_service.upload_data(df, logic_type, required_cols, log_func=logging.info)
+                
+                # ใช้ระบบ auto schema update
+                processing_report = {'auto_fixes_applied': True}  # สมมติว่าใช้ auto-fix
+                success, message = file_service.upload_data_with_auto_schema_update(
+                    df, logic_type, processing_report
+                )
                 
                 if success:
                     logging.info(f"✅ อัปโหลดสำเร็จ: {message}")
@@ -301,103 +227,83 @@ def process_main_files_step(source_path: str) -> None:
                                 logging.info(f"📦 ย้ายไฟล์ไปยัง: {os.path.basename(new_path)}")
                         else:
                             logging.info(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
-                    except Exception as move_error:
-                        logging.info(f"❌ เกิดข้อผิดพลาดในการย้ายไฟล์: {move_error}")
+                    except Exception as e:
+                        logging.info(f"❌ ข้อผิดพลาดในการย้ายไฟล์: {e}")
                 else:
-                    logging.info(f"❌ อัปโหลดไม่สำเร็จ: {message}")
-                    # ลองตรวจสอบ error เพิ่มเติม (เหมือน GUI)
-                    logging.info(f"🔍 ตรวจสอบข้อมูล: แถว {len(df)}, คอลัมน์ {list(df.columns)}")
+                    logging.info(f"❌ อัปโหลดล้มเหลว: {message}")
                     
             except Exception as e:
-                logging.info(f"❌ เกิดข้อผิดพลาดขณะประมวลผล {os.path.basename(file_path)}: {e}")
+                logging.error(f"❌ ข้อผิดพลาดในการประมวลผล {os.path.basename(file_path)}: {e}")
+                continue
         
-        logging.info(f"✅ ประมวลผลไฟล์เสร็จสิ้น: {successful_uploads}/{total_files} ไฟล์สำเร็จ")
+        # สรุปผล
+        logging.info(f"🏁 สรุป: ประมวลผล {total_files} ไฟล์ สำเร็จ {successful_uploads} ไฟล์")
         
     except Exception as e:
-        logging.error(f"❌ เกิดข้อผิดพลาดในการประมวลผลไฟล์: {e}", exc_info=True)
+        logging.error(f"❌ เกิดข้อผิดพลาดในการประมวลผลไฟล์หลัก: {e}")
 
 
-
-
-
-def main_cli() -> None:
+def auto_upload_cli(args) -> None:
     """
-    ฟังก์ชันหลักสำหรับ CLI application - ประมวลผลอัตโนมัติเหมือน GUI
+    ฟังก์ชันหลักสำหรับการประมวลผลอัตโนมัติผ่าน CLI (เหมือน GUI auto process)
     
-    รันตามลำดับขั้นตอน:
-    1. รวมไฟล์ Excel จากไฟล์ ZIP
-    2. ประมวลผลและอัปโหลดไฟล์ทั้งหมด
+    Args:
+        args: arguments จาก argparse
     """
-    logging.info("🤖 เริ่มการประมวลผลอัตโนมัติ")
-
-    # ตรวจสอบและโหลด path ต้นทาง
-    source_path = validate_source_path()
+    logging.info("🤖 เริ่มการประมวลผลอัตโนมัติผ่าน CLI")
+    
+    # กำหนด source path
+    source_path = args.source if args.source else validate_source_path()
+    
     if not source_path:
         return
     
-    logging.info(f"📂 โฟลเดอร์ต้นทาง: {source_path}")
-    
-    # ตรวจสอบการเชื่อมต่อฐานข้อมูลก่อน (เหมือน GUI)
+    # ตรวจสอบการเชื่อมต่อฐานข้อมูล
     db_service = DatabaseService()
-    is_connected, message = db_service.check_connection()
-    if not is_connected:
-        logging.error(f"ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้: {message}")
-        logging.error("กรุณาตรวจสอบการตั้งค่าฐานข้อมูลก่อน")
+    success, message = db_service.check_connection()
+    if not success:
+        logging.error(f"❌ ไม่สามารถเชื่อมต่อฐานข้อมูล: {message}")
         return
-
+    
+    logging.info("✅ เชื่อมต่อฐานข้อมูลสำเร็จ")
+    
     try:
-        # ดำเนินการตามลำดับขั้นตอน
-        process_zip_files_step(source_path)
+        # ขั้นตอนหลัก: ประมวลผลไฟล์
         process_main_files_step(source_path)
         
-        logging.info("=== 🏁 การประมวลผลอัตโนมัติเสร็จสิ้น ===")
+        logging.info("🎉 การประมวลผลอัตโนมัติเสร็จสิ้นแล้ว")
         
     except Exception as e:
-        logging.error(f"❌ เกิดข้อผิดพลาดในการประมวลผลอัตโนมัติ: {e}", exc_info=True)
+        logging.error(f"❌ เกิดข้อผิดพลาดในการประมวลผลอัตโนมัติ: {e}")
 
 
 def main():
-    """ฟังก์ชันหลักที่จัดการ command line arguments"""
-    parser = argparse.ArgumentParser(
-        description='PIPELINE_SQLSERVER CLI - แอปพลิเคชัน command line สำหรับประมวลผลไฟล์',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-ตัวอย่างการใช้งาน:
-
-  # ประมวลผลไฟล์ปกติ (default)
-  python pipeline_cli_app.py
-
-  # รวมไฟล์ Excel จาก ZIP files
-  python pipeline_cli_app.py merge-zip --folder ./path/to/zip/folder
-        """
+    """
+    Main function สำหรับ CLI
+    """
+    parser = argparse.ArgumentParser(description='PIPELINE_SQLSERVER CLI - ระบบประมวลผลไฟล์ Excel/CSV สู่ SQL Server')
+    
+    # Main command
+    subparsers = parser.add_subparsers(dest='command', help='คำสั่งที่ใช้ได้')
+    
+    # Auto upload command
+    auto_parser = subparsers.add_parser(
+        'auto', 
+        help='ประมวลผลไฟล์อัตโนมัติ (เหมือน GUI auto process)'
     )
-    
-    # สร้าง subcommands
-    subparsers = parser.add_subparsers(dest='command', help='คำสั่งที่ต้องการใช้')
-    
-
-    
-    # Subcommand สำหรับ ZIP Excel merger
-    merge_parser = subparsers.add_parser(
-        'merge-zip', 
-        help='รวมไฟล์ Excel จาก ZIP files'
-    )
-    merge_parser.add_argument(
-        '--folder', 
+    auto_parser.add_argument(
+        '--source', '-s',
         type=str, 
-        required=True, 
-        help='โฟลเดอร์ที่มีไฟล์ ZIP (จำเป็นต้องระบุ)'
+        help='โฟลเดอร์ต้นทาง (ถ้าไม่ระบุจะใช้จาก last_path.json)'
     )
     
     args = parser.parse_args()
     
-    # เรียกใช้ฟังก์ชันตาม command ที่เลือก
-    if args.command == 'merge-zip':
-        merge_zip_excel_cli(args)
+    if args.command == 'auto':
+        auto_upload_cli(args)
     else:
-        # ถ้าไม่มี command หรือ command ไม่ถูกต้อง ให้รันแบบปกติ
-        main_cli()
+        parser.print_help()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

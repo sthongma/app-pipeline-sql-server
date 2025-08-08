@@ -4,7 +4,7 @@ File Service สำหรับ PIPELINE_SQLSERVER (รุ่นใหม่ท�
 เป็น orchestrator ที่รวม services ต่างๆ เข้าด้วยกัน:
 - FileReaderService: อ่านและตรวจจับไฟล์
 - DataProcessorService: ประมวลผลและตรวจสอบข้อมูล
-- FileManagementService: จัดการไฟล์และ ZIP operations
+- FileManagementService: จัดการไฟล์
 
 ตัวอย่างการใช้งาน:
     # สำหรับ GUI
@@ -200,10 +200,6 @@ class FileService:
     def move_uploaded_files(self, file_paths, logic_types=None):
         """ย้ายไฟล์ที่อัปโหลดแล้วไปยังโฟลเดอร์ Uploaded_Files"""
         return self.file_manager.move_uploaded_files(file_paths, logic_types, self.search_path)
-
-    def process_zip_excel_merger(self, folder_path, progress_callback=None):
-        """ประมวลผลการรวมไฟล์ Excel จาก ZIP files"""
-        return self.file_manager.process_zip_excel_merger(folder_path, progress_callback)
 
     # ========================
     # Legacy Methods (เก็บไว้เพื่อ backward compatibility)

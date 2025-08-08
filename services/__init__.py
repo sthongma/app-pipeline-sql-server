@@ -6,7 +6,7 @@ Services module สำหรับ PIPELINE_SQLSERVER (จัดระเบี�
 - FileService: orchestrator หลักสำหรับการจัดการไฟล์ (backward compatible)
 - FileReaderService: การอ่านและตรวจจับไฟล์
 - DataProcessorService: การประมวลผลและตรวจสอบข้อมูล
-- FileManagementService: การจัดการไฟล์และ ZIP operations
+- FileManagementService: การจัดการไฟล์
 """
 
 from .database_service import DatabaseService
