@@ -353,18 +353,67 @@ class DatabaseService:
             if df.empty:
                 return False, "ข้อมูลว่างเปล่าหลังการแปลง"
             
-            # อัปโหลดข้อมูลแบบ chunked สำหรับไฟล์ใหญ่
-            if len(df) > 10000:  # ถ้าไฟล์ใหญ่กว่า 10,000 แถว
+            # พยายามใช้ bcpandas เพื่อเร่งความเร็ว (fallback ไป to_sql ถ้าใช้ไม่ได้)
+            try:
+                from bcpandas import SqlCreds, to_sql as bcp_to_sql  # type: ignore
+
+                cfg = getattr(self.db_config, 'config', {}) or {}
+                if cfg.get('auth_type') == DatabaseConstants.AUTH_WINDOWS:
+                    creds = SqlCreds(
+                        server=cfg.get('server', ''),
+                        database=cfg.get('database', ''),
+                        trusted_connection='yes'
+                    )
+                else:
+                    creds = SqlCreds(
+                        server=cfg.get('server', ''),
+                        database=cfg.get('database', ''),
+                        username=cfg.get('username', ''),
+                        password=cfg.get('password', '')
+                    )
+
+                data_to_load = df[list(required_cols.keys())]
                 if log_func:
-                    log_func(f"📊 ไฟล์ขนาดใหญ่ ({len(df):,} แถว) - อัปโหลดแบบ chunked")
-                
-                chunk_size = 5000
-                total_chunks = (len(df) + chunk_size - 1) // chunk_size
-                uploaded_rows = 0
-                
-                for i in range(0, len(df), chunk_size):
-                    chunk = df.iloc[i:i+chunk_size]
-                    chunk[list(required_cols.keys())].to_sql(
+                    log_func(f"⚡ ใช้ bcp สำหรับการอัปโหลดแบบเร็ว: {len(data_to_load):,} แถว → {schema_name}.{table_name}")
+
+                # ใช้ bcp โหลดแบบ append (ตารางถูกสร้างแล้วด้านบน)
+                bcp_to_sql(
+                    data_to_load,
+                    table_name,
+                    creds,
+                    index=False,
+                    schema=schema_name,
+                    if_exists='append'
+                )
+                return True, f" {schema_name}.{table_name} อัปโหลดข้อมูล {len(data_to_load):,} แถวสำเร็จ (bcp)"
+            except Exception as be:
+                if log_func:
+                    log_func(f"⚠️ bcp ไม่พร้อมใช้งาน/ล้มเหลว จะใช้วิธีปกติแทน: {be}")
+
+                # Fallback เป็น pandas.to_sql แบบ chunked สำหรับไฟล์ใหญ่
+                if len(df) > 10000:
+                    if log_func:
+                        log_func(f"📊 ไฟล์ขนาดใหญ่ ({len(df):,} แถว) - อัปโหลดแบบ chunked (fallback)")
+                    chunk_size = 5000
+                    total_chunks = (len(df) + chunk_size - 1) // chunk_size
+                    uploaded_rows = 0
+                    for i in range(0, len(df), chunk_size):
+                        chunk = df.iloc[i:i+chunk_size]
+                        chunk[list(required_cols.keys())].to_sql(
+                            name=table_name,
+                            con=self.engine,
+                            schema=schema_name,
+                            if_exists='append',
+                            index=False,
+                            dtype=required_cols
+                        )
+                        uploaded_rows += len(chunk)
+                        chunk_num = (i // chunk_size) + 1
+                        if log_func:
+                            log_func(f"📤 อัปโหลด chunk {chunk_num}/{total_chunks}: {len(chunk):,} แถว")
+                    return True, f" {schema_name}.{table_name} อัปโหลดข้อมูล {uploaded_rows:,} แถวสำเร็จ (fallback chunked)"
+                else:
+                    df[list(required_cols.keys())].to_sql(
                         name=table_name,
                         con=self.engine,
                         schema=schema_name,
@@ -372,24 +421,7 @@ class DatabaseService:
                         index=False,
                         dtype=required_cols
                     )
-                    uploaded_rows += len(chunk)
-                    
-                    chunk_num = (i // chunk_size) + 1
-                    if log_func:
-                        log_func(f"📤 อัปโหลด chunk {chunk_num}/{total_chunks}: {len(chunk):,} แถว")
-                
-                return True, f" {schema_name}.{table_name} อัปโหลดข้อมูล {uploaded_rows:,} แถวสำเร็จ (แบบ chunked)"
-            else:
-                # อัปโหลดแบบปกติสำหรับไฟล์เล็ก
-                df[list(required_cols.keys())].to_sql(
-                    name=table_name,
-                    con=self.engine,
-                    schema=schema_name,
-                    if_exists='append',
-                    index=False,
-                    dtype=required_cols
-                )
-                return True, f" {schema_name}.{table_name} อัปโหลดข้อมูล {df.shape[0]} แถวสำเร็จ"
+                    return True, f" {schema_name}.{table_name} อัปโหลดข้อมูล {df.shape[0]} แถวสำเร็จ (fallback)"
         except Exception as e:
             # สรุปข้อความผิดพลาดให้สั้นและชี้เป้าคอลัมน์ที่น่าจะมีปัญหา
             def _short_exception_message(exc: Exception) -> str:
