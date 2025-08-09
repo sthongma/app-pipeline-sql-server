@@ -501,7 +501,7 @@ class SettingsTab:
         
         date_format_label = ctk.CTkLabel(
             date_format_frame, 
-            text="Date Format (US/MM-DD-YYYY หรือ UK/DD-MM-YYYY)", 
+            text="⏰ Date Format (US / MM-DD หรือ UK / DD-MM)", 
             width=400, 
             anchor="w"
         )
