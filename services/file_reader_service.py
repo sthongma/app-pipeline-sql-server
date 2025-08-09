@@ -127,13 +127,29 @@ class FileReaderService:
         return self.column_settings[file_type]
 
     def normalize_col(self, col):
-        """ปรับปรุงการ normalize column (เร็วขึ้น)"""
+        """ปรับปรุงการ normalize column (แม่นยำกับข้อมูลจริง)"""
         if pd.isna(col):
             return ""
-        return str(col).strip().lower().replace(' ', '').replace('\u200b', '')
+        
+        # แปลงเป็น string และทำความสะอาดขั้นพื้นฐาน
+        normalized = str(col).strip()
+        
+        # ลบ zero-width characters และ invisible characters
+        normalized = normalized.replace('\u200b', '')  # Zero Width Space
+        normalized = normalized.replace('\u200c', '')  # Zero Width Non-Joiner
+        normalized = normalized.replace('\u200d', '')  # Zero Width Joiner
+        normalized = normalized.replace('\ufeff', '')  # Byte Order Mark
+        
+        # แปลงเป็น lowercase สำหรับการเปรียบเทียบ
+        normalized = normalized.lower()
+        
+        # ปรับปรุงการจัดการช่องว่าง - ลบช่องว่างซ้ำซ้อนแต่เก็บช่องว่างเดี่ยว
+        normalized = ' '.join(normalized.split())
+        
+        return normalized
 
     def detect_file_type(self, file_path):
-        """ตรวจสอบประเภทของไฟล์ (แบบ dynamic, normalize header) รองรับทั้ง xlsx/xls/csv และ mapping กลับด้าน"""
+        """ตรวจสอบประเภทของไฟล์ (แบบ dynamic, normalize header) รองรับทั้ง xlsx/xls/csv และ identity mapping"""
         try:
             if not self.column_settings:
                 return None
@@ -148,14 +164,76 @@ class FileReaderService:
                 # สำหรับไฟล์ .xlsx
                 df_peek = pd.read_excel(file_path, header=None, nrows=2)
 
-            for logic_type, mapping in self.column_settings.items():
-                # พิจารณาทั้ง keys (old->new) และ values (new->old) เพื่อรองรับกรณีผู้ใช้ใส่กลับด้าน
-                required_keys = set(self.normalize_col(c) for c in mapping.keys())
-                required_vals = set(self.normalize_col(c) for c in mapping.values())
-                for row in range(min(2, df_peek.shape[0])):
-                    header_row = set(self.normalize_col(col) for col in df_peek.iloc[row].values)
-                    if required_keys.issubset(header_row) or required_vals.issubset(header_row):
-                        return logic_type
+            # ตรวจสอบทุก header row ที่เป็นไปได้
+            for row in range(min(2, df_peek.shape[0])):
+                header_row = set(self.normalize_col(col) for col in df_peek.iloc[row].values if not pd.isna(col))
+                
+                # ถ้าไม่มี header ใน row นี้ ข้าม
+                if not header_row:
+                    continue
+                
+                # หา logic_type ที่ตรงกันมากที่สุด
+                best_match = None
+                best_score = 0
+                
+                for logic_type, mapping in self.column_settings.items():
+                    if not mapping:  # ข้าม mapping ที่ว่าง
+                        continue
+                    
+                    required_keys = set(self.normalize_col(c) for c in mapping.keys() if c)
+                    required_vals = set(self.normalize_col(c) for c in mapping.values() if c)
+                    
+                    # ตรวจสอบว่าเป็น identity mapping หรือไม่
+                    is_identity_mapping = (required_keys == required_vals)
+                    
+                    if is_identity_mapping:
+                        # สำหรับ identity mapping ใช้การจับคู่แบบตรง
+                        match_count = len(header_row & required_keys)
+                        total_required = len(required_keys)
+                        
+                        # ใช้เกณฑ์แบบปรับตัว: อย่างน้อย 5 คอลัมน์ตรง หรือ 10% สำหรับ config ขนาดใหญ่
+                        if total_required > 0:
+                            score = match_count / total_required
+                            if total_required >= 50:
+                                # สำหรับ config ขนาดใหญ่ (50+ คอลัมน์) ใช้เกณฑ์ 10% หรืออย่างน้อย 5 คอลัมน์
+                                min_threshold = max(0.1, 5/total_required)
+                            elif total_required >= 20:
+                                # สำหรับ config ขนาดกลาง (20-49 คอลัมน์) ใช้เกณฑ์ 20% หรืออย่างน้อย 5 คอลัมน์  
+                                min_threshold = max(0.2, 5/total_required)
+                            else:
+                                # สำหรับ config ขนาดเล็ก (< 20 คอลัมน์) ใช้เกณฑ์ 30%
+                                min_threshold = 0.3
+                            
+                            if score >= min_threshold and score > best_score:
+                                best_match = logic_type
+                                best_score = score
+                    else:
+                        # สำหรับ mapping ปกติ ตรวจสอบทั้ง keys และ values
+                        keys_match = len(header_row & required_keys)
+                        vals_match = len(header_row & required_vals)
+                        
+                        # เลือกทิศทางที่มี match มากกว่า
+                        if keys_match > vals_match:
+                            score = keys_match / len(required_keys) if required_keys else 0
+                        else:
+                            score = vals_match / len(required_vals) if required_vals else 0
+                        
+                        # ใช้เกณฑ์แบบปรับตัวเดียวกัน
+                        total_keys = len(required_keys) if keys_match > vals_match else len(required_vals)
+                        if total_keys >= 50:
+                            min_threshold = max(0.1, 5/total_keys)
+                        elif total_keys >= 20:
+                            min_threshold = max(0.2, 5/total_keys)
+                        else:
+                            min_threshold = 0.3
+                            
+                        if score >= min_threshold and score > best_score:
+                            best_match = logic_type
+                            best_score = score
+                
+                if best_match:
+                    return best_match
+            
             return None
         except Exception:
             return None
@@ -163,30 +241,142 @@ class FileReaderService:
     def build_rename_mapping_for_dataframe(self, df_columns, logic_type):
         """
         สร้าง mapping สำหรับ df.rename(columns=...) โดยอัตโนมัติให้ทิศทางถูกต้อง
-        - รองรับทั้ง config ที่เป็น old->new (คาดหวัง) และ new->old (ผู้ใช้ใส่กลับด้าน)
+        - รองรับ identity mapping และ mapping ปกติ
+        - จับคู่คอลัมน์แบบ fuzzy matching สำหรับความแม่นยำ
         """
         mapping = self.get_column_name_mapping(logic_type)
         if not mapping:
             return {}
 
-        # Normalize รายชื่อคอลัมน์จาก DataFrame เพื่อเปรียบเทียบ
-        normalized_df_cols = set(self.normalize_col(c) for c in list(df_columns))
+        # สร้าง normalized mapping สำหรับเปรียบเทียบ
+        df_cols_normalized = {self.normalize_col(c): c for c in df_columns}
+        
+        # สร้าง mapping dictionaries
+        keys_to_original = {self.normalize_col(k): k for k in mapping.keys() if k}
+        vals_to_original = {self.normalize_col(v): v for v in mapping.values() if v}
+        
+        # ตรวจสอบว่าเป็น identity mapping หรือไม่
+        normalized_keys = set(keys_to_original.keys())
+        normalized_vals = set(vals_to_original.keys())
+        is_identity_mapping = (normalized_keys == normalized_vals)
+        
+        if is_identity_mapping:
+            # สำหรับ identity mapping ไม่ต้อง rename
+            # แต่ให้จับคู่กับชื่อคอลัมน์ที่ตรงกันเพื่อ standardize
+            result_mapping = {}
+            
+            for norm_col, original_df_col in df_cols_normalized.items():
+                if norm_col in normalized_keys:
+                    # หาคอลัมน์ที่ตรงกันใน mapping
+                    for orig_key, orig_val in mapping.items():
+                        if self.normalize_col(orig_key) == norm_col:
+                            # ใช้ชื่อจาก mapping เป็นชื่อใหม่
+                            if original_df_col != orig_key:
+                                result_mapping[original_df_col] = orig_key
+                            break
+            
+            return result_mapping
+        else:
+            # สำหรับ mapping ปกติ ตรวจสอบทิศทาง
+            keys_matches = set(df_cols_normalized.keys()) & normalized_keys
+            vals_matches = set(df_cols_normalized.keys()) & normalized_vals
+            
+            result_mapping = {}
+            
+            if len(keys_matches) >= len(vals_matches):
+                # DataFrame columns ตรงกับ keys มากกว่า -> mapping คือ old->new
+                for norm_col, original_df_col in df_cols_normalized.items():
+                    if norm_col in keys_to_original:
+                        original_key = keys_to_original[norm_col]
+                        new_value = mapping.get(original_key)
+                        if new_value and original_df_col != new_value:
+                            result_mapping[original_df_col] = new_value
+            else:
+                # DataFrame columns ตรงกับ values มากกว่า -> mapping ถูกใส่กลับด้าน
+                inverted_mapping = {v: k for k, v in mapping.items() if k and v}
+                for norm_col, original_df_col in df_cols_normalized.items():
+                    if norm_col in vals_to_original:
+                        original_val = vals_to_original[norm_col]
+                        new_value = inverted_mapping.get(original_val)
+                        if new_value and original_df_col != new_value:
+                            result_mapping[original_df_col] = new_value
+            
+            return result_mapping
 
-        # เตรียมชุด normalized ของ keys และ values
-        normalized_keys = set(self.normalize_col(k) for k in mapping.keys())
-        normalized_vals = set(self.normalize_col(v) for v in mapping.values())
-
-        # วัดว่าชุดไหนตรงกับ header มากกว่า
-        overlap_keys = len(normalized_df_cols & normalized_keys)
-        overlap_vals = len(normalized_df_cols & normalized_vals)
-
-        # ถ้า header ตรงกับ keys มากกว่า แสดงว่า mapping เป็น old->new อยู่แล้ว
-        if overlap_keys >= overlap_vals:
-            return mapping
-
-        # ถ้า header ตรงกับ values มากกว่า แสดงว่า mapping ใส่กลับด้าน ต้องกลับทิศทาง
-        inverted = {v: k for k, v in mapping.items()}
-        return inverted
+    def debug_column_mapping(self, file_path, logic_type=None):
+        """
+        Debug ฟังก์ชันสำหรับตรวจสอบการ mapping คอลัมน์
+        
+        Args:
+            file_path: ที่อยู่ไฟล์
+            logic_type: ประเภทไฟล์ (ถ้าไม่ระบุจะ auto detect)
+            
+        Returns:
+            Dict: ข้อมูล debug
+        """
+        try:
+            # อ่านไฟล์พื้นฐาน (ปิดการใช้ log_callback ระหว่างอ่าน)
+            original_log_callback = self.log_callback
+            self.log_callback = lambda x: None  # Disable logging
+            
+            success, result = self.read_file_basic(file_path)
+            
+            # คืน log_callback เดิม
+            self.log_callback = original_log_callback
+            
+            if not success:
+                return {"error": result}
+            
+            df = result
+            actual_columns = list(df.columns)
+            
+            # ตรวจจับประเภทไฟล์ถ้าไม่ระบุ
+            if not logic_type:
+                logic_type = self.detect_file_type(file_path)
+            
+            # ข้อมูล debug
+            debug_info = {
+                "file_path": file_path,
+                "detected_logic_type": logic_type,
+                "actual_columns": actual_columns,
+                "actual_columns_count": len(actual_columns),
+                "normalized_actual_columns": [self.normalize_col(c) for c in actual_columns],
+            }
+            
+            if logic_type and logic_type in self.column_settings:
+                mapping = self.column_settings[logic_type]
+                debug_info.update({
+                    "config_mapping": mapping,
+                    "config_keys": list(mapping.keys()),
+                    "config_values": list(mapping.values()),
+                    "normalized_config_keys": [self.normalize_col(k) for k in mapping.keys()],
+                    "normalized_config_values": [self.normalize_col(v) for v in mapping.values()],
+                    "is_identity_mapping": set(self.normalize_col(k) for k in mapping.keys()) == set(self.normalize_col(v) for v in mapping.values()),
+                })
+                
+                # ทดสอบ rename mapping
+                rename_mapping = self.build_rename_mapping_for_dataframe(df.columns, logic_type)
+                debug_info["rename_mapping"] = rename_mapping
+                debug_info["rename_mapping_count"] = len(rename_mapping)
+                
+                # วิเคราะห์การจับคู่
+                actual_normalized = set(self.normalize_col(c) for c in actual_columns)
+                config_keys_normalized = set(self.normalize_col(k) for k in mapping.keys())
+                config_vals_normalized = set(self.normalize_col(v) for v in mapping.values())
+                
+                debug_info.update({
+                    "keys_intersection": list(actual_normalized & config_keys_normalized),
+                    "values_intersection": list(actual_normalized & config_vals_normalized),
+                    "keys_match_count": len(actual_normalized & config_keys_normalized),
+                    "values_match_count": len(actual_normalized & config_vals_normalized),
+                    "missing_from_actual": list(config_keys_normalized - actual_normalized),
+                    "extra_in_actual": list(actual_normalized - config_keys_normalized),
+                })
+            
+            return debug_info
+            
+        except Exception as e:
+            return {"error": f"Exception occurred: {type(e).__name__}: {str(e)}"}
 
     def read_file_basic(self, file_path, file_type='auto'):
         """
