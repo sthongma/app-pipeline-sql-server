@@ -12,9 +12,12 @@ class LoadingDialog(ctk.CTkToplevel):
         title: str = "กำลังโหลด...",
         message: str = "กรุณารอสักครู่",
         min_display_ms: int = 600,
+        min_step_duration_ms: int = 800,
+        min_total_duration_ms: int | None = None,
         steps: list | None = None,
         show_tips: bool = True,
         tips: list | None = None,
+        auto_close_on_task_done: bool = True,
     ):
         super().__init__(parent)
         
@@ -23,10 +26,12 @@ class LoadingDialog(ctk.CTkToplevel):
         self.error = None
         self.task_thread = None
         self._min_display_ms = int(min_display_ms)
+        self._min_step_duration_ms = int(min_step_duration_ms)
         self._start_ts = None
         self.steps = steps or []
         self._step_labels = []
         self._current_step_index = None
+        self._step_done_flags = [False] * len(self.steps)
         self._show_tips = bool(show_tips)
         self._tips = tips or [
             "เคล็ดลับ: คุณสามารถปรับธีม UI ได้จาก Settings",
@@ -35,6 +40,13 @@ class LoadingDialog(ctk.CTkToplevel):
             "เคล็ดลับ: ตรวจสอบชนิดข้อมูลให้ตรงกับคอลัมน์ก่อนอัปโหลด",
         ]
         self._tip_index = 0
+        self._closing_started = False
+        self._min_total_duration_ms = (
+            int(min_total_duration_ms)
+            if min_total_duration_ms is not None
+            else (len(self.steps) * self._min_step_duration_ms if self.steps else self._min_display_ms)
+        )
+        self._auto_close_on_task_done = bool(auto_close_on_task_done)
         
         # ตั้งค่าหน้าต่าง
         self.title(title)
@@ -153,13 +165,15 @@ class LoadingDialog(ctk.CTkToplevel):
         if 0 <= index < len(self._step_labels):
             icon, _ = self._step_labels[index]
             icon.configure(text="✓")
+            if 0 <= index < len(self._step_done_flags):
+                self._step_done_flags[index] = True
 
     def mark_step_error(self, index: int):
         if 0 <= index < len(self._step_labels):
             icon, _ = self._step_labels[index]
             icon.configure(text="✗")
             
-    def run_task(self, task_func: Callable, *args, **kwargs):
+    def run_task(self, task_func: Callable, *args, on_done: Callable[[Any, Any], None] | None = None, **kwargs):
         """รันงานใน background thread"""
         def worker():
             try:
@@ -171,8 +185,15 @@ class LoadingDialog(ctk.CTkToplevel):
             except Exception as e:
                 self.error = e
             finally:
-                # ปิด dialog เมื่อเสร็จ
-                self.after(100, self._finish_task)
+                # แจ้ง callback เสร็จงานบน main thread และปิดถ้าตั้งค่า auto_close
+                def _done():
+                    try:
+                        if callable(on_done):
+                            on_done(self.result, self.error)
+                    finally:
+                        if self._auto_close_on_task_done:
+                            self._finish_task()
+                self.after(100, _done)
                 
         self.task_thread = threading.Thread(target=worker)
         self.task_thread.daemon = True
@@ -181,13 +202,85 @@ class LoadingDialog(ctk.CTkToplevel):
     def _finish_task(self):
         """เสร็จสิ้นงานและปิด dialog"""
         try:
-            # รอให้แสดงผลขั้นต่ำเพื่อ UX ที่นุ่มนวล
-            elapsed_ms = 0
-            if self._start_ts is not None:
-                elapsed_ms = int((time.perf_counter() - self._start_ts) * 1000)
-            if elapsed_ms < self._min_display_ms:
-                self.after(self._min_display_ms - elapsed_ms, self._finish_task)
+            if self._closing_started:
                 return
+            # คำนวณเวลาแสดงผลขั้นต่ำรวม (ช้ากว่าการทำงานจริงได้)
+            elapsed_ms = int((time.perf_counter() - self._start_ts) * 1000) if self._start_ts else 0
+            required_min_ms = max(self._min_display_ms, self._min_total_duration_ms or 0)
+
+            # ถ้ามี steps และยังไม่ทำครบ ให้แอนิเมตขั้นตอนที่เหลือแบบคั่นเวลา แล้วค่อยปิด
+            total_steps = len(self.steps)
+            done_count = sum(1 for f in self._step_done_flags if f)
+            if total_steps > 0 and done_count < total_steps:
+                self._closing_started = True
+                # เริ่มรัน step ปัจจุบันถ้ายังไม่ได้รัน
+                if self._current_step_index is None:
+                    self.mark_step_running(0)
+                self._animate_remaining_steps_and_close(required_min_ms)
+                return
+
+            # หากไม่มี steps หรือทำครบแล้ว แต่เวลาไม่ถึงขั้นต่ำ ให้รอเพิ่ม
+            if elapsed_ms < required_min_ms:
+                self.after(required_min_ms - elapsed_ms, self._finish_task)
+                return
+
+            # ปิดจริง
+            self._final_close()
+        except Exception:
+            pass
+
+    def _animate_remaining_steps_and_close(self, required_min_ms: int):
+        """แอนิเมตให้ขั้นตอนที่เหลือเสร็จตามช่วงเวลา แล้วปิดเมื่อถึงเวลา"""
+        try:
+            total_steps = len(self.steps)
+            # หาดัชนีขั้นตอนถัดไปที่ยังไม่ done (รวมปัจจุบัน)
+            next_idx = None
+            for i in range(self._current_step_index or 0, total_steps):
+                if not self._step_done_flags[i]:
+                    next_idx = i
+                    break
+            if next_idx is None:
+                # ทุกขั้นตอนทำครบแล้ว → ตรวจเวลาแล้วปิด
+                elapsed_ms = int((time.perf_counter() - self._start_ts) * 1000) if self._start_ts else 0
+                if elapsed_ms < required_min_ms:
+                    self.after(required_min_ms - elapsed_ms, self._final_close)
+                else:
+                    self._final_close()
+                return
+            # ทำให้แน่ใจว่า step นี้กำลังทำงานอยู่
+            if self._current_step_index != next_idx:
+                self.mark_step_running(next_idx)
+            # คำนวณเวลาต่อขั้นตอนให้พอดีกับ required_min_ms ที่เหลือ
+            elapsed_ms = int((time.perf_counter() - self._start_ts) * 1000) if self._start_ts else 0
+            remaining_ms = max(required_min_ms - elapsed_ms, 0)
+            remaining_steps = sum(1 for f in self._step_done_flags if not f)
+            per_step_ms = max(self._min_step_duration_ms, int(remaining_ms / remaining_steps) if remaining_steps > 0 else self._min_step_duration_ms)
+
+            def _advance():
+                self.mark_step_done(next_idx)
+                # ไปขั้นตอนถัดไป
+                following_idx = None
+                for j in range(next_idx + 1, total_steps):
+                    if not self._step_done_flags[j]:
+                        following_idx = j
+                        break
+                if following_idx is not None:
+                    self.mark_step_running(following_idx)
+                    self.after(per_step_ms, lambda: self._animate_remaining_steps_and_close(required_min_ms))
+                else:
+                    # ไม่มีขั้นตอนเหลือ → ตรวจเวลาแล้วปิด
+                    elapsed = int((time.perf_counter() - self._start_ts) * 1000) if self._start_ts else 0
+                    if elapsed < required_min_ms:
+                        self.after(required_min_ms - elapsed, self._final_close)
+                    else:
+                        self._final_close()
+
+            self.after(per_step_ms, _advance)
+        except Exception:
+            self._final_close()
+
+    def _final_close(self):
+        try:
             if hasattr(self, 'progress') and self.progress:
                 self.progress.stop()
             if self.winfo_exists():
@@ -195,6 +288,18 @@ class LoadingDialog(ctk.CTkToplevel):
                 self.destroy()
         except Exception:
             pass
+
+    def release_and_close(self):
+        """ให้ปิด dialog ได้เมื่อถึงเวลาแสดงขั้นต่ำแล้ว (ใช้คู่กับ auto_close_on_task_done=False)"""
+        try:
+            if not self._auto_close_on_task_done:
+                self._finish_task()
+        except Exception:
+            try:
+                if self.winfo_exists():
+                    self.destroy()
+            except Exception:
+                pass
         
     def _cancel_task(self):
         """ยกเลิกงาน (ถ้าต้องการ)"""

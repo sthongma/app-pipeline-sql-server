@@ -155,7 +155,10 @@ class LoginWindow(ctk.CTk):
                 self,
                 "กำลังเตรียมระบบ",
                 "กำลังทดสอบการเชื่อมต่อกับฐานข้อมูล...",
-                min_display_ms=900,
+                min_display_ms=1200,
+                min_step_duration_ms=900,
+                min_total_duration_ms=3800,
+                auto_close_on_task_done=False,
                 steps=[
                     "เชื่อมต่อฐานข้อมูล",
                     "ตรวจสอบสิทธิ์การใช้งาน",
@@ -164,18 +167,39 @@ class LoginWindow(ctk.CTk):
                 ]
             )
 
-            # รันงานแบบรวมใน background
-            loading_dialog.run_task(self._connect_and_prepare, config)
+            # รันงานแบบรวมใน background และคุมเวลาปิด dialog เองหลังงาน UI พร้อมจริง
+            final_result = {}
+            self._prepare_done_var = ctk.BooleanVar(value=False)
+            def on_prepare_done(res, err):
+                final_result["res"] = res
+                final_result["err"] = err
+                # แจ้งว่าเสร็จแล้วให้ wait_variable เดินต่อ
+                try:
+                    self._prepare_done_var.set(True)
+                except Exception:
+                    pass
 
-            # รอผลลัพธ์
-            self.wait_window(loading_dialog)
+            loading_dialog.run_task(self._connect_and_prepare, config, on_done=on_prepare_done)
+
+            # รอให้เตรียมระบบเสร็จ (แต่ยังไม่ปิด dialog)
+            self.wait_variable(self._prepare_done_var)
+
+            # ตรวจสอบผลลัพธ์
+            result = final_result.get("res") or {}
+            error = final_result.get("err")
+            if error:
+                loading_dialog.release_and_close()
+                self.wait_window(loading_dialog)
+                messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(error)}")
+                return
 
             if loading_dialog.error:
                 messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(loading_dialog.error)}")
                 return
 
-            result = loading_dialog.result or {}
             if not result.get('connection_ok', False):
+                loading_dialog.release_and_close()
+                self.wait_window(loading_dialog)
                 messagebox.showerror("Error", "ไม่สามารถเชื่อมต่อกับ SQL Server ได้")
                 return
 
@@ -185,6 +209,8 @@ class LoginWindow(ctk.CTk):
                 detail_msg = f"ขาดสิทธิ์ที่จำเป็น: {', '.join(missing_permissions)}\n\n"
                 if recommendations:
                     detail_msg += "คำแนะนำการแก้ไข:\n" + "\n".join(recommendations[:3])
+                loading_dialog.release_and_close()
+                self.wait_window(loading_dialog)
                 messagebox.showerror("สิทธิ์ไม่เพียงพอ", f"เชื่อมต่อสำเร็จ แต่สิทธิ์ไม่เพียงพอ\n\n{detail_msg}")
                 return
 
@@ -196,7 +222,16 @@ class LoginWindow(ctk.CTk):
                 self,
                 "กำลังสร้าง UI",
                 "กำลังเตรียม MainWindow และสร้าง UI ทุกประเภทไฟล์...",
-                min_display_ms=600
+                min_display_ms=900,
+                min_step_duration_ms=700,
+                min_total_duration_ms=2200,
+                auto_close_on_task_done=False,
+                steps=[
+                    "สร้าง Tab View",
+                    "สร้าง Main Tab",
+                    "สร้าง Log Tab",
+                    "สร้าง Settings Tab"
+                ]
             )
 
             # เริ่มสร้าง MainWindow ใน main thread โดยใช้ after()
@@ -226,9 +261,10 @@ class LoginWindow(ctk.CTk):
             # ใช้ callback เพื่อเปิด main window เมื่อสร้าง UI ทั้งหมดเสร็จ (รอทุกอย่างพร้อมก่อนแสดง)
             def on_main_ready():
                 # ปิด dialog สร้าง UI และค่อยแสดงหน้าหลัก
+                # ค่อยปล่อยให้ dialog ปิดเองตามเวลาขั้นต่ำ
                 try:
-                    if self.ui_loading_dialog and self.ui_loading_dialog.winfo_exists():
-                        self.ui_loading_dialog.destroy()
+                    if self.ui_loading_dialog:
+                        self.ui_loading_dialog.release_and_close()
                 except Exception:
                     pass
                 # ซ่อน Login และโชว์ Main หลังจากพร้อมเต็มที่
@@ -244,8 +280,8 @@ class LoginWindow(ctk.CTk):
             # ซ่อน MainWindow ไว้ก่อนจนกว่าจะพร้อม
             self.main_window.withdraw()
             
-            # รอเสร็จแล้วปิด dialog และแสดง main window
-            self.after(100, self._finish_ui_creation)
+            # รอเสร็จแล้ว ปล่อย dialog ปิดตามเวลาและตั้ง handler ปิดหน้าต่างหลัก
+            self.after(150, self._finish_ui_creation)
             
         except Exception as e:
             self.ui_loading_dialog.destroy()
@@ -256,10 +292,10 @@ class LoginWindow(ctk.CTk):
         try:
             self.ui_loading_dialog.update_message("สร้าง MainWindow และ UI เสร็จสิ้น!")
             
-            # ปิด dialog ถ้ายังไม่ถูกปิดจาก on_main_ready
+            # ปล่อยให้ dialog ปิดตัวเองเมื่อครบเวลาขั้นต่ำแล้ว
             try:
-                if self.ui_loading_dialog and self.ui_loading_dialog.winfo_exists():
-                    self.ui_loading_dialog.destroy()
+                if self.ui_loading_dialog:
+                    self.ui_loading_dialog.release_and_close()
             except Exception:
                 pass
             
