@@ -2,6 +2,7 @@ import os
 import customtkinter as ctk
 from tkinter import ttk
 from datetime import datetime
+import logging
 
 class FileList(ctk.CTkScrollableFrame):
     def __init__(self, master, **kwargs):
@@ -93,7 +94,7 @@ class FileList(ctk.CTkScrollableFrame):
                         v.set(0)
                         break
         except Exception as e:
-            print(f"Error disabling checkbox: {e}")
+            logging.error(f"Error disabling checkbox: {e}")
 
     def set_file_uploaded(self, file_path):
         """เปลี่ยนชื่อไฟล์เป็นสีเทาเมื่ออัปโหลดแล้ว"""

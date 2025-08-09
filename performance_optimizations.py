@@ -16,12 +16,13 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple, Callable, Any
 import pandas as pd
+import logging
 
 class PerformanceOptimizer:
     """คลาสสำหรับการปรับปรุง Performance"""
     
     def __init__(self, log_callback: Optional[Callable] = None):
-        self.log_callback = log_callback or print
+        self.log_callback = log_callback or logging.info
         self.cancellation_token = threading.Event()
         self.chunk_size = 10000  # ขนาด chunk สำหรับการอ่านไฟล์
         self.max_workers = min(4, os.cpu_count() or 1)  # จำนวน worker threads
@@ -365,7 +366,7 @@ class LargeFileProcessor:
     
     def __init__(self, log_callback: Optional[Callable] = None):
         self.optimizer = PerformanceOptimizer(log_callback)
-        self.log_callback = log_callback or print
+        self.log_callback = log_callback or logging.info
         
     def process_large_file(self, file_path: str, file_type: str, 
                           processing_steps: List[Callable]) -> Tuple[bool, pd.DataFrame]:
@@ -427,7 +428,7 @@ def create_chunk_processor(chunk_size: int = 5000):
             
             # แสดงความคืบหน้า
             chunk_num = (i // chunk_size) + 1
-            print(f"📊 ประมวลผล chunk {chunk_num}/{total_chunks}")
+            logging.info(f"📊 ประมวลผล chunk {chunk_num}/{total_chunks}")
         
         return pd.concat(results, ignore_index=True)
     

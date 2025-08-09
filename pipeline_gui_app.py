@@ -1,9 +1,14 @@
 try:
     import customtkinter as ctk
-except ImportError:
-    import tkinter as ctk
+except ImportError as e:
+    raise SystemExit(
+        "ไม่พบไลบรารี customtkinter จำเป็นต้องติดตั้งก่อนใช้งาน UI.\n"
+        "ติดตั้งด้วยคำสั่ง: pip install customtkinter"
+    ) from e
 
 from ui.login_window import LoginWindow
+import logging
+from utils.logger import setup_logging
 import os
 
 def main():
@@ -13,6 +18,9 @@ def main():
     # ตั้งค่า appearance mode และ theme
     ctk.set_appearance_mode("System")
     ctk.set_default_color_theme("blue")
+    
+    # ตั้งค่า logging มาตรฐาน
+    setup_logging(level=logging.INFO)
     
     # สร้างหน้าต่างล็อกอิน
     login_window = LoginWindow()

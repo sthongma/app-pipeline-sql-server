@@ -237,16 +237,68 @@ class DatabaseService:
                     msg = f"❌ คอลัมน์ของตาราง {schema_name}.{table_name} ไม่ตรงกับ config"
                     needs_recreate = True
                 else:
-                    # ตรวจสอบ data types โดยเฉพาะ Text() (NVARCHAR(MAX))
+                    # ตรวจสอบ data types ให้ครอบคลุมทุกรูปแบบ
+                    from sqlalchemy.types import NVARCHAR as SA_NVARCHAR, DateTime as SA_DateTime, DATE as SA_DATE
+                    from sqlalchemy.types import Integer as SA_Integer, SmallInteger as SA_SmallInteger, Float as SA_Float, DECIMAL as SA_DECIMAL, Text as SA_Text, Boolean as SA_Boolean
+
+                    def _type_category(type_str: str) -> str:
+                        t = (type_str or '').upper()
+                        if any(x in t for x in ['INT', 'BIGINT', 'SMALLINT', 'FLOAT', 'DECIMAL', 'NUMERIC', 'REAL', 'MONEY']):
+                            return 'NUMERIC'
+                        if any(x in t for x in ['DATE', 'DATETIME', 'SMALLDATETIME', 'DATETIME2', 'TIME']):
+                            return 'DATETIME'
+                        if any(x in t for x in ['BIT', 'BOOLEAN']):
+                            return 'BOOLEAN'
+                        if any(x in t for x in ['CHAR', 'NCHAR', 'VARCHAR', 'NVARCHAR', 'TEXT']):
+                            return 'STRING'
+                        return 'OTHER'
+
+                    def _expected_type_str(sa_type_obj) -> str:
+                        # แปลง SQLAlchemy type object เป็น string ที่ใช้เทียบกับ DB
+                        s = str(sa_type_obj).upper()
+                        # Map Text() ให้เทียบเป็น NVARCHAR(MAX)
+                        if isinstance(sa_type_obj, SA_Text):
+                            return 'NVARCHAR(MAX)'
+                        return s
+
+                    def _parse_varchar_len(type_str: str) -> int:
+                        try:
+                            if 'MAX' in type_str.upper():
+                                return 2_147_483_647  # ใหญ่พอแทน MAX
+                            if '(' in type_str and ')' in type_str:
+                                return int(type_str.split('(')[1].split(')')[0])
+                        except Exception:
+                            pass
+                        return -1
+
                     for col_name, expected_dtype in required_cols.items():
                         db_type = db_col_types.get(col_name, '')
-                        
-                        if isinstance(expected_dtype, Text):
-                            # สำหรับ Text() ต้องเป็น NVARCHAR(MAX) หรือ TEXT
+                        expected_str = _expected_type_str(expected_dtype)
+                        cat_db = _type_category(db_type)
+                        cat_expected = _type_category(expected_str)
+
+                        # กรณี Text() ต้องเป็น NVARCHAR(MAX)
+                        if isinstance(expected_dtype, SA_Text):
                             if 'NVARCHAR(MAX)' not in db_type and 'TEXT' not in db_type:
-                                msg = f"❌ คอลัมน์ '{col_name}' ควรเป็น NVARCHAR(MAX) แต่เป็น {db_type}"
                                 if log_func:
-                                    log_func(msg)
+                                    log_func(f"❌ คอลัมน์ '{col_name}' ควรเป็น NVARCHAR(MAX) แต่เป็น {db_type}")
+                                needs_recreate = True
+                                break
+
+                        # ตรวจจับ mismatch ของหมวดชนิดข้อมูล (เช่น STRING ↔ NUMERIC)
+                        if cat_db != cat_expected:
+                            if log_func:
+                                log_func(f"❌ ชนิดข้อมูลของคอลัมน์ '{col_name}' ไม่ตรงกัน (DB: {db_type} | Expected: {expected_str})")
+                            needs_recreate = True
+                            break
+
+                        # ถ้าเป็น STRING ให้ตรวจสอบความยาว NVARCHAR
+                        if cat_expected == 'STRING' and 'NVARCHAR' in expected_str:
+                            exp_len = _parse_varchar_len(expected_str)
+                            act_len = _parse_varchar_len(db_type)
+                            if act_len != -1 and exp_len != -1 and act_len < exp_len:
+                                if log_func:
+                                    log_func(f"❌ ความยาว NVARCHAR ของ '{col_name}' ไม่พอ (DB: {db_type} | Expected: {expected_str})")
                                 needs_recreate = True
                                 break
             
@@ -276,15 +328,24 @@ class DatabaseService:
                 with self.engine.begin() as conn:
                     conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
             
-            # แปลงคอลัมน์วันที่ให้เป็นรูปแบบที่ SQL Server รองรับ
+            # จัดการคอลัมน์วันที่: คงเป็น dtype datetime ของ pandas เพื่อส่งให้ SQLAlchemy จัดการ ไม่แปลงเป็นสตริง
             for col, dtype in required_cols.items():
                 dtype_str = str(dtype).lower()
                 if col in df.columns and ("date" in dtype_str or "datetime" in dtype_str):
-                    df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=False)
-                    if "date" in dtype_str and "datetime" not in dtype_str:
-                        df[col] = df[col].dt.strftime("%Y-%m-%d")
-                    elif "datetime" in dtype_str:
-                        df[col] = df[col].dt.strftime("%Y-%m-%d %H:%M:%S")
+                    try:
+                        # re-parse เฉพาะกรณีที่ยังไม่ใช่ datetime dtype
+                        import pandas as pd
+                        from pandas.api.types import is_datetime64_any_dtype
+                        if not is_datetime64_any_dtype(df[col]):
+                            df[col] = pd.to_datetime(df[col], errors="coerce")
+                        # กรองค่าวันที่ที่อยู่นอกช่วงที่ SQL Server รองรับ
+                        min_sql_date = pd.Timestamp('1753-01-01')
+                        max_sql_date = pd.Timestamp('9999-12-31 23:59:59')
+                        valid_mask = df[col].notna() & (df[col] >= min_sql_date) & (df[col] <= max_sql_date)
+                        df.loc[~valid_mask, col] = pd.NaT
+                    except Exception:
+                        # ถ้าแปลงไม่ได้ ปล่อยให้เป็นค่าเดิม (to_sql จะพยายามจัดการตาม dtype)
+                        pass
             
             # ตรวจสอบว่าข้อมูลไม่ว่างเปล่าหลังการแปลง
             if df.empty:

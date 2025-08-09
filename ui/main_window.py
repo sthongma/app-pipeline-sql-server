@@ -4,6 +4,7 @@ Main Window - รีแฟคเตอร์แล้ว
 """
 import os
 import threading
+import logging
 from datetime import datetime
 import customtkinter as ctk
 from tkinter import messagebox
@@ -22,6 +23,8 @@ from services.file_service import FileService
 from services.database_service import DatabaseService
 from services.file_management_service import FileManagementService
 from config.database import DatabaseConfig
+from constants import AppConstants, DatabaseConstants
+from utils.logger import create_gui_log_handler
 
 
 class MainWindow(ctk.CTk):
@@ -30,25 +33,11 @@ class MainWindow(ctk.CTk):
         
         # ตั้งค่าหน้าต่างแอปพลิเคชัน
         self.title("ตรวจสอบและอัปโหลดไฟล์")
-        self.geometry("900x780")
+        self.geometry(f"{AppConstants.MAIN_WINDOW_SIZE[0]}x{AppConstants.MAIN_WINDOW_SIZE[1]}")
         self.resizable(False, False)
         
         # กำหนดประเภทข้อมูลที่รองรับ (SQL Server data types)
-        self.supported_dtypes = [
-            "VARCHAR(255)",
-            "NVARCHAR(100)",
-            "NVARCHAR(255)",
-            "NVARCHAR(500)",
-            "NVARCHAR(1000)",
-            "NVARCHAR(MAX)",
-            "INT",
-            "BIGINT",
-            "DECIMAL(18,2)",
-            "FLOAT",
-            "DATE",
-            "DATETIME",
-            "BIT"
-        ]
+        self.supported_dtypes = DatabaseConstants.SUPPORTED_DTYPES
         
         # Initialize handlers
         self.settings_file = "config/column_settings.json"
@@ -70,8 +59,11 @@ class MainWindow(ctk.CTk):
         self.db_config = DatabaseConfig()
         self.sql_config = self.db_config.config
         
+        # ผูก logging เข้ากับ GUI
+        self._attach_logging_to_gui()
+
         # สร้างบริการ
-        self.file_service = FileService(log_callback=self.log)
+        self.file_service = FileService(log_callback=logging.info)
         self.db_service = DatabaseService()
         self.file_mgmt_service = FileManagementService()
         
@@ -263,9 +255,17 @@ class MainWindow(ctk.CTk):
     
     # ===== Logging Methods =====
     def log(self, message):
-        """เพิ่มข้อความลงในกล่องข้อความพร้อมเวลา"""
-        timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
-        formatted_message = f"{timestamp} {message}\n"
+        """มาตรฐานการ log จากส่วนต่างๆ ของ GUI: ส่งเข้าระบบ logging"""
+        try:
+            logging.info(str(message))
+        except Exception:
+            # fallback: เขียนลง GUI ตรงๆ หาก logging ล้มเหลว
+            self._append_log_message(str(message))
+
+    def _append_log_message(self, formatted_message: str) -> None:
+        """เพิ่มข้อความที่ถูก format แล้วลง GUI โดยตรง (ถูกเรียกจาก logging handler)"""
+        if not formatted_message.endswith("\n"):
+            formatted_message += "\n"
         self.after(0, self._update_textbox, formatted_message)
         self.after(0, self._update_log_textbox, formatted_message)
         
@@ -280,6 +280,14 @@ class MainWindow(ctk.CTk):
         if hasattr(self, 'log_textbox') and self.log_textbox:
             self.log_textbox.insert("end", message)
             self.log_textbox.see("end")
+
+    def _attach_logging_to_gui(self) -> None:
+        """แนบ logging handler ให้ส่ง log ทั้งระบบเข้า GUI"""
+        gui_handler = create_gui_log_handler(self._append_log_message, level=logging.INFO)
+        root_logger = logging.getLogger()
+        # ป้องกันซ้ำด้วยการตรวจสอบ class ของ handler
+        if not any(h.__class__ is gui_handler.__class__ for h in root_logger.handlers):
+            root_logger.addHandler(gui_handler)
     
     # ===== Database Connection =====
     def check_sql_connection(self):

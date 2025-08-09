@@ -16,6 +16,7 @@ from typing import List, Tuple, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
+import logging
 
 
 class FileManagementService:
@@ -76,9 +77,8 @@ class FileManagementService:
                     
                     shutil.move(file_path, destination)
                     return (file_path, destination)
-                    
                 except Exception as e:
-                    print(f"ไม่สามารถย้ายไฟล์ {file_path}: {str(e)}")
+                    logging.error(f"ไม่สามารถย้ายไฟล์ {file_path}: {str(e)}")
                     return None
             
             # ถ้ามีไฟล์น้อยกว่า 5 ไฟล์ ทำทีละไฟล์
@@ -162,7 +162,7 @@ class FileManagementService:
                     return json.load(f)
             return {}
         except Exception as e:
-            print(f"เกิดข้อผิดพลาดในการโหลดการตั้งค่า: {e}")
+            logging.error(f"เกิดข้อผิดพลาดในการโหลดการตั้งค่า: {e}")
             return {}
     
     def save_settings(self, settings: Dict[str, Any]) -> bool:
@@ -172,7 +172,7 @@ class FileManagementService:
                 json.dump(settings, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            print(f"เกิดข้อผิดพลาดในการบันทึกการตั้งค่า: {e}")
+            logging.error(f"เกิดข้อผิดพลาดในการบันทึกการตั้งค่า: {e}")
             return False
     
     def cleanup_temp_files(self, temp_directories: List[str]) -> None:
@@ -182,7 +182,7 @@ class FileManagementService:
                 if os.path.exists(temp_dir):
                     shutil.rmtree(temp_dir, ignore_errors=True)
             except Exception as e:
-                print(f"ไม่สามารถลบโฟลเดอร์ temp {temp_dir}: {e}")
+                logging.error(f"ไม่สามารถลบโฟลเดอร์ temp {temp_dir}: {e}")
     
     def get_disk_usage(self, path: str) -> Dict[str, int]:
         """ตรวจสอบการใช้งานพื้นที่ดิสก์"""
@@ -195,5 +195,5 @@ class FileManagementService:
                 'percent_used': (usage.used / usage.total) * 100
             }
         except Exception as e:
-            print(f"ไม่สามารถตรวจสอบการใช้งานดิสก์: {e}")
+            logging.error(f"ไม่สามารถตรวจสอบการใช้งานดิสก์: {e}")
             return {'total': 0, 'used': 0, 'free': 0, 'percent_used': 0}

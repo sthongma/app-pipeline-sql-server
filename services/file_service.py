@@ -22,6 +22,7 @@ File Service สำหรับ PIPELINE_SQLSERVER (รุ่นใหม่ท�
 """
 
 from typing import Optional, Tuple, Any, Dict
+import logging
 import pandas as pd
 
 from .file_reader_service import FileReaderService
@@ -49,11 +50,11 @@ class FileService:
             search_path (Optional[str]): ที่อยู่โฟลเดอร์สำหรับค้นหาไฟล์
             log_callback (Optional[callable]): ฟังก์ชันสำหรับแสดง log
         """
-        self.log_callback = log_callback if log_callback else print
+        self.log_callback = log_callback if log_callback else logging.info
         
         # สร้าง services
-        self.file_reader = FileReaderService(search_path, log_callback)
-        self.data_processor = DataProcessorService(log_callback)
+        self.file_reader = FileReaderService(search_path, self.log_callback)
+        self.data_processor = DataProcessorService(self.log_callback)
         self.file_manager = FileManagementService(search_path)
         
         # อัปเดตข้อมูลจาก SettingsManager
@@ -66,7 +67,7 @@ class FileService:
         self.data_processor._settings_loaded = True
         
         # สร้าง performance optimizer
-        self.performance_optimizer = PerformanceOptimizer(log_callback)
+        self.performance_optimizer = PerformanceOptimizer(self.log_callback)
         
         # เก็บ reference สำหรับ backward compatibility
         self.search_path = self.file_reader.search_path

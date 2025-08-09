@@ -18,17 +18,19 @@ class LogTab:
     
     def _create_ui(self):
         """สร้างส่วนประกอบใน Log Tab"""
-        # กล่องข้อความสำหรับแสดง Log
-        self.log_textbox = ctk.CTkTextbox(self.parent, width=850, height=600)
-        self.log_textbox.pack(pady=10, padx=10, fill="both", expand=True)
+        # Toolbar
+        toolbar = ctk.CTkFrame(self.parent)
+        toolbar.pack(fill="x", padx=10, pady=(10, 0))
 
-        # ปุ่มคัดลอก Log
-        copy_btn = ctk.CTkButton(
-            self.parent,
-            text="คัดลอก Log",
-            command=self._copy_log_to_clipboard
-        )
-        copy_btn.pack(pady=(0, 0))
+        copy_btn = ctk.CTkButton(toolbar, text="คัดลอก Log", command=self._copy_log_to_clipboard, width=120)
+        copy_btn.pack(side="left")
+
+        clear_btn = ctk.CTkButton(toolbar, text="ล้าง Log", command=self._clear_log, width=120)
+        clear_btn.pack(side="left", padx=5)
+
+        # กล่องข้อความสำหรับแสดง Log
+        self.log_textbox = ctk.CTkTextbox(self.parent, width=850, height=560)
+        self.log_textbox.pack(pady=10, padx=10, fill="both", expand=True)
     
     def _copy_log_to_clipboard(self):
         """คัดลอกข้อความ log ทั้งหมดไปยัง clipboard"""
@@ -39,6 +41,10 @@ class LogTab:
         root.clipboard_append(log_text)
         root.update()  # เพื่อให้ clipboard ทำงาน
         messagebox.showinfo("คัดลอกแล้ว", "คัดลอก Log เรียบร้อยแล้ว!")
+
+    def _clear_log(self):
+        """ล้างข้อความทั้งหมดใน log textbox"""
+        self.log_textbox.delete("1.0", "end")
     
     def add_log(self, message):
         """เพิ่มข้อความลงใน log textbox"""

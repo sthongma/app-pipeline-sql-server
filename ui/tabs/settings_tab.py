@@ -4,6 +4,7 @@ import json
 import customtkinter as ctk
 from tkinter import messagebox, filedialog
 import pandas as pd
+from constants import DatabaseConstants, FileConstants
 
 
 class SettingsTab:
@@ -507,8 +508,14 @@ class SettingsTab:
         )
         date_format_label.pack(side="left", padx=(15, 10), pady=12, expand=True, fill="x")
         
-        date_format_menu = ctk.CTkOptionMenu(date_format_frame, values=["UK", "US"], width=200)
-        date_format_menu.set(self.dtype_settings.get(file_type, {}).get("_date_format", "UK"))
+        date_format_menu = ctk.CTkOptionMenu(
+            date_format_frame,
+            values=[FileConstants.DATE_FORMAT_UK, FileConstants.DATE_FORMAT_US],
+            width=200
+        )
+        date_format_menu.set(
+            self.dtype_settings.get(file_type, {}).get("_date_format", FileConstants.DATE_FORMAT_UK)
+        )
         date_format_menu.pack(side="right", padx=(0, 15), pady=12)
         
         # เก็บ reference สำหรับบันทึก
@@ -521,10 +528,7 @@ class SettingsTab:
         if file_type not in self.dtype_menus:
             self.dtype_menus[file_type] = {}
         
-        supported_dtypes = [
-            "NVARCHAR(100)", "NVARCHAR(255)", "NVARCHAR(500)", "NVARCHAR(1000)", "NVARCHAR(MAX)",
-            "INT", "FLOAT", "DECIMAL(18,2)", "DATE", "DATETIME", "BIT"
-        ]
+        supported_dtypes = DatabaseConstants.SUPPORTED_DTYPES
         
         column_menus = {}
         

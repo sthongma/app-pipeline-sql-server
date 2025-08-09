@@ -78,8 +78,8 @@ class AppConstants:
     APP_VERSION = "1.0.0"
     
     # Window settings
-    MAIN_WINDOW_SIZE = (900, 700)
-    LOGIN_WINDOW_SIZE = (400, 300)
+    MAIN_WINDOW_SIZE = (900, 780)
+    LOGIN_WINDOW_SIZE = (500, 400)
     
     # Threading settings
     MAX_WORKER_THREADS = 3
