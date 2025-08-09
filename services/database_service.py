@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DBAPIError, ProgrammingError
 
 from config.database import DatabaseConfig
 from constants import DatabaseConstants, ErrorMessages, SuccessMessages
@@ -390,7 +391,105 @@ class DatabaseService:
                 )
                 return True, f" {schema_name}.{table_name} อัปโหลดข้อมูล {df.shape[0]} แถวสำเร็จ"
         except Exception as e:
-            error_msg = f"เกิดข้อผิดพลาด: {e}"
+            # สรุปข้อความผิดพลาดให้สั้นและชี้เป้าคอลัมน์ที่น่าจะมีปัญหา
+            def _short_exception_message(exc: Exception) -> str:
+                try:
+                    if isinstance(exc, DBAPIError) and getattr(exc, "orig", None):
+                        # ดึงเฉพาะข้อความหลักจาก DBAPI/pyodbc โดยตัด SQL และ parameters ทิ้ง
+                        orig = exc.orig
+                        # pyodbc จะมี args เป็น tuple ที่มีข้อความยาว เราเลือกอันที่สื่อความสุด
+                        parts = [str(p) for p in getattr(orig, "args", []) if p]
+                        core = parts[-1] if parts else str(exc)
+                    else:
+                        core = str(exc)
+                    # ตัดส่วน [SQL: ...] และ [parameters: ...] ถ้ามี
+                    for token in ["[SQL:", "[parameters:"]:
+                        if token in core:
+                            core = core.split(token)[0].strip()
+                    # ย่อบรรทัดให้สั้น (เอาเฉพาะบรรทัดแรก)
+                    core = core.splitlines()[0]
+                    return core
+                except Exception:
+                    return str(exc)
+
+            def _detect_problem_columns(df_local, required_map, max_cols: int = 5, max_examples: int = 3):
+                import pandas as pd  # ภายในเพื่อหลีกเลี่ยง import วน
+                from sqlalchemy.types import (
+                    Integer as SA_Integer,
+                    SmallInteger as SA_SmallInteger,
+                    Float as SA_Float,
+                    DECIMAL as SA_DECIMAL,
+                    DATE as SA_DATE,
+                    DateTime as SA_DateTime,
+                    NVARCHAR as SA_NVARCHAR,
+                )
+                problems = []
+                try:
+                    for col, dtype in required_map.items():
+                        if col not in df_local.columns:
+                            continue
+                        # ตัวเลข
+                        if isinstance(dtype, (SA_Integer, SA_SmallInteger, SA_Float, SA_DECIMAL)):
+                            numeric_series = pd.to_numeric(df_local[col], errors="coerce")
+                            mask = numeric_series.isna() & df_local[col].notna()
+                            bad_count = int(mask.sum())
+                            if bad_count > 0:
+                                examples = [str(x) for x in df_local.loc[mask, col].head(max_examples).tolist()]
+                                problems.append({
+                                    "column": col,
+                                    "expected": str(dtype),
+                                    "bad_count": bad_count,
+                                    "examples": examples,
+                                })
+                        # วันที่
+                        elif isinstance(dtype, (SA_DATE, SA_DateTime)):
+                            parsed = pd.to_datetime(df_local[col], errors="coerce")
+                            mask = parsed.isna() & df_local[col].notna()
+                            bad_count = int(mask.sum())
+                            if bad_count > 0:
+                                examples = [str(x) for x in df_local.loc[mask, col].head(max_examples).tolist()]
+                                problems.append({
+                                    "column": col,
+                                    "expected": str(dtype),
+                                    "bad_count": bad_count,
+                                    "examples": examples,
+                                })
+                        # ความยาวของ string (ถ้ากำหนด NVARCHAR(n))
+                        elif isinstance(dtype, SA_NVARCHAR) and getattr(dtype, "length", None):
+                            max_len = int(dtype.length)
+                            str_series = df_local[col].astype(str)
+                            mask = str_series.str.len() > max_len
+                            bad_count = int(mask.sum())
+                            if bad_count > 0:
+                                examples = str_series.loc[mask].str[:50].head(max_examples).tolist()
+                                problems.append({
+                                    "column": col,
+                                    "expected": f"NVARCHAR({max_len})",
+                                    "bad_count": bad_count,
+                                    "examples": examples,
+                                })
+                        # อื่น ๆ ข้ามไป
+                        if len(problems) >= max_cols:
+                            break
+                except Exception:
+                    pass
+                return problems
+
+            short_msg = _short_exception_message(e)
+            problem_hints = _detect_problem_columns(df, required_cols)
+
+            if problem_hints:
+                lines = [
+                    f"เกิดข้อผิดพลาดจากฐานข้อมูล: {short_msg}",
+                    "คอลัมน์ที่น่าจะมีปัญหา (แสดงบางส่วน):",
+                ]
+                for p in problem_hints:
+                    ex = ", ".join(p.get("examples", []))
+                    lines.append(f"- {p['column']} (คาดว่า {p['expected']}) ผิด {p['bad_count']:,} แถว ตัวอย่าง: [{ex}]")
+                error_msg = "\n".join(lines)
+            else:
+                error_msg = f"เกิดข้อผิดพลาดจากฐานข้อมูล: {short_msg}"
+
             if log_func:
                 log_func(f"❌ {error_msg}")
             return False, error_msg
