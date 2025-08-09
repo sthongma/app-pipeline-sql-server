@@ -168,8 +168,15 @@ class SettingsTab:
         if self.total_types > 0:
             # เริ่มสร้าง UI แรก
             self._build_next_file_type_ui()
-        elif progress_callback:
-            progress_callback("ไม่มีประเภทไฟล์ให้สร้าง UI")
+        else:
+            if progress_callback:
+                progress_callback("ไม่มีประเภทไฟล์ให้สร้าง UI")
+            # กรณีไม่มีประเภทไฟล์ ให้ถือว่า SettingsTab พร้อมทันที
+            if callable(self.on_all_ui_built):
+                try:
+                    self.parent.after(0, self.on_all_ui_built)
+                except Exception:
+                    self.on_all_ui_built()
     
     def _build_next_file_type_ui(self):
         """สร้าง UI สำหรับประเภทไฟล์ถัดไป"""

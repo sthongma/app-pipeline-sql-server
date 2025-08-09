@@ -173,7 +173,10 @@ class MainWindow(ctk.CTkToplevel):
         )
         
         if ui_progress_callback:
-            ui_progress_callback("Settings Tab เสร็จสิ้น")
+            if self.column_settings:
+                ui_progress_callback("Settings Tab เสร็จสิ้น")
+            else:
+                ui_progress_callback("ไม่มีประเภทไฟล์ — ข้ามการสร้าง Settings UI และพร้อมใช้งานทันที")
 
     def _on_all_ui_built(self, on_ready_callback):
         """ถูกเรียกเมื่อ SettingsTab สร้าง UI ทั้งหมดเสร็จ เพื่อแจ้งว่า MainWindow พร้อมใช้งาน"""
