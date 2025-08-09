@@ -127,7 +127,8 @@ class MainWindow(ctk.CTk):
         if ui_progress_callback:
             ui_progress_callback("กำลังสร้าง Settings Tab...")
             
-        self._create_settings_tab(settings_tab_frame, ui_progress_callback)
+        # แบ่งการสร้าง Settings Tab ออกเป็นขั้นตอน
+        self.after(10, lambda: self._create_settings_tab_async(settings_tab_frame, ui_progress_callback))
         
         # Settings Tab สร้างเสร็จแล้ว UI building ของประเภทไฟล์จะเริ่มแบบ async อัตโนมัติ
     
@@ -158,8 +159,31 @@ class MainWindow(ctk.CTk):
         # เก็บ reference ไปยัง log textbox
         self.log_textbox = self.log_tab_ui.log_textbox
     
+    def _create_settings_tab_async(self, parent, ui_progress_callback=None):
+        """สร้างส่วนประกอบใน Settings Tab แบบ async"""
+        if ui_progress_callback:
+            ui_progress_callback("กำลังเตรียม Settings Tab...")
+            
+        # Create settings tab with callbacks
+        callbacks = {
+            'save_column_settings': self._save_column_settings,
+            'save_dtype_settings': self._save_dtype_settings
+        }
+        
+        self.settings_tab_ui = SettingsTab(
+            parent, 
+            self.column_settings, 
+            self.dtype_settings, 
+            self.supported_dtypes, 
+            callbacks,
+            ui_progress_callback
+        )
+        
+        if ui_progress_callback:
+            ui_progress_callback("Settings Tab เสร็จสิ้น")
+    
     def _create_settings_tab(self, parent, ui_progress_callback=None):
-        """สร้างส่วนประกอบใน Settings Tab"""
+        """สร้างส่วนประกอบใน Settings Tab (เดิม - สำหรับ fallback)"""
         # Create settings tab with callbacks
         callbacks = {
             'save_column_settings': self._save_column_settings,

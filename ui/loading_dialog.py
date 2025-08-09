@@ -54,6 +54,9 @@ class LoadingDialog(ctk.CTkToplevel):
         self.progress.pack(pady=(10, 15))
         self.progress.start()
         
+        # เพิ่มการอัพเดท UI เป็นระยะ เพื่อให้ progress bar วิ่งได้
+        self._schedule_ui_update()
+        
         # ข้อความ
         self.message_label = ctk.CTkLabel(
             main_frame, 
@@ -115,6 +118,15 @@ class LoadingDialog(ctk.CTkToplevel):
         self.error = "ยกเลิกโดยผู้ใช้"
         self._finish_task()
         
+    def _schedule_ui_update(self):
+        """กำหนดการอัพเดท UI เป็นระยะ เพื่อให้ progress bar วิ่งได้"""
+        try:
+            if self.winfo_exists():
+                self.update_idletasks()
+                self.after(50, self._schedule_ui_update)
+        except Exception:
+            pass
+            
     def get_result(self):
         """คืนค่าผลลัพธ์ของงาน"""
         if self.error:

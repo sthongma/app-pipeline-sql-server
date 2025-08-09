@@ -24,6 +24,7 @@ class SettingsTab:
         self.dtype_settings = dtype_settings
         self.supported_dtypes = supported_dtypes
         self.callbacks = callbacks
+        self.ui_progress_callback = ui_progress_callback
         
         # UI variables
         self.dtype_menus = {}
@@ -33,15 +34,8 @@ class SettingsTab:
         self.ui_cache = {}
         self.current_file_type = None
         
-        # Create basic UI components first (non-blocking)
-        self._create_ui()
-        
-        # โหลดข้อมูลประเภทไฟล์ที่มีอยู่
-        self.refresh_file_type_tabs()
-        
-        # เริ่ม pre-build UI แบบ async หลังจากสร้าง basic UI เสร็จ
-        if self.column_settings:  # มีประเภทไฟล์ให้สร้าง UI
-            self.parent.after(50, lambda: self._start_async_ui_building(ui_progress_callback))
+        # สร้าง UI แบบ step-by-step
+        self._create_ui_step_by_step()
     
     def _start_async_ui_building(self, ui_progress_callback):
         """เริ่ม UI building แบบ async"""
@@ -51,8 +45,84 @@ class SettingsTab:
         # เริ่ม pre-build UI สำหรับทุกประเภทไฟล์
         self._prebuild_all_ui_cache_async(ui_progress_callback)
     
+    def _create_ui_step_by_step(self):
+        """สร้าง UI แบบ step-by-step เพื่อไม่บล็อค"""
+        if self.ui_progress_callback:
+            self.ui_progress_callback("สร้าง Control Panel...")
+        
+        self.parent.after(10, self._create_control_panel)
+    
+    def _create_control_panel(self):
+        """สร้าง Control Panel"""
+        # ปุ่มเพิ่ม/ลบ/บันทึกประเภทไฟล์และ dropdown เลือกประเภทไฟล์
+        control_frame = ctk.CTkFrame(self.parent)
+        control_frame.pack(fill="x", padx=10, pady=10)
+        
+        # ปุ่มควบคุมและ dropdown ในแถวเดียวกัน
+        button_row = ctk.CTkFrame(control_frame, fg_color="transparent")
+        button_row.pack(fill="x", pady=5)
+        
+        if self.ui_progress_callback:
+            self.ui_progress_callback("สร้างปุ่มควบคุม...")
+        
+        self.parent.after(10, lambda: self._create_buttons(button_row))
+    
+    def _create_buttons(self, button_row):
+        """สร้างปุ่มควบคุม"""
+        # ปุ่มควบคุมด้านซ้าย
+        add_type_btn = ctk.CTkButton(button_row, text="➕ เพิ่มประเภทไฟล์", command=self._add_file_type)
+        add_type_btn.pack(side="left", padx=5)
+        del_type_btn = ctk.CTkButton(button_row, text="🗑️ ลบประเภทไฟล์", command=self._delete_file_type)
+        del_type_btn.pack(side="left", padx=5)
+        save_dtype_btn = ctk.CTkButton(button_row, text="บันทึกชนิดข้อมูล", command=self._save_all_dtype_settings)
+        save_dtype_btn.pack(side="left", padx=5)
+        edit_type_btn = ctk.CTkButton(button_row, text="✏️ แก้ไขชื่อประเภทไฟล์", command=self._edit_file_type)
+        edit_type_btn.pack(side="left", padx=5)
+        
+        if self.ui_progress_callback:
+            self.ui_progress_callback("สร้าง Dropdown...")
+        
+        self.parent.after(10, lambda: self._create_dropdown(button_row))
+    
+    def _create_dropdown(self, button_row):
+        """สร้าง Dropdown"""
+        # Dropdown สำหรับเลือกประเภทไฟล์
+        self.file_type_var = ctk.StringVar(value="เลือกประเภทไฟล์...")
+        self.file_type_selector = ctk.CTkOptionMenu(
+            button_row, 
+            variable=self.file_type_var,
+            values=["เลือกประเภทไฟล์..."],
+            command=self._on_file_type_selected,
+            width=300
+        )
+        self.file_type_selector.pack(side="right", padx=5)
+        
+        if self.ui_progress_callback:
+            self.ui_progress_callback("สร้าง Content Frame...")
+        
+        self.parent.after(10, self._create_content_frame)
+    
+    def _create_content_frame(self):
+        """สร้าง Content Frame"""
+        # สร้าง content frame สำหรับแสดงเนื้อหาของประเภทไฟล์ที่เลือก
+        self.content_frame = ctk.CTkFrame(self.parent)
+        self.content_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
+        if self.ui_progress_callback:
+            self.ui_progress_callback("โหลดข้อมูลประเภทไฟล์...")
+        
+        self.parent.after(10, self._finish_ui_creation)
+    
+    def _finish_ui_creation(self):
+        """เสร็จสิ้นการสร้าง UI"""
+        # โหลดข้อมูลประเภทไฟล์ที่มีอยู่
+        self.refresh_file_type_tabs()
+        
+        if self.ui_progress_callback:
+            self.ui_progress_callback("Settings Tab พร้อมใช้งาน")
+    
     def _create_ui(self):
-        """สร้างส่วนประกอบใน Settings Tab (dynamic file types/columns)"""
+        """สร้างส่วนประกอบใน Settings Tab (เดิม - สำหรับ fallback)"""
         # ปุ่มเพิ่ม/ลบ/บันทึกประเภทไฟล์และ dropdown เลือกประเภทไฟล์
         control_frame = ctk.CTkFrame(self.parent)
         control_frame.pack(fill="x", padx=10, pady=10)
@@ -119,7 +189,7 @@ class SettingsTab:
             self.current_build_index += 1
             
             # ใช้ after() เพื่อสร้างประเภทถัดไปโดยไม่บล็อค UI
-            self.parent.after(50, self._build_next_file_type_ui)
+            self.parent.after(10, self._build_next_file_type_ui)
         else:
             # เสร็จสิ้นการสร้างทั้งหมด
             if self.ui_progress_callback:
@@ -361,8 +431,8 @@ class SettingsTab:
         if file_type in self.ui_cache:
             self.ui_cache[file_type]['scroll_frame'].pack(fill="both", expand=True, padx=10, pady=(0, 10))
         else:
-            # สร้าง UI ใหม่และแคชไว้ (กรณี dynamic file type ที่เพิ่งเพิ่ม)
-            self._create_and_cache_ui(file_type)
+            # สร้าง UI ใหม่แบบ lazy loading พร้อม loading dialog
+            self._create_ui_lazy(file_type)
             
         self.current_file_type = file_type
     
@@ -371,11 +441,40 @@ class SettingsTab:
         for cached_ui in self.ui_cache.values():
             cached_ui['scroll_frame'].pack_forget()
     
+    def _create_ui_lazy(self, file_type):
+        """สร้าง UI แบบ lazy loading พร้อม progress indicator"""
+        # แสดง loading message
+        loading_frame = ctk.CTkFrame(self.content_frame)
+        loading_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        
+        loading_label = ctk.CTkLabel(loading_frame, text=f"กำลังสร้าง UI สำหรับ {file_type}...")
+        loading_label.pack(expand=True)
+        
+        # ใช้ after เพื่อสร้าง UI จริงโดยไม่บล็อค
+        self.parent.after(10, lambda: self._create_ui_async(file_type, loading_frame))
+    
+    def _create_ui_async(self, file_type, loading_frame):
+        """สร้าง UI จริงแบบ async"""
+        try:
+            # ลบ loading frame
+            loading_frame.destroy()
+            
+            # สร้าง UI จริง
+            self._create_and_cache_ui(file_type)
+            
+            # แสดง UI ที่สร้างเสร็จ
+            self.ui_cache[file_type]['scroll_frame'].pack(fill="both", expand=True, padx=10, pady=(0, 10))
+            
+        except Exception as e:
+            loading_frame.destroy()
+            error_frame = ctk.CTkFrame(self.content_frame)
+            error_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+            ctk.CTkLabel(error_frame, text=f"เกิดข้อผิดพลาด: {e}").pack(expand=True)
+
     def _create_and_cache_ui(self, file_type):
         """สร้างและแคช UI สำหรับประเภทไฟล์"""
         # สร้าง scrollable frame สำหรับแสดงคอลัมน์
         scroll_frame = ctk.CTkScrollableFrame(self.content_frame, width=820, height=450)
-        scroll_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
         # --- Date Format Dropdown ---
         date_format_menu = self._create_date_format_section(scroll_frame, file_type)
