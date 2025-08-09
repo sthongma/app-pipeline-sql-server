@@ -81,7 +81,11 @@ class LoadingDialog(ctk.CTkToplevel):
         """รันงานใน background thread"""
         def worker():
             try:
-                self.result = task_func(*args, **kwargs)
+                # ถ้า task_func รองรับ progress_callback ให้ส่งไป
+                if 'progress_callback' in task_func.__code__.co_varnames:
+                    self.result = task_func(*args, progress_callback=self.update_message, **kwargs)
+                else:
+                    self.result = task_func(*args, **kwargs)
             except Exception as e:
                 self.error = e
             finally:

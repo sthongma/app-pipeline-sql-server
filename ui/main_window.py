@@ -25,7 +25,7 @@ from config.database import DatabaseConfig
 
 
 class MainWindow(ctk.CTk):
-    def __init__(self):
+    def __init__(self, preloaded_data=None, ui_progress_callback=None):
         super().__init__()
         
         # ตั้งค่าหน้าต่างแอปพลิเคชัน
@@ -54,9 +54,17 @@ class MainWindow(ctk.CTk):
         self.settings_file = "config/column_settings.json"
         self.settings_handler = SettingsHandler(self.settings_file, self.log)
         
-        # โหลดการตั้งค่า
-        self.column_settings = self.settings_handler.load_column_settings()
-        self.dtype_settings = self.settings_handler.load_dtype_settings()
+        # โหลดการตั้งค่า (ใช้ preloaded data ถ้ามี)
+        if preloaded_data:
+            self.column_settings = preloaded_data.get('column_settings', {})
+            self.dtype_settings = preloaded_data.get('dtype_settings', {})
+            # โหลด last_path จาก preloaded data
+            preloaded_last_path = preloaded_data.get('last_path')
+        else:
+            # fallback: โหลดแบบปกติถ้าไม่มีข้อมูลล่วงหน้า
+            self.column_settings = self.settings_handler.load_column_settings()
+            self.dtype_settings = self.settings_handler.load_dtype_settings()
+            preloaded_last_path = None
         
         # โหลดการตั้งค่า SQL Server
         self.db_config = DatabaseConfig()
@@ -75,19 +83,27 @@ class MainWindow(ctk.CTk):
             self.log
         )
         
-        # ตรวจสอบการเชื่อมต่อ SQL Server
-        self.check_sql_connection()
-        
-        # โหลด path ล่าสุด ถ้ามี
-        last_path = self.settings_handler.load_last_path()
+        # โหลด path ล่าสุด ถ้ามี (ใช้ preloaded data ก่อน)
+        last_path = preloaded_last_path if preloaded_last_path else self.settings_handler.load_last_path()
         if last_path and os.path.isdir(last_path):
             self.file_service.set_search_path(last_path)
         
-        # สร้างส่วนประกอบ UI
-        self._create_ui()
+        # สร้าง UI พร้อมแสดง progress
+        if ui_progress_callback:
+            ui_progress_callback("กำลังสร้าง Tab View...")
+        
+        self._create_ui(ui_progress_callback)
+        
+        # ตรวจสอบการเชื่อมต่อ SQL Server หลังสร้าง UI เสร็จ
+        if ui_progress_callback:
+            ui_progress_callback("ตรวจสอบการเชื่อมต่อ SQL Server...")
+        self.check_sql_connection()
     
-    def _create_ui(self):
+    def _create_ui(self, ui_progress_callback=None):
         """สร้างส่วนประกอบ UI ทั้งหมด"""
+        if ui_progress_callback:
+            ui_progress_callback("กำลังสร้าง Tab View...")
+        
         # สร้าง Tab View
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(fill="both", expand=True, padx=5, pady=5)
@@ -97,10 +113,24 @@ class MainWindow(ctk.CTk):
         log_tab_frame = self.tabview.add("Log")
         settings_tab_frame = self.tabview.add("Settings")
         
+        if ui_progress_callback:
+            ui_progress_callback("กำลังสร้าง Main Tab...")
+        
         # สร้างส่วนประกอบในแต่ละ Tab
         self._create_main_tab(main_tab_frame)
+        
+        if ui_progress_callback:
+            ui_progress_callback("กำลังสร้าง Log Tab...")
+            
         self._create_log_tab(log_tab_frame)
-        self._create_settings_tab(settings_tab_frame)
+        
+        if ui_progress_callback:
+            ui_progress_callback("กำลังสร้าง Settings Tab...")
+            
+        self._create_settings_tab(settings_tab_frame, ui_progress_callback)
+        
+        # Settings Tab สร้างเสร็จแล้ว UI building ของประเภทไฟล์จะเริ่มแบบ async อัตโนมัติ
+    
     
     def _create_main_tab(self, parent):
         """สร้างส่วนประกอบใน Main Tab"""
@@ -128,7 +158,7 @@ class MainWindow(ctk.CTk):
         # เก็บ reference ไปยัง log textbox
         self.log_textbox = self.log_tab_ui.log_textbox
     
-    def _create_settings_tab(self, parent):
+    def _create_settings_tab(self, parent, ui_progress_callback=None):
         """สร้างส่วนประกอบใน Settings Tab"""
         # Create settings tab with callbacks
         callbacks = {
@@ -141,7 +171,8 @@ class MainWindow(ctk.CTk):
             self.column_settings, 
             self.dtype_settings, 
             self.supported_dtypes, 
-            callbacks
+            callbacks,
+            ui_progress_callback
         )
     
     # ===== Callback Methods สำหรับ UI Components =====
@@ -216,13 +247,15 @@ class MainWindow(ctk.CTk):
         
     def _update_textbox(self, message):
         """อัปเดตกล่องข้อความในแท็บหลัก"""
-        self.textbox.insert("end", message)
-        self.textbox.see("end")
+        if hasattr(self, 'textbox') and self.textbox:
+            self.textbox.insert("end", message)
+            self.textbox.see("end")
         
     def _update_log_textbox(self, message):
         """อัปเดตกล่องข้อความในแท็บ Log"""
-        self.log_textbox.insert("end", message)
-        self.log_textbox.see("end")
+        if hasattr(self, 'log_textbox') and self.log_textbox:
+            self.log_textbox.insert("end", message)
+            self.log_textbox.see("end")
     
     # ===== Database Connection =====
     def check_sql_connection(self):

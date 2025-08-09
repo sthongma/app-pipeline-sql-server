@@ -5,6 +5,7 @@ import os
 from services.database_service import DatabaseService
 from ui.main_window import MainWindow
 from ui.loading_dialog import LoadingDialog
+from services.preload_service import PreloadService
 from constants import PathConstants
 
 class LoginWindow(ctk.CTk):
@@ -18,6 +19,7 @@ class LoginWindow(ctk.CTk):
         
         # สร้างบริการ
         self.db_service = DatabaseService()
+        self.preload_service = PreloadService()
         
         # สร้าง UI
         self._create_ui()
@@ -199,15 +201,89 @@ class LoginWindow(ctk.CTk):
                     )
                     return
                 
-                # เชื่อมต่อและสิทธิ์ผ่าน
-                self.withdraw()
-                main_window = MainWindow()
-                main_window.protocol("WM_DELETE_WINDOW", lambda: self._on_main_window_close(main_window))
-                main_window.mainloop()
+                # เชื่อมต่อและสิทธิ์ผ่าน - โหลดข้อมูลล่วงหน้าก่อนเปิด MainWindow
+                preload_dialog = LoadingDialog(
+                    self,
+                    "กำลังโหลดข้อมูล",
+                    "กำลังโหลดประเภทไฟล์และการตั้งค่าทั้งหมด..."
+                )
+                
+                # รันการโหลดข้อมูลใน background
+                preload_dialog.run_task(self.preload_service.preload_file_settings)
+                
+                # รอผลลัพธ์
+                self.wait_window(preload_dialog)
+                
+                if preload_dialog.error:
+                    messagebox.showerror("Error", f"เกิดข้อผิดพลาดในการโหลดข้อมูล: {str(preload_dialog.error)}")
+                    return
+                
+                # ส่งข้อมูลที่โหลดไว้ให้ MainWindow
+                preloaded_data = None
+                if preload_dialog.result and preload_dialog.result[0]:  # success = True
+                    preloaded_data = preload_dialog.result[2]  # data
+                
+                # แสดง loading dialog และสร้าง MainWindow ใน main thread
+                self.ui_loading_dialog = LoadingDialog(
+                    self,
+                    "กำลังสร้าง UI",
+                    "กำลังเตรียม MainWindow และสร้าง UI ทุกประเภทไฟล์..."
+                )
+                
+                # เริ่มสร้าง MainWindow ใน main thread โดยใช้ after()
+                self.preloaded_data = preloaded_data
+                self.after(100, self._start_ui_creation)
             else:
                 messagebox.showerror("Error", "ไม่สามารถเชื่อมต่อกับ SQL Server ได้")
         except Exception as e:
             messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(e)}")
+            
+    def _start_ui_creation(self):
+        """เริ่มการสร้าง UI ใน main thread"""
+        try:
+            # อัพเดท progress
+            self.ui_loading_dialog.update_message("กำลังเริ่มสร้าง MainWindow...")
+            self.after(50, self._create_main_window_step1)
+        except Exception as e:
+            self.ui_loading_dialog.destroy()
+            messagebox.showerror("Error", f"เกิดข้อผิดพลาดในการสร้าง UI: {str(e)}")
+    
+    def _create_main_window_step1(self):
+        """สร้าง MainWindow ขั้นตอนที่ 1"""
+        try:
+            self.ui_loading_dialog.update_message("กำลังสร้าง MainWindow...")
+            # สร้าง MainWindow พร้อม progress callback
+            def progress_callback(message):
+                self.ui_loading_dialog.update_message(message)
+                
+            self.main_window = MainWindow(
+                preloaded_data=self.preloaded_data, 
+                ui_progress_callback=progress_callback
+            )
+            
+            # รอเสร็จแล้วปิด dialog และแสดง main window
+            self.after(100, self._finish_ui_creation)
+            
+        except Exception as e:
+            self.ui_loading_dialog.destroy()
+            messagebox.showerror("Error", f"เกิดข้อผิดพลาดในการสร้าง UI: {str(e)}")
+    
+    def _finish_ui_creation(self):
+        """เสร็จสิ้นการสร้าง UI"""
+        try:
+            self.ui_loading_dialog.update_message("สร้าง MainWindow และ UI เสร็จสิ้น!")
+            
+            # ปิด dialog
+            self.ui_loading_dialog.destroy()
+            
+            # ซ่อน LoginWindow และแสดง MainWindow
+            self.withdraw()
+            self.main_window.protocol("WM_DELETE_WINDOW", lambda: self._on_main_window_close(self.main_window))
+            self.main_window.mainloop()
+            
+        except Exception as e:
+            self.ui_loading_dialog.destroy()
+            messagebox.showerror("Error", f"เกิดข้อผิดพลาดในการสร้าง UI: {str(e)}")
             
     def _on_main_window_close(self, main_window):
         """จัดการเมื่อปิดหน้าต่างหลัก"""

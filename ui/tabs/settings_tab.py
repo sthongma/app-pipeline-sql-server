@@ -7,7 +7,7 @@ import pandas as pd
 
 
 class SettingsTab:
-    def __init__(self, parent, column_settings, dtype_settings, supported_dtypes, callbacks):
+    def __init__(self, parent, column_settings, dtype_settings, supported_dtypes, callbacks, ui_progress_callback=None):
         """
         Initialize Settings Tab
         
@@ -17,6 +17,7 @@ class SettingsTab:
             dtype_settings: Dictionary of dtype settings
             supported_dtypes: List of supported SQL Server data types
             callbacks: Dictionary of callback functions
+            ui_progress_callback: Callback for UI building progress
         """
         self.parent = parent
         self.column_settings = column_settings
@@ -28,8 +29,27 @@ class SettingsTab:
         self.dtype_menus = {}
         self.date_format_menus = {}
         
-        # Create UI components
+        # แคช UI สำหรับแต่ละประเภทไฟล์
+        self.ui_cache = {}
+        self.current_file_type = None
+        
+        # Create basic UI components first (non-blocking)
         self._create_ui()
+        
+        # โหลดข้อมูลประเภทไฟล์ที่มีอยู่
+        self.refresh_file_type_tabs()
+        
+        # เริ่ม pre-build UI แบบ async หลังจากสร้าง basic UI เสร็จ
+        if self.column_settings:  # มีประเภทไฟล์ให้สร้าง UI
+            self.parent.after(50, lambda: self._start_async_ui_building(ui_progress_callback))
+    
+    def _start_async_ui_building(self, ui_progress_callback):
+        """เริ่ม UI building แบบ async"""
+        if ui_progress_callback:
+            ui_progress_callback("เริ่มสร้าง UI สำหรับประเภทไฟล์ต่างๆ...")
+        
+        # เริ่ม pre-build UI สำหรับทุกประเภทไฟล์
+        self._prebuild_all_ui_cache_async(ui_progress_callback)
     
     def _create_ui(self):
         """สร้างส่วนประกอบใน Settings Tab (dynamic file types/columns)"""
@@ -65,12 +85,65 @@ class SettingsTab:
         # สร้าง content frame สำหรับแสดงเนื้อหาของประเภทไฟล์ที่เลือก
         self.content_frame = ctk.CTkFrame(self.parent)
         self.content_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-
-        # โหลดข้อมูลประเภทไฟล์ที่มีอยู่
-        self.refresh_file_type_tabs()
+    
+    def _prebuild_all_ui_cache_async(self, progress_callback=None):
+        """Pre-build UI สำหรับทุกประเภทไฟล์แบบ async"""
+        self.file_types_to_build = list(self.column_settings.keys())
+        self.total_types = len(self.file_types_to_build)
+        self.current_build_index = 0
+        self.ui_progress_callback = progress_callback
+        
+        if self.total_types > 0:
+            # เริ่มสร้าง UI แรก
+            self._build_next_file_type_ui()
+        elif progress_callback:
+            progress_callback("ไม่มีประเภทไฟล์ให้สร้าง UI")
+    
+    def _build_next_file_type_ui(self):
+        """สร้าง UI สำหรับประเภทไฟล์ถัดไป"""
+        if self.current_build_index < self.total_types:
+            file_type = self.file_types_to_build[self.current_build_index]
+            
+            # อัพเดท progress
+            if self.ui_progress_callback:
+                self.ui_progress_callback(
+                    f"กำลังสร้าง UI สำหรับ: {file_type} ({self.current_build_index + 1}/{self.total_types})"
+                )
+            
+            # สร้าง UI สำหรับประเภทไฟล์นี้
+            if file_type not in self.ui_cache:
+                self._create_and_cache_ui(file_type)
+                # ซ่อน UI ที่สร้างใหม่
+                self.ui_cache[file_type]['scroll_frame'].pack_forget()
+            
+            self.current_build_index += 1
+            
+            # ใช้ after() เพื่อสร้างประเภทถัดไปโดยไม่บล็อค UI
+            self.parent.after(50, self._build_next_file_type_ui)
+        else:
+            # เสร็จสิ้นการสร้างทั้งหมด
+            if self.ui_progress_callback:
+                self.ui_progress_callback(f"สร้าง UI สำหรับ {self.total_types} ประเภทไฟล์เสร็จสิ้น")
+    
+    def _prebuild_all_ui_cache(self, progress_callback=None):
+        """Pre-build UI สำหรับทุกประเภทไฟล์ล่วงหน้า (เก่า - สำหรับ fallback)"""
+        file_types = list(self.column_settings.keys())
+        total_types = len(file_types)
+        
+        for i, file_type in enumerate(file_types):
+            if progress_callback:
+                progress_callback(f"กำลังสร้าง UI สำหรับประเภทไฟล์: {file_type} ({i+1}/{total_types})")
+                
+            if file_type not in self.ui_cache:
+                self._create_and_cache_ui(file_type)
+                # ซ่อน UI ที่สร้างใหม่
+                self.ui_cache[file_type]['scroll_frame'].pack_forget()
+        
+        if progress_callback and total_types > 0:
+            progress_callback(f"สร้าง UI สำหรับ {total_types} ประเภทไฟล์เสร็จสิ้น")
     
     def refresh_file_type_tabs(self):
-        """รีเฟรช tabs ของประเภทไฟล์"""
+        """รีเฟรช tabs ของประเภทไฟล์ (ใช้ข้อมูลแคช)"""
         # ซิงค์ dtype_settings ก่อนอัปเดต UI
         for file_type in self.column_settings.keys():
             self._sync_dtype_settings(file_type)
@@ -78,15 +151,40 @@ class SettingsTab:
         # อัปเดต dropdown ของประเภทไฟล์
         self._update_file_type_selector()
         
-        # ล้างข้อมูลเก่า
-        if hasattr(self, 'date_format_menus'):
-            self.date_format_menus.clear()
+        # ล้าง UI cache เก่าที่ไม่ใช้แล้ว
+        self._cleanup_unused_cache()
         
-        # --- sync dropdown กับ config หลังอัปเดต ---
-        if hasattr(self, 'date_format_menus'):
-            for file_type, menu in self.date_format_menus.items():
+        # อัปเดต UI ที่แคชไว้ให้ตรงกับข้อมูลใหม่
+        self._update_cached_ui()
+        
+        # Pre-build UI สำหรับประเภทไฟล์ใหม่ที่ยังไม่มี cache
+        self._prebuild_all_ui_cache()
+    
+    def _cleanup_unused_cache(self):
+        """ล้าง UI cache ที่ไม่ใช้แล้ว"""
+        current_file_types = set(self.column_settings.keys())
+        cached_file_types = set(self.ui_cache.keys())
+        unused_types = cached_file_types - current_file_types
+        
+        for file_type in unused_types:
+            # ลบ UI elements
+            if 'scroll_frame' in self.ui_cache[file_type]:
+                self.ui_cache[file_type]['scroll_frame'].destroy()
+            
+            # ลบจากแคช
+            del self.ui_cache[file_type]
+            
+            # ลบจาก menus
+            self.dtype_menus.pop(file_type, None)
+            self.date_format_menus.pop(file_type, None)
+    
+    def _update_cached_ui(self):
+        """อัปเดต UI ที่แคชไว้ให้ตรงกับข้อมูลใหม่"""
+        for file_type in self.ui_cache.keys():
+            # อัปเดต date format menu
+            if file_type in self.date_format_menus:
                 val = self.dtype_settings.get(file_type, {}).get('_date_format', 'UK')
-                menu.set(val)
+                self.date_format_menus[file_type].set(val)
     
     def _add_file_type(self):
         """เพิ่มประเภทไฟล์ใหม่โดยเลือกไฟล์ตัวอย่าง"""
@@ -251,20 +349,46 @@ class SettingsTab:
         self._show_file_type_content(choice)
     
     def _show_file_type_content(self, file_type):
-        """แสดงเนื้อหาของประเภทไฟล์ที่เลือก"""
-        # ลบเนื้อหาเดิม
-        for widget in self.content_frame.winfo_children():
-            widget.destroy()
+        """แสดงเนื้อหาของประเภทไฟล์ที่เลือก (ใช้แคช UI)"""
+        # ถ้าเป็นประเภทไฟล์เดิม ไม่ต้องทำอะไร
+        if self.current_file_type == file_type:
+            return
+            
+        # ซ่อน UI เก่า
+        self._hide_all_cached_ui()
         
+        # ถ้ามี UI แคชอยู่แล้ว ให้แสดง UI นั้น
+        if file_type in self.ui_cache:
+            self.ui_cache[file_type]['scroll_frame'].pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        else:
+            # สร้าง UI ใหม่และแคชไว้ (กรณี dynamic file type ที่เพิ่งเพิ่ม)
+            self._create_and_cache_ui(file_type)
+            
+        self.current_file_type = file_type
+    
+    def _hide_all_cached_ui(self):
+        """ซ่อน UI ที่แคชไว้ทั้งหมด"""
+        for cached_ui in self.ui_cache.values():
+            cached_ui['scroll_frame'].pack_forget()
+    
+    def _create_and_cache_ui(self, file_type):
+        """สร้างและแคช UI สำหรับประเภทไฟล์"""
         # สร้าง scrollable frame สำหรับแสดงคอลัมน์
         scroll_frame = ctk.CTkScrollableFrame(self.content_frame, width=820, height=450)
         scroll_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
         # --- Date Format Dropdown ---
-        self._create_date_format_section(scroll_frame, file_type)
+        date_format_menu = self._create_date_format_section(scroll_frame, file_type)
         
         # --- Column Settings ---
-        self._create_column_settings_section(scroll_frame, file_type)
+        column_menus = self._create_column_settings_section(scroll_frame, file_type)
+        
+        # แคช UI elements
+        self.ui_cache[file_type] = {
+            'scroll_frame': scroll_frame,
+            'date_format_menu': date_format_menu,
+            'column_menus': column_menus
+        }
     
     def _create_date_format_section(self, parent, file_type):
         """สร้างส่วน Date Format"""
@@ -290,6 +414,8 @@ class SettingsTab:
         
         # เก็บ reference สำหรับบันทึก
         self.date_format_menus[file_type] = date_format_menu
+        
+        return date_format_menu
     
     def _create_column_settings_section(self, parent, file_type):
         """สร้างส่วนการตั้งค่าคอลัมน์"""
@@ -300,6 +426,8 @@ class SettingsTab:
             "NVARCHAR(100)", "NVARCHAR(255)", "NVARCHAR(500)", "NVARCHAR(1000)", "NVARCHAR(MAX)",
             "INT", "FLOAT", "DECIMAL(18,2)", "DATE", "DATETIME", "BIT"
         ]
+        
+        column_menus = {}
         
         for col in self.column_settings.get(file_type, {}):
             # เพิ่ม outer frame เพื่อครอบและเพิ่มระยะห่าง
@@ -318,6 +446,9 @@ class SettingsTab:
             dtype_menu.pack(side="right", padx=(0, 15), pady=12)
             
             self.dtype_menus[file_type][col] = dtype_menu
+            column_menus[col] = dtype_menu
+            
+        return column_menus
     
     def _update_file_type_selector(self):
         """อัปเดต dropdown ของประเภทไฟล์"""
@@ -334,9 +465,9 @@ class SettingsTab:
         else:
             self.file_type_selector.configure(values=["เลือกประเภทไฟล์..."])
             self.file_type_var.set("เลือกประเภทไฟล์...")
-            # ลบเนื้อหาในกรณีไม่มีประเภทไฟล์
-            for widget in self.content_frame.winfo_children():
-                widget.destroy()
+            # ซ่อน UI ที่แคชไว้ในกรณีไม่มีประเภทไฟล์
+            self._hide_all_cached_ui()
+            self.current_file_type = None
     
     def _sync_dtype_settings(self, file_type):
         """ซิงค์ dtype_settings ให้ตรงกับ column_settings (เพิ่ม/ลบ key ตาม column) และเก็บ meta key เช่น _date_format"""
