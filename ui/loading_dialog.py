@@ -6,13 +6,15 @@ from typing import Callable, Any
 class LoadingDialog(ctk.CTkToplevel):
     """Loading dialog สำหรับแสดงสถานะการโหลด"""
     
-    def __init__(self, parent, title="กำลังโหลด...", message="กรุณารอสักครู่"):
+    def __init__(self, parent, title="กำลังโหลด...", message="กรุณารอสักครู่", min_display_ms: int = 600):
         super().__init__(parent)
         
         self.parent = parent
         self.result = None
         self.error = None
         self.task_thread = None
+        self._min_display_ms = int(min_display_ms)
+        self._start_ts = None
         
         # ตั้งค่าหน้าต่าง
         self.title(title)
@@ -26,6 +28,7 @@ class LoadingDialog(ctk.CTkToplevel):
         
         # สร้าง UI
         self._create_ui(message)
+        self._start_ts = time.perf_counter()
         
     def _center_window(self):
         """จัดหน้าต่างให้อยู่กึ่งกลางของ parent window"""
@@ -105,6 +108,13 @@ class LoadingDialog(ctk.CTkToplevel):
     def _finish_task(self):
         """เสร็จสิ้นงานและปิด dialog"""
         try:
+            # รอให้แสดงผลขั้นต่ำเพื่อ UX ที่นุ่มนวล
+            elapsed_ms = 0
+            if self._start_ts is not None:
+                elapsed_ms = int((time.perf_counter() - self._start_ts) * 1000)
+            if elapsed_ms < self._min_display_ms:
+                self.after(self._min_display_ms - elapsed_ms, self._finish_task)
+                return
             if hasattr(self, 'progress') and self.progress:
                 self.progress.stop()
             if self.winfo_exists():

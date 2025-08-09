@@ -27,9 +27,9 @@ from constants import AppConstants, DatabaseConstants
 from utils.logger import create_gui_log_handler
 
 
-class MainWindow(ctk.CTk):
-    def __init__(self, preloaded_data=None, ui_progress_callback=None):
-        super().__init__()
+class MainWindow(ctk.CTkToplevel):
+    def __init__(self, master=None, preloaded_data=None, ui_progress_callback=None):
+        super().__init__(master)
         
         # ตั้งค่าหน้าต่างแอปพลิเคชัน
         self.title("ตรวจสอบและอัปโหลดไฟล์")
@@ -86,10 +86,10 @@ class MainWindow(ctk.CTk):
         
         self._create_ui(ui_progress_callback)
         
-        # ตรวจสอบการเชื่อมต่อ SQL Server หลังสร้าง UI เสร็จ
+        # ตรวจสอบการเชื่อมต่อ SQL Server หลังสร้าง UI เสร็จ (ทำแบบ async เพื่อลดการค้าง)
         if ui_progress_callback:
             ui_progress_callback("ตรวจสอบการเชื่อมต่อ SQL Server...")
-        self.check_sql_connection()
+        self.after(100, self._run_check_sql_connection_async)
     
     def _create_ui(self, ui_progress_callback=None):
         """สร้างส่วนประกอบ UI ทั้งหมด"""
@@ -290,12 +290,24 @@ class MainWindow(ctk.CTk):
             root_logger.addHandler(gui_handler)
     
     # ===== Database Connection =====
-    def check_sql_connection(self):
-        """ตรวจสอบการเชื่อมต่อกับ SQL Server"""
-        success, message = self.db_service.check_connection()
+    def _run_check_sql_connection_async(self) -> None:
+        """รันตรวจสอบการเชื่อมต่อ SQL แบบ background เพื่อลดการค้าง UI"""
+        def worker():
+            # ปิด popup warning ใน service ระหว่างเช็คแบบ background
+            success, message = self.db_service.check_connection(show_warning=False)
+            # ส่งผลลัพธ์กลับมาอัพเดท UI บน main thread
+            self.after(0, self._on_sql_connection_checked, success, message)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+    def _on_sql_connection_checked(self, success: bool, message: str) -> None:
         if success:
             self.log("✅ " + message)
         else:
             self.log("❌ " + message)
-            messagebox.showerror("ข้อผิดพลาด", f"ไม่สามารถเชื่อมต่อกับ SQL Server ได้:\n{message}\n\nกรุณาตรวจสอบการเชื่อมต่อและลองใหม่อีกครั้ง")
+            messagebox.showerror(
+                "ข้อผิดพลาด",
+                f"ไม่สามารถเชื่อมต่อกับ SQL Server ได้:\n{message}\n\nกรุณาตรวจสอบการเชื่อมต่อและลองใหม่อีกครั้ง"
+            )
             self.after(2000, self.destroy)

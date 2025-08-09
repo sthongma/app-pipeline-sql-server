@@ -74,7 +74,7 @@ class DatabaseService:
         checker = self._get_permission_checker()
         return checker.generate_permission_report(schema_name)
 
-    def check_connection(self) -> Tuple[bool, str]:
+    def check_connection(self, show_warning: bool = True) -> Tuple[bool, str]:
         """
         ตรวจสอบการเชื่อมต่อกับ SQL Server
         
@@ -88,7 +88,8 @@ class DatabaseService:
         except Exception as e:
             error_msg = f"{ErrorMessages.DB_CONNECTION_FAILED}: {e}"
             self.logger.error(error_msg)
-            messagebox.showwarning("การเชื่อมต่อฐานข้อมูล", error_msg)
+            if show_warning:
+                messagebox.showwarning("การเชื่อมต่อฐานข้อมูล", error_msg)
             return False, error_msg
 
     def test_connection(self, config: Dict[str, Any]) -> bool:

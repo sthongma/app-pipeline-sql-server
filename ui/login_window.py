@@ -149,93 +149,53 @@ class LoginWindow(ctk.CTk):
         # บันทึกการตั้งค่า
         self._save_settings()
         
-        # ทดสอบการเชื่อมต่อและสิทธิ์
+        # ทดสอบการเชื่อมต่อ ตรวจสิทธิ์ และ preload ใน dialog เดียว (background)
         try:
-            # แสดง loading dialog สำหรับการเชื่อมต่อ
             loading_dialog = LoadingDialog(
-                self, 
-                "กำลังเชื่อมต่อ", 
-                "กำลังทดสอบการเชื่อมต่อกับฐานข้อมูล..."
+                self,
+                "กำลังเตรียมระบบ",
+                "กำลังทดสอบการเชื่อมต่อกับฐานข้อมูล...",
+                min_display_ms=700
             )
-            
-            # รันการทดสอบการเชื่อมต่อใน background
-            loading_dialog.run_task(self.db_service.test_connection, config)
-            
+
+            # รันงานแบบรวมใน background
+            loading_dialog.run_task(self._connect_and_prepare, config)
+
             # รอผลลัพธ์
             self.wait_window(loading_dialog)
-            
+
             if loading_dialog.error:
                 messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(loading_dialog.error)}")
                 return
-                
-            if loading_dialog.result:
-                # แสดง loading dialog สำหรับการตรวจสอบสิทธิ์
-                permission_dialog = LoadingDialog(
-                    self,
-                    "กำลังตรวจสอบสิทธิ์",
-                    "กำลังตรวจสอบสิทธิ์การใช้งานฐานข้อมูล..."
-                )
-                
-                # รันการตรวจสอบสิทธิ์ใน background
-                permission_dialog.run_task(self.db_service.check_permissions, 'bronze')
-                
-                # รอผลลัพธ์
-                self.wait_window(permission_dialog)
-                
-                if permission_dialog.error:
-                    messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(permission_dialog.error)}")
-                    return
-                
-                permission_results = permission_dialog.result
-                if not permission_results.get('success', False):
-                    missing_permissions = permission_results.get('missing_critical', [])
-                    recommendations = permission_results.get('recommendations', [])
-                    
-                    # สร้างข้อความแสดงรายละเอียด
-                    detail_msg = f"ขาดสิทธิ์ที่จำเป็น: {', '.join(missing_permissions)}\n\n"
-                    if recommendations:
-                        detail_msg += "คำแนะนำการแก้ไข:\n" + "\n".join(recommendations[:3])  # แสดง 3 บรรทัดแรก
-                    
-                    messagebox.showerror(
-                        "สิทธิ์ไม่เพียงพอ", 
-                        f"เชื่อมต่อสำเร็จ แต่ไม่สามารถใช้งานได้เนื่องจากสิทธิ์ฐานข้อมูลไม่เพียงพอ\n\n{detail_msg}"
-                    )
-                    return
-                
-                # เชื่อมต่อและสิทธิ์ผ่าน - โหลดข้อมูลล่วงหน้าก่อนเปิด MainWindow
-                preload_dialog = LoadingDialog(
-                    self,
-                    "กำลังโหลดข้อมูล",
-                    "กำลังโหลดประเภทไฟล์และการตั้งค่าทั้งหมด..."
-                )
-                
-                # รันการโหลดข้อมูลใน background
-                preload_dialog.run_task(self.preload_service.preload_file_settings)
-                
-                # รอผลลัพธ์
-                self.wait_window(preload_dialog)
-                
-                if preload_dialog.error:
-                    messagebox.showerror("Error", f"เกิดข้อผิดพลาดในการโหลดข้อมูล: {str(preload_dialog.error)}")
-                    return
-                
-                # ส่งข้อมูลที่โหลดไว้ให้ MainWindow
-                preloaded_data = None
-                if preload_dialog.result and preload_dialog.result[0]:  # success = True
-                    preloaded_data = preload_dialog.result[2]  # data
-                
-                # แสดง loading dialog และสร้าง MainWindow ใน main thread
-                self.ui_loading_dialog = LoadingDialog(
-                    self,
-                    "กำลังสร้าง UI",
-                    "กำลังเตรียม MainWindow และสร้าง UI ทุกประเภทไฟล์..."
-                )
-                
-                # เริ่มสร้าง MainWindow ใน main thread โดยใช้ after()
-                self.preloaded_data = preloaded_data
-                self.after(100, self._start_ui_creation)
-            else:
+
+            result = loading_dialog.result or {}
+            if not result.get('connection_ok', False):
                 messagebox.showerror("Error", "ไม่สามารถเชื่อมต่อกับ SQL Server ได้")
+                return
+
+            if not result.get('permissions_ok', False):
+                missing_permissions = result.get('missing_permissions', [])
+                recommendations = result.get('recommendations', [])
+                detail_msg = f"ขาดสิทธิ์ที่จำเป็น: {', '.join(missing_permissions)}\n\n"
+                if recommendations:
+                    detail_msg += "คำแนะนำการแก้ไข:\n" + "\n".join(recommendations[:3])
+                messagebox.showerror("สิทธิ์ไม่เพียงพอ", f"เชื่อมต่อสำเร็จ แต่สิทธิ์ไม่เพียงพอ\n\n{detail_msg}")
+                return
+
+            # ส่งข้อมูลที่โหลดไว้ให้ MainWindow
+            preloaded_data = result.get('preloaded_data')
+
+            # แสดง loading dialog และสร้าง MainWindow ใน main thread
+            self.ui_loading_dialog = LoadingDialog(
+                self,
+                "กำลังสร้าง UI",
+                "กำลังเตรียม MainWindow และสร้าง UI ทุกประเภทไฟล์...",
+                min_display_ms=600
+            )
+
+            # เริ่มสร้าง MainWindow ใน main thread โดยใช้ after()
+            self.preloaded_data = preloaded_data
+            self.after(100, self._start_ui_creation)
         except Exception as e:
             messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(e)}")
             
@@ -258,7 +218,8 @@ class LoginWindow(ctk.CTk):
                 self.ui_loading_dialog.update_message(message)
                 
             self.main_window = MainWindow(
-                preloaded_data=self.preloaded_data, 
+                master=self,
+                preloaded_data=self.preloaded_data,
                 ui_progress_callback=progress_callback
             )
             
@@ -277,10 +238,10 @@ class LoginWindow(ctk.CTk):
             # ปิด dialog
             self.ui_loading_dialog.destroy()
             
-            # ซ่อน LoginWindow และแสดง MainWindow
+            # ซ่อน LoginWindow และแสดง MainWindow (ไม่เรียก mainloop ซ้อน)
             self.withdraw()
             self.main_window.protocol("WM_DELETE_WINDOW", lambda: self._on_main_window_close(self.main_window))
-            self.main_window.mainloop()
+            self.main_window.deiconify()
             
         except Exception as e:
             self.ui_loading_dialog.destroy()
@@ -290,3 +251,37 @@ class LoginWindow(ctk.CTk):
         """จัดการเมื่อปิดหน้าต่างหลัก"""
         main_window.destroy()
         self.destroy()  # ปิดแอปพลิเคชัน 
+
+    # ===== Combined background task =====
+    def _connect_and_prepare(self, config, progress_callback=None):
+        """รวมขั้นตอน: เชื่อมต่อ -> ตรวจสิทธิ์ -> preload ข้อมูล"""
+        # 1) ทดสอบการเชื่อมต่อ
+        if progress_callback:
+            progress_callback("กำลังทดสอบการเชื่อมต่อกับฐานข้อมูล...")
+        connection_ok = self.db_service.test_connection(config)
+        if not connection_ok:
+            return {"connection_ok": False}
+
+        # 2) ตรวจสิทธิ์
+        if progress_callback:
+            progress_callback("กำลังตรวจสอบสิทธิ์การใช้งานฐานข้อมูล...")
+        permission_results = self.db_service.check_permissions('bronze', log_callback=progress_callback)
+        permissions_ok = permission_results.get('success', False)
+        if not permissions_ok:
+            return {
+                "connection_ok": True,
+                "permissions_ok": False,
+                "missing_permissions": permission_results.get('missing_critical', []),
+                "recommendations": permission_results.get('recommendations', [])
+            }
+
+        # 3) Preload ข้อมูล
+        if progress_callback:
+            progress_callback("กำลังโหลดประเภทไฟล์และการตั้งค่าทั้งหมด...")
+        preload_success, _msg, data = self.preload_service.preload_file_settings(progress_callback=progress_callback)
+
+        return {
+            "connection_ok": True,
+            "permissions_ok": True,
+            "preloaded_data": data if preload_success else None
+        }
