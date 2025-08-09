@@ -74,8 +74,11 @@ class LoadingDialog(ctk.CTkToplevel):
         
     def update_message(self, message):
         """อัพเดทข้อความ"""
-        if hasattr(self, 'message_label'):
-            self.message_label.configure(text=message)
+        try:
+            if hasattr(self, 'message_label') and self.message_label and self.winfo_exists():
+                self.message_label.configure(text=message)
+        except Exception:
+            pass
             
     def run_task(self, task_func: Callable, *args, **kwargs):
         """รันงานใน background thread"""
@@ -98,9 +101,14 @@ class LoadingDialog(ctk.CTkToplevel):
         
     def _finish_task(self):
         """เสร็จสิ้นงานและปิด dialog"""
-        self.progress.stop()
-        self.grab_release()
-        self.destroy()
+        try:
+            if hasattr(self, 'progress') and self.progress:
+                self.progress.stop()
+            if self.winfo_exists():
+                self.grab_release()
+                self.destroy()
+        except Exception:
+            pass
         
     def _cancel_task(self):
         """ยกเลิกงาน (ถ้าต้องการ)"""
