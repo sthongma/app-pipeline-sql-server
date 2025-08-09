@@ -103,8 +103,8 @@ class FileService:
             if not success:
                 return False, "ไม่สามารถอ่านไฟล์ได้"
             
-            # Apply column mapping
-            col_map = self.file_reader.get_column_name_mapping(logic_type)
+            # Apply column mapping (พิจารณาทิศทาง mapping ให้ตรงกับ header ของไฟล์)
+            col_map = self.file_reader.build_rename_mapping_for_dataframe(df.columns, logic_type)
             if col_map:
                 self.log_callback(f"🔄 ปรับชื่อคอลัมน์ตาม mapping ({len(col_map)} คอลัมน์)")
                 df.rename(columns=col_map, inplace=True)

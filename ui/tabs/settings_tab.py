@@ -76,9 +76,9 @@ class SettingsTab:
         add_type_btn.pack(side="left", padx=5)
         del_type_btn = ctk.CTkButton(button_row, text="🗑️ ลบประเภทไฟล์", command=self._delete_file_type)
         del_type_btn.pack(side="left", padx=5)
-        save_dtype_btn = ctk.CTkButton(button_row, text="บันทึกชนิดข้อมูล", command=self._save_all_dtype_settings)
+        save_dtype_btn = ctk.CTkButton(button_row, text="✅ บันทึกชนิดข้อมูล", command=self._save_all_dtype_settings)
         save_dtype_btn.pack(side="left", padx=5)
-        edit_type_btn = ctk.CTkButton(button_row, text="✏️ แก้ไขชื่อประเภทไฟล์", command=self._edit_file_type)
+        edit_type_btn = ctk.CTkButton(button_row, text="แก้ไขชื่อประเภทไฟล์", command=self._edit_file_type)
         edit_type_btn.pack(side="left", padx=5)
         
         if self.ui_progress_callback:
@@ -138,9 +138,9 @@ class SettingsTab:
         add_type_btn.pack(side="left", padx=5)
         del_type_btn = ctk.CTkButton(button_row, text="🗑️ ลบประเภทไฟล์", command=self._delete_file_type)
         del_type_btn.pack(side="left", padx=5)
-        save_dtype_btn = ctk.CTkButton(button_row, text="บันทึกชนิดข้อมูล", command=self._save_all_dtype_settings)
+        save_dtype_btn = ctk.CTkButton(button_row, text="✅ บันทึกชนิดข้อมูล", command=self._save_all_dtype_settings)
         save_dtype_btn.pack(side="left", padx=5)
-        edit_type_btn = ctk.CTkButton(button_row, text="✏️ แก้ไขชื่อประเภทไฟล์", command=self._edit_file_type)
+        edit_type_btn = ctk.CTkButton(button_row, text="แก้ไขชื่อประเภทไฟล์", command=self._edit_file_type)
         edit_type_btn.pack(side="left", padx=5)
         
         # Dropdown สำหรับเลือกประเภทไฟล์

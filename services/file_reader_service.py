@@ -133,12 +133,12 @@ class FileReaderService:
         return str(col).strip().lower().replace(' ', '').replace('\u200b', '')
 
     def detect_file_type(self, file_path):
-        """ตรวจสอบประเภทของไฟล์ (แบบ dynamic, normalize header) รองรับทั้ง xlsx/xls/csv"""
+        """ตรวจสอบประเภทของไฟล์ (แบบ dynamic, normalize header) รองรับทั้ง xlsx/xls/csv และ mapping กลับด้าน"""
         try:
             if not self.column_settings:
                 return None
-                
-            # ใช้วิธีเดิมที่ทำงานได้ดี แต่เพิ่ม cache เล็กน้อย
+
+            # อ่านหัวตารางบางส่วนเพื่อเดาประเภทไฟล์
             if file_path.lower().endswith('.csv'):
                 df_peek = pd.read_csv(file_path, header=None, nrows=2, encoding='utf-8')
             elif file_path.lower().endswith('.xls'):
@@ -147,16 +147,46 @@ class FileReaderService:
             else:
                 # สำหรับไฟล์ .xlsx
                 df_peek = pd.read_excel(file_path, header=None, nrows=2)
-                
-            for logic_type in self.column_settings.keys():
-                required_cols = set(self.normalize_col(c) for c in self.column_settings[logic_type].keys())
+
+            for logic_type, mapping in self.column_settings.items():
+                # พิจารณาทั้ง keys (old->new) และ values (new->old) เพื่อรองรับกรณีผู้ใช้ใส่กลับด้าน
+                required_keys = set(self.normalize_col(c) for c in mapping.keys())
+                required_vals = set(self.normalize_col(c) for c in mapping.values())
                 for row in range(min(2, df_peek.shape[0])):
                     header_row = set(self.normalize_col(col) for col in df_peek.iloc[row].values)
-                    if required_cols.issubset(header_row):
+                    if required_keys.issubset(header_row) or required_vals.issubset(header_row):
                         return logic_type
             return None
         except Exception:
             return None
+
+    def build_rename_mapping_for_dataframe(self, df_columns, logic_type):
+        """
+        สร้าง mapping สำหรับ df.rename(columns=...) โดยอัตโนมัติให้ทิศทางถูกต้อง
+        - รองรับทั้ง config ที่เป็น old->new (คาดหวัง) และ new->old (ผู้ใช้ใส่กลับด้าน)
+        """
+        mapping = self.get_column_name_mapping(logic_type)
+        if not mapping:
+            return {}
+
+        # Normalize รายชื่อคอลัมน์จาก DataFrame เพื่อเปรียบเทียบ
+        normalized_df_cols = set(self.normalize_col(c) for c in list(df_columns))
+
+        # เตรียมชุด normalized ของ keys และ values
+        normalized_keys = set(self.normalize_col(k) for k in mapping.keys())
+        normalized_vals = set(self.normalize_col(v) for v in mapping.values())
+
+        # วัดว่าชุดไหนตรงกับ header มากกว่า
+        overlap_keys = len(normalized_df_cols & normalized_keys)
+        overlap_vals = len(normalized_df_cols & normalized_vals)
+
+        # ถ้า header ตรงกับ keys มากกว่า แสดงว่า mapping เป็น old->new อยู่แล้ว
+        if overlap_keys >= overlap_vals:
+            return mapping
+
+        # ถ้า header ตรงกับ values มากกว่า แสดงว่า mapping ใส่กลับด้าน ต้องกลับทิศทาง
+        inverted = {v: k for k, v in mapping.items()}
+        return inverted
 
     def read_file_basic(self, file_path, file_type='auto'):
         """
@@ -224,8 +254,8 @@ class FileReaderService:
             
             df = result
             
-            # Apply column mapping
-            col_map = self.get_column_name_mapping(logic_type)
+            # Apply column mapping (เลือกทิศทางอัตโนมัติให้ตรงกับ header)
+            col_map = self.build_rename_mapping_for_dataframe(df.columns, logic_type)
             if col_map:
                 self.log_callback(f"🔄 ปรับชื่อคอลัมน์ตาม mapping ({len(col_map)} คอลัมน์)")
                 df.rename(columns=col_map, inplace=True)
