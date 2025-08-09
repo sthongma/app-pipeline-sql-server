@@ -4,9 +4,18 @@ import time
 from typing import Callable, Any
 
 class LoadingDialog(ctk.CTkToplevel):
-    """Loading dialog สำหรับแสดงสถานะการโหลด"""
+    """Loading dialog สำหรับแสดงสถานะการโหลด พร้อมรายการขั้นตอน, เคล็ดลับ และเวลา"""
     
-    def __init__(self, parent, title="กำลังโหลด...", message="กรุณารอสักครู่", min_display_ms: int = 600):
+    def __init__(
+        self,
+        parent,
+        title: str = "กำลังโหลด...",
+        message: str = "กรุณารอสักครู่",
+        min_display_ms: int = 600,
+        steps: list | None = None,
+        show_tips: bool = True,
+        tips: list | None = None,
+    ):
         super().__init__(parent)
         
         self.parent = parent
@@ -15,6 +24,17 @@ class LoadingDialog(ctk.CTkToplevel):
         self.task_thread = None
         self._min_display_ms = int(min_display_ms)
         self._start_ts = None
+        self.steps = steps or []
+        self._step_labels = []
+        self._current_step_index = None
+        self._show_tips = bool(show_tips)
+        self._tips = tips or [
+            "เคล็ดลับ: คุณสามารถปรับธีม UI ได้จาก Settings",
+            "เคล็ดลับ: ตั้งค่า Date Format ให้ตรงกับไฟล์ใน Settings",
+            "เคล็ดลับ: ใช้ ‘ประมวลผลอัตโนมัติ’ เพื่อลดขั้นตอน",
+            "เคล็ดลับ: ตรวจสอบชนิดข้อมูลให้ตรงกับคอลัมน์ก่อนอัปโหลด",
+        ]
+        self._tip_index = 0
         
         # ตั้งค่าหน้าต่าง
         self.title(title)
@@ -50,11 +70,15 @@ class LoadingDialog(ctk.CTkToplevel):
     def _create_ui(self, message):
         """สร้าง UI ของ dialog"""
         main_frame = ctk.CTkFrame(self)
-        main_frame.pack(expand=True, fill="both", padx=20, pady=20)
+        main_frame.pack(expand=True, fill="both", padx=20, pady=16)
+        
+        # หัวเรื่อง
+        self.title_label = ctk.CTkLabel(main_frame, text=self.title(), font=("Arial", 16, "bold"))
+        self.title_label.pack(pady=(0, 6))
         
         # Progress bar
         self.progress = ctk.CTkProgressBar(main_frame, mode="indeterminate")
-        self.progress.pack(pady=(10, 15))
+        self.progress.pack(pady=(6, 10), fill="x")
         self.progress.start()
         
         # เพิ่มการอัพเดท UI เป็นระยะ เพื่อให้ progress bar วิ่งได้
@@ -67,7 +91,33 @@ class LoadingDialog(ctk.CTkToplevel):
             font=("Arial", 12),
             wraplength=300
         )
-        self.message_label.pack(pady=5)
+        self.message_label.pack(pady=(2, 8))
+
+        # กล่องขั้นตอนการทำงาน
+        if self.steps:
+            self.steps_frame = ctk.CTkFrame(main_frame)
+            self.steps_frame.pack(fill="x", pady=(0, 6))
+            for step_text in self.steps:
+                row = ctk.CTkFrame(self.steps_frame, fg_color="transparent")
+                row.pack(fill="x", pady=1)
+                icon = ctk.CTkLabel(row, text="○", width=16)
+                icon.pack(side="left", padx=(2, 6))
+                lbl = ctk.CTkLabel(row, text=step_text, anchor="w")
+                lbl.pack(side="left", fill="x", expand=True)
+                self._step_labels.append((icon, lbl))
+
+        # เวลาและเคล็ดลับ
+        bottom_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        bottom_frame.pack(fill="x", pady=(4, 0))
+        self.elapsed_label = ctk.CTkLabel(bottom_frame, text="เวลา: 0.0 วินาที", text_color="#888888")
+        self.elapsed_label.pack(side="left")
+        if self._show_tips and self._tips:
+            self.tip_label = ctk.CTkLabel(bottom_frame, text=self._tips[0], text_color="#888888")
+            self.tip_label.pack(side="right")
+            self._schedule_tip_rotation()
+        
+        # อัพเดทเวลา
+        self._schedule_elapsed_update()
         
         # ปุ่ม Cancel (ซ่อนไว้ก่อน)
         self.cancel_button = ctk.CTkButton(
@@ -83,8 +133,31 @@ class LoadingDialog(ctk.CTkToplevel):
         try:
             if hasattr(self, 'message_label') and self.message_label and self.winfo_exists():
                 self.message_label.configure(text=message)
+                # เดาและอัพเดทสถานะขั้นตอนจากข้อความ
+                self._infer_step_from_message(str(message))
         except Exception:
             pass
+
+    def set_steps(self, steps: list[str]):
+        """กำหนดรายการขั้นตอนใหม่"""
+        self.steps = steps or []
+        # ล้างของเดิมและสร้างใหม่หากต้องการ (ขอข้ามเพื่อความเรียบง่าย)
+        
+    def mark_step_running(self, index: int):
+        if 0 <= index < len(self._step_labels):
+            self._current_step_index = index
+            icon, _ = self._step_labels[index]
+            icon.configure(text="●")
+
+    def mark_step_done(self, index: int):
+        if 0 <= index < len(self._step_labels):
+            icon, _ = self._step_labels[index]
+            icon.configure(text="✓")
+
+    def mark_step_error(self, index: int):
+        if 0 <= index < len(self._step_labels):
+            icon, _ = self._step_labels[index]
+            icon.configure(text="✗")
             
     def run_task(self, task_func: Callable, *args, **kwargs):
         """รันงานใน background thread"""
@@ -134,6 +207,48 @@ class LoadingDialog(ctk.CTkToplevel):
             if self.winfo_exists():
                 self.update_idletasks()
                 self.after(50, self._schedule_ui_update)
+        except Exception:
+            pass
+
+    def _schedule_elapsed_update(self):
+        try:
+            if self.winfo_exists() and self._start_ts is not None:
+                elapsed = time.perf_counter() - self._start_ts
+                if hasattr(self, 'elapsed_label') and self.elapsed_label:
+                    self.elapsed_label.configure(text=f"เวลา: {elapsed:.1f} วินาที")
+                self.after(200, self._schedule_elapsed_update)
+        except Exception:
+            pass
+
+    def _schedule_tip_rotation(self):
+        try:
+            if self.winfo_exists() and hasattr(self, 'tip_label') and self.tip_label:
+                self._tip_index = (self._tip_index + 1) % len(self._tips)
+                self.tip_label.configure(text=self._tips[self._tip_index])
+                self.after(2500, self._schedule_tip_rotation)
+        except Exception:
+            pass
+
+    def _infer_step_from_message(self, message: str):
+        """พยายามจับคู่ข้อความกับขั้นตอน และอัพเดทสถานะอัตโนมัติ"""
+        text = message.strip()
+        try:
+            # ตัวอย่างขั้นตอนมาตรฐานตอนเตรียมระบบ
+            keywords_map = [
+                (0, ["เชื่อมต่อ", "การเชื่อมต่อ"]),
+                (1, ["สิทธิ์", "สิทธิ์การใช้งาน"]),
+                (2, ["โหลด", "เตรียม", "ตั้งค่า"]),
+                (3, ["สร้าง UI", "สร้าง MainWindow", "สร้าง Tab"]),
+            ]
+            if self.steps:
+                for idx, keys in keywords_map:
+                    if idx < len(self.steps) and any(k in text for k in keys):
+                        # กำลังทำ
+                        self.mark_step_running(idx)
+                        # ถ้ามีคำบ่งชี้เสร็จสิ้น
+                        if any(done_kw in text for done_kw in ["เสร็จสิ้น", "สำเร็จ", "เรียบร้อย"]):
+                            self.mark_step_done(idx)
+                        break
         except Exception:
             pass
             

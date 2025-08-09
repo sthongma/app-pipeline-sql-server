@@ -28,7 +28,7 @@ from utils.logger import create_gui_log_handler
 
 
 class MainWindow(ctk.CTkToplevel):
-    def __init__(self, master=None, preloaded_data=None, ui_progress_callback=None):
+    def __init__(self, master=None, preloaded_data=None, ui_progress_callback=None, on_ready_callback=None):
         super().__init__(master)
         
         # ตั้งค่าหน้าต่างแอปพลิเคชัน
@@ -84,14 +84,14 @@ class MainWindow(ctk.CTkToplevel):
         if ui_progress_callback:
             ui_progress_callback("กำลังสร้าง Tab View...")
         
-        self._create_ui(ui_progress_callback)
+        self._create_ui(ui_progress_callback, on_ready_callback)
         
         # ตรวจสอบการเชื่อมต่อ SQL Server หลังสร้าง UI เสร็จ (ทำแบบ async เพื่อลดการค้าง)
         if ui_progress_callback:
             ui_progress_callback("ตรวจสอบการเชื่อมต่อ SQL Server...")
         self.after(100, self._run_check_sql_connection_async)
     
-    def _create_ui(self, ui_progress_callback=None):
+    def _create_ui(self, ui_progress_callback=None, on_ready_callback=None):
         """สร้างส่วนประกอบ UI ทั้งหมด"""
         if ui_progress_callback:
             ui_progress_callback("กำลังสร้าง Tab View...")
@@ -120,7 +120,7 @@ class MainWindow(ctk.CTkToplevel):
             ui_progress_callback("กำลังสร้าง Settings Tab...")
             
         # แบ่งการสร้าง Settings Tab ออกเป็นขั้นตอน
-        self.after(10, lambda: self._create_settings_tab_async(settings_tab_frame, ui_progress_callback))
+        self.after(10, lambda: self._create_settings_tab_async(settings_tab_frame, ui_progress_callback, on_ready_callback))
         
         # Settings Tab สร้างเสร็จแล้ว UI building ของประเภทไฟล์จะเริ่มแบบ async อัตโนมัติ
     
@@ -151,7 +151,7 @@ class MainWindow(ctk.CTkToplevel):
         # เก็บ reference ไปยัง log textbox
         self.log_textbox = self.log_tab_ui.log_textbox
     
-    def _create_settings_tab_async(self, parent, ui_progress_callback=None):
+    def _create_settings_tab_async(self, parent, ui_progress_callback=None, on_ready_callback=None):
         """สร้างส่วนประกอบใน Settings Tab แบบ async"""
         if ui_progress_callback:
             ui_progress_callback("กำลังเตรียม Settings Tab...")
@@ -168,11 +168,20 @@ class MainWindow(ctk.CTkToplevel):
             self.dtype_settings, 
             self.supported_dtypes, 
             callbacks,
-            ui_progress_callback
+            ui_progress_callback,
+            on_all_ui_built=(lambda: self._on_all_ui_built(on_ready_callback)) if on_ready_callback else None
         )
         
         if ui_progress_callback:
             ui_progress_callback("Settings Tab เสร็จสิ้น")
+
+    def _on_all_ui_built(self, on_ready_callback):
+        """ถูกเรียกเมื่อ SettingsTab สร้าง UI ทั้งหมดเสร็จ เพื่อแจ้งว่า MainWindow พร้อมใช้งาน"""
+        try:
+            if callable(on_ready_callback):
+                on_ready_callback()
+        except Exception:
+            pass
     
     def _create_settings_tab(self, parent, ui_progress_callback=None):
         """สร้างส่วนประกอบใน Settings Tab (เดิม - สำหรับ fallback)"""

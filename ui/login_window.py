@@ -155,7 +155,13 @@ class LoginWindow(ctk.CTk):
                 self,
                 "กำลังเตรียมระบบ",
                 "กำลังทดสอบการเชื่อมต่อกับฐานข้อมูล...",
-                min_display_ms=700
+                min_display_ms=900,
+                steps=[
+                    "เชื่อมต่อฐานข้อมูล",
+                    "ตรวจสอบสิทธิ์การใช้งาน",
+                    "โหลดการตั้งค่าระบบและประเภทไฟล์",
+                    "สร้างส่วนประกอบของหน้าหลัก"
+                ]
             )
 
             # รันงานแบบรวมใน background
@@ -217,11 +223,26 @@ class LoginWindow(ctk.CTk):
             def progress_callback(message):
                 self.ui_loading_dialog.update_message(message)
                 
+            # ใช้ callback เพื่อเปิด main window เมื่อสร้าง UI ทั้งหมดเสร็จ (รอทุกอย่างพร้อมก่อนแสดง)
+            def on_main_ready():
+                # ปิด dialog สร้าง UI และค่อยแสดงหน้าหลัก
+                try:
+                    if self.ui_loading_dialog and self.ui_loading_dialog.winfo_exists():
+                        self.ui_loading_dialog.destroy()
+                except Exception:
+                    pass
+                # ซ่อน Login และโชว์ Main หลังจากพร้อมเต็มที่
+                self.withdraw()
+                self.main_window.deiconify()
+
             self.main_window = MainWindow(
                 master=self,
                 preloaded_data=self.preloaded_data,
-                ui_progress_callback=progress_callback
+                ui_progress_callback=progress_callback,
+                on_ready_callback=on_main_ready
             )
+            # ซ่อน MainWindow ไว้ก่อนจนกว่าจะพร้อม
+            self.main_window.withdraw()
             
             # รอเสร็จแล้วปิด dialog และแสดง main window
             self.after(100, self._finish_ui_creation)
@@ -235,13 +256,15 @@ class LoginWindow(ctk.CTk):
         try:
             self.ui_loading_dialog.update_message("สร้าง MainWindow และ UI เสร็จสิ้น!")
             
-            # ปิด dialog
-            self.ui_loading_dialog.destroy()
+            # ปิด dialog ถ้ายังไม่ถูกปิดจาก on_main_ready
+            try:
+                if self.ui_loading_dialog and self.ui_loading_dialog.winfo_exists():
+                    self.ui_loading_dialog.destroy()
+            except Exception:
+                pass
             
-            # ซ่อน LoginWindow และแสดง MainWindow (ไม่เรียก mainloop ซ้อน)
-            self.withdraw()
+            # ตั้ง handler ปิดหน้าต่างหลัก (MainWindow จะถูกแสดงโดย on_main_ready เมื่อพร้อมทั้งหมด)
             self.main_window.protocol("WM_DELETE_WINDOW", lambda: self._on_main_window_close(self.main_window))
-            self.main_window.deiconify()
             
         except Exception as e:
             self.ui_loading_dialog.destroy()

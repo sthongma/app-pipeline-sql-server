@@ -8,7 +8,7 @@ from constants import DatabaseConstants, FileConstants
 
 
 class SettingsTab:
-    def __init__(self, parent, column_settings, dtype_settings, supported_dtypes, callbacks, ui_progress_callback=None):
+    def __init__(self, parent, column_settings, dtype_settings, supported_dtypes, callbacks, ui_progress_callback=None, on_all_ui_built=None):
         """
         Initialize Settings Tab
         
@@ -26,6 +26,7 @@ class SettingsTab:
         self.supported_dtypes = supported_dtypes
         self.callbacks = callbacks
         self.ui_progress_callback = ui_progress_callback
+        self.on_all_ui_built = on_all_ui_built
         
         # UI variables
         self.dtype_menus = {}
@@ -195,6 +196,12 @@ class SettingsTab:
             # เสร็จสิ้นการสร้างทั้งหมด
             if self.ui_progress_callback:
                 self.ui_progress_callback(f"สร้าง UI สำหรับ {self.total_types} ประเภทไฟล์เสร็จสิ้น")
+            # แจ้ง callback ว่า UI พร้อมแล้ว
+            if callable(self.on_all_ui_built):
+                try:
+                    self.parent.after(0, self.on_all_ui_built)
+                except Exception:
+                    self.on_all_ui_built()
     
     def _prebuild_all_ui_cache(self, progress_callback=None):
         """Pre-build UI สำหรับทุกประเภทไฟล์ล่วงหน้า (เก่า - สำหรับ fallback)"""
@@ -228,8 +235,8 @@ class SettingsTab:
         # อัปเดต UI ที่แคชไว้ให้ตรงกับข้อมูลใหม่
         self._update_cached_ui()
         
-        # Pre-build UI สำหรับประเภทไฟล์ใหม่ที่ยังไม่มี cache
-        self._prebuild_all_ui_cache()
+        # Pre-build UI สำหรับประเภทไฟล์ใหม่ที่ยังไม่มี cache แบบ async เพื่อลดการค้างของ UI
+        self._prebuild_all_ui_cache_async(progress_callback=self.ui_progress_callback)
     
     def _cleanup_unused_cache(self):
         """ล้าง UI cache ที่ไม่ใช้แล้ว"""
