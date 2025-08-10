@@ -405,7 +405,14 @@ class FileReaderService:
             
             # อ่านไฟล์
             if file_type == 'csv':
-                df = pd.read_csv(file_path, encoding='utf-8')
+                # รองรับไฟล์ภาษาไทย: UTF-8 → cp874 → latin1
+                try:
+                    df = pd.read_csv(file_path, encoding='utf-8')
+                except UnicodeDecodeError:
+                    try:
+                        df = pd.read_csv(file_path, encoding='cp874')
+                    except UnicodeDecodeError:
+                        df = pd.read_csv(file_path, encoding='latin1')
             elif file_type == 'excel_xls':
                 # สำหรับไฟล์ .xls ใช้ xlrd engine
                 df = pd.read_excel(file_path, sheet_name=0, engine='xlrd')

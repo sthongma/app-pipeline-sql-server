@@ -95,7 +95,12 @@ class DatabaseConfig:
                 f'?driver={DatabaseConstants.DEFAULT_DRIVER}'
             )
         
-        self.engine = create_engine(connection_string)
+        # เปิด fast_executemany เพื่อเร่งการอัปโหลด Unicode ผ่าน pyodbc (รองรับภาษาไทยดีกว่า bcp ที่ไม่ได้ใช้ -w)
+        try:
+            self.engine = create_engine(connection_string, fast_executemany=True)
+        except TypeError:
+            # เผื่อกรณี SQLAlchemy รุ่นเก่า ไม่รองรับ keyword นี้
+            self.engine = create_engine(connection_string)
     
     def get_engine(self) -> Optional[Engine]:
         """

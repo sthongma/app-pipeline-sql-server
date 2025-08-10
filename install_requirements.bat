@@ -23,11 +23,66 @@ REM Install requirements
 echo Installing requirements...
 python -m pip install -r requirements.txt
 
+REM Verify Python deps
+echo.
+echo Verifying Python packages (bcpandas, pandas, sqlalchemy, pyodbc)...
+python -c "import bcpandas, pandas, sqlalchemy, pyodbc; print('Python deps OK')" 2>nul
+if %ERRORLEVEL% NEQ 0 (
+    echo Some Python packages are missing. Re-installing requirements...
+    python -m pip install --upgrade pip setuptools wheel
+    python -m pip install -r requirements.txt
+)
+
+REM Check for bcp CLI
+echo.
+echo Checking for 'bcp' command on PATH...
+where bcp >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo 'bcp' not found. Attempting to install SQL Server Command Line Utilities and ODBC driver.
+
+    REM Try winget first
+    where winget >nul 2>&1
+    if %ERRORLEVEL% EQU 0 (
+        echo Installing via winget ^(silent^)...
+        winget install --id Microsoft.SQLServer.CommandLineTools --silent --accept-package-agreements --accept-source-agreements
+        if %ERRORLEVEL% NEQ 0 (
+            echo Trying alternate winget package id for Command Line Utilities...
+            winget install --id Microsoft.SQLServer.CommandLineUtilities --silent --accept-package-agreements --accept-source-agreements
+        )
+
+        echo Installing Microsoft ODBC Driver for SQL Server via winget...
+        winget install --id Microsoft.MicrosoftODBCDriver18 --silent --accept-package-agreements --accept-source-agreements
+        if %ERRORLEVEL% NEQ 0 (
+            winget install --id Microsoft.MicrosoftODBCDriver17 --silent --accept-package-agreements --accept-source-agreements
+        )
+    ) else (
+        REM Try Chocolatey if available
+        where choco >nul 2>&1
+        if %ERRORLEVEL% EQU 0 (
+            echo Installing via Chocolatey...
+            choco install mssql-commandlineutils -y
+            choco install mssql-odbcdriver -y
+        ) else (
+            echo Could not find winget or choco. Please install manually:
+            echo  - Command Line Utilities ^(bcp^): https://aka.ms/sqlcmdlinetools
+            echo  - ODBC Driver for SQL Server: https://aka.ms/msodbcsql
+        )
+    )
+
+    echo Re-checking 'bcp' on PATH...
+    where bcp >nul 2>&1
+    if %ERRORLEVEL% NEQ 0 (
+        echo WARNING: 'bcp' is still not available. You may need to restart the terminal or install manually.
+    ) else (
+        echo 'bcp' installed successfully.
+    )
+) else (
+    echo 'bcp' is available.
+)
+
 echo.
 echo Installation completed successfully!
 echo You can now run the application using:
 echo - run_pipeline_gui.bat (for GUI version)
 echo - run_pipeline_cli.bat (for CLI version)
 echo.
-echo Press any key to exit...
-pause >nul

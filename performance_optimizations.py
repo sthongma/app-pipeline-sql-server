@@ -46,10 +46,10 @@ class PerformanceOptimizer:
             file_size = os.path.getsize(file_path)
             file_size_mb = file_size / (1024 * 1024)
             
-            self.log_callback(f"📂 กำลังอ่านไฟล์: {os.path.basename(file_path)} ({file_size_mb:.1f} MB)")
+            self.log_callback(f"📂 อ่านไฟล์: {os.path.basename(file_path)} ({file_size_mb:.1f} MB)")
             
             if file_size_mb > 100:  # ไฟล์ใหญ่กว่า 100MB
-                self.log_callback(f"⚠️ ไฟล์ขนาดใหญ่ - ใช้การอ่านแบบ chunked")
+                self.log_callback(f"⚠️ ไฟล์ใหญ่ ใช้วิธีอ่านแบบ chunked")
                 return self._read_large_file_chunked(file_path, file_type)
             else:
                 return self._read_small_file(file_path, file_type)
@@ -69,7 +69,7 @@ class PerformanceOptimizer:
             else:
                 df = pd.read_excel(file_path, header=0, sheet_name=0, engine='openpyxl')
             
-            self.log_callback(f"✅ อ่านไฟล์สำเร็จ - {len(df):,} แถว, {len(df.columns)} คอลัมน์")
+            self.log_callback(f"✅ อ่านไฟล์สำเร็จ: {len(df):,} แถว, {len(df.columns)} คอลัมน์")
             return True, df
             
         except Exception as e:
@@ -84,11 +84,21 @@ class PerformanceOptimizer:
             
             if file_type == 'csv':
                 # นับจำนวนแถวทั้งหมดก่อน
-                total_rows = sum(1 for _ in open(file_path, 'r', encoding='utf-8')) - 1
-                self.log_callback(f"📊 จำนวนแถวทั้งหมด: {total_rows:,}")
+                # พยายามใช้ UTF-8 ก่อน แล้ว fallback เป็น cp874/latin1 สำหรับไฟล์ที่เป็นภาษาไทยเก่าหรือปนรหัส
+                try:
+                    total_rows = sum(1 for _ in open(file_path, 'r', encoding='utf-8')) - 1
+                    encoding_used = 'utf-8'
+                except UnicodeDecodeError:
+                    try:
+                        total_rows = sum(1 for _ in open(file_path, 'r', encoding='cp874')) - 1
+                        encoding_used = 'cp874'
+                    except UnicodeDecodeError:
+                        total_rows = sum(1 for _ in open(file_path, 'r', encoding='latin1')) - 1
+                        encoding_used = 'latin1'
+                self.log_callback(f"📊 จำนวนแถวทั้งหมด: {total_rows:,} (encoding={encoding_used})")
                 
                 # อ่านแบบ chunk
-                chunk_reader = pd.read_csv(file_path, header=0, encoding='utf-8', chunksize=self.chunk_size)
+                chunk_reader = pd.read_csv(file_path, header=0, encoding=encoding_used, chunksize=self.chunk_size)
                 
                 for i, chunk in enumerate(chunk_reader):
                     if self.cancellation_token.is_set():

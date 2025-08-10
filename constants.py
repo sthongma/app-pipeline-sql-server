@@ -26,7 +26,6 @@ class DatabaseConstants:
     
     # Supported SQL Server data types
     SUPPORTED_DTYPES: List[str] = [
-        "VARCHAR(255)",
         "NVARCHAR(100)",
         "NVARCHAR(255)", 
         "NVARCHAR(500)",
@@ -85,9 +84,6 @@ class AppConstants:
     MAX_WORKER_THREADS = 3
     UI_UPDATE_INTERVAL = 100  # milliseconds
     
-    # File management settings
-    DEFAULT_ARCHIVE_DAYS = 30  # วันสำหรับย้ายไฟล์เก่าจาก last_path ไป archive
-    DEFAULT_DELETE_ARCHIVE_DAYS = 90  # วันสำหรับย้ายไฟล์ใน archive ไปถังขยะ
     
     # Logging settings
     LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
@@ -111,13 +107,6 @@ class PathConstants:
     # Default search path
     DEFAULT_SEARCH_PATH = os.path.join(os.path.expanduser("~"), "Downloads")
     
-    # Archive paths
-    DEFAULT_ARCHIVE_PATH = "D:/Archived_Files"
-    
-    # Backup and logs
-    BACKUP_DIR = "backups"
-    LOGS_DIR = "logs"
-
 
 # === ERROR MESSAGES ===
 class ErrorMessages:

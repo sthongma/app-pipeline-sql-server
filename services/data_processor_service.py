@@ -834,147 +834,11 @@ class DataProcessorService:
                 if hasattr(self, attr):
                     delattr(self, attr)
 
-    def auto_detect_and_fix_data_types(self, df, logic_type):
-        """
-        ตรวจสอบชนิดข้อมูลอัตโนมัติ แปลงให้เข้ากับ SQL และอัพเดท JSON config
-        
-        Args:
-            df: DataFrame ที่ต้องการประมวลผล
-            logic_type: ประเภทไฟล์
-            
-        Returns:
-            Tuple[DataFrame, bool, Dict]: (DataFrame ที่แก้ไขแล้ว, มีการเปลี่ยนแปลง, รายละเอียดการเปลี่ยนแปลง)
-        """
-        changes_made = False
-        change_details = {
-            'modified_columns': {},
-            'auto_conversions': {},
-            'warnings': []
-        }
-        
-        if not logic_type or logic_type not in self.dtype_settings:
-            return df, changes_made, change_details
-            
-        self.log_with_time(f"\n🤖 เริ่มการตรวจสอบและแก้ไขชนิดข้อมูลอัตโนมัติ...")
-        
-        for col, expected_dtype_str in self.dtype_settings[logic_type].items():
-            if col.startswith('_') or col not in df.columns:
-                continue
-                
-            expected_dtype_str = expected_dtype_str.upper()
-            original_dtype = expected_dtype_str
-            
-            try:
-                # ตรวจสอบข้อมูลในคอลัมน์
-                sample_data = df[col].dropna().head(100)  # ใช้ sample แทนการตรวจทั้งหมด
-                
-                if len(sample_data) == 0:
-                    continue
-                
-                # วิเคราะห์ข้อมูลและแนะนำชนิดที่เหมาะสม
-                suggested_dtype = self._analyze_and_suggest_data_type(sample_data, expected_dtype_str, col)
-                
-                if suggested_dtype != expected_dtype_str:
-                    # อัพเดท dtype settings
-                    self.dtype_settings[logic_type][col] = suggested_dtype
-                    changes_made = True
-                    
-                    change_details['modified_columns'][col] = {
-                        'original': original_dtype,
-                        'new': suggested_dtype,
-                        'reason': self._get_change_reason(sample_data, original_dtype, suggested_dtype)
-                    }
-                    
-                    self.log_with_time(f"   🔄 แก้ไข '{col}': {original_dtype} → {suggested_dtype}")
-                    
-            except Exception as e:
-                change_details['warnings'].append(f"ไม่สามารถวิเคราะห์คอลัมน์ '{col}': {e}")
-                
-        if changes_made:
-            # บันทึกการตั้งค่าใหม่
-            self._save_updated_dtype_settings(logic_type)
-            self.log_with_time(f"\n💾 บันทึกการตั้งค่าใหม่สำเร็จ")
-            
-        return df, changes_made, change_details
+    # ฟังก์ชัน auto-fix ถูกยกเลิก
 
-    def _analyze_and_suggest_data_type(self, sample_data, expected_dtype, col_name):
-        """วิเคราะห์ข้อมูลและแนะนำชนิดข้อมูลที่เหมาะสม"""
-        try:
-            # ตรวจสอบข้อมูลตัวเลข
-            if expected_dtype in ['INT', 'BIGINT', 'SMALLINT', 'FLOAT'] or expected_dtype.startswith('DECIMAL'):
-                numeric_data = pd.to_numeric(sample_data, errors='coerce')
-                invalid_count = numeric_data.isna().sum()
-                
-                # ถ้าข้อมูลไม่ใช่ตัวเลขมากกว่า 20% ให้เปลี่ยนเป็น string
-                if invalid_count > len(sample_data) * 0.2:
-                    max_length = sample_data.astype(str).str.len().max()
-                    return self._suggest_string_type(max_length)
-                    
-                # ถ้าเป็นตัวเลขและมีทศนิยม แต่กำหนดเป็น INT ให้เปลี่ยนเป็น DECIMAL
-                if expected_dtype in ['INT', 'BIGINT', 'SMALLINT']:
-                    valid_numeric = numeric_data.dropna()
-                    if len(valid_numeric) > 0 and (valid_numeric % 1 != 0).any():
-                        return 'DECIMAL(18,4)'
-                        
-            # ตรวจสอบข้อมูลวันที่ - เพิ่มการตรวจสอบที่เข้มงวดขึ้น
-            elif 'DATE' in expected_dtype:
-                valid_dates = 0
-                total_non_null = len(sample_data)
-                
-                for value in sample_data:
-                    if pd.isna(value) or value == '':
-                        continue
-                        
-                    try:
-                        # ลองแปลงด้วย pandas
-                        converted_date = pd.to_datetime(str(value), errors='raise')
-                        
-                        # ตรวจสอบว่าวันที่อยู่ในช่วงที่ SQL Server รองรับ (1753-01-01 ถึง 9999-12-31)
-                        if converted_date.year < 1753 or converted_date.year > 9999:
-                            continue
-                            
-                        # ตรวจสอบรูปแบบวันที่ที่แปลกประหลาด
-                        if converted_date.year < 1900 or converted_date.year > 2100:
-                            continue
-                            
-                        valid_dates += 1
-                        
-                    except (ValueError, pd._libs.tslibs.parsing.DateParseError, OverflowError):
-                        continue
-                
-                # ถ้าข้อมูลวันที่ที่ถูกต้องน้อยกว่า 70% ให้เปลี่ยนเป็น string
-                valid_percentage = valid_dates / total_non_null if total_non_null > 0 else 0
-                if valid_percentage < 0.7:
-                    max_length = sample_data.astype(str).str.len().max()
-                    suggested_type = self._suggest_string_type(max_length)
-                    self.log_with_time(f"   ⚠️ คอลัมน์ '{col_name}': วันที่ถูกต้องเพียง {valid_percentage:.1%} → เปลี่ยนเป็น {suggested_type}")
-                    return suggested_type
-                    
-            # ตรวจสอบข้อมูล string
-            elif expected_dtype.startswith('NVARCHAR'):
-                max_length = sample_data.astype(str).str.len().max()
-                current_limit = self._extract_varchar_length(expected_dtype)
-                
-                # ถ้าข้อมูลยาวเกิน 120% ของขนาดที่กำหนด ให้ขยายขนาด
-                if max_length > current_limit * 1.2:
-                    return self._suggest_string_type(max_length)
-                    
-            return expected_dtype
-            
-        except Exception as e:
-            self.log_with_time(f"   ⚠️ ไม่สามารถวิเคราะห์คอลัมน์ '{col_name}': {e}")
-            return expected_dtype
+    # ฟังก์ชัน auto-fix ถูกยกเลิก
 
-    def _suggest_string_type(self, max_length):
-        """แนะนำชนิด string ที่เหมาะสมตามความยาว"""
-        if max_length <= 100:
-            return 'NVARCHAR(255)'
-        elif max_length <= 500:
-            return 'NVARCHAR(1000)'
-        elif max_length <= 2000:
-            return 'NVARCHAR(4000)'
-        else:
-            return 'NVARCHAR(MAX)'
+    # ฟังก์ชัน auto-fix ถูกยกเลิก
 
     def _extract_varchar_length(self, dtype_str):
         """ดึงความยาวจาก NVARCHAR(n)"""
@@ -986,101 +850,13 @@ class DataProcessorService:
         except:
             return 255
 
-    def _get_change_reason(self, sample_data, original_dtype, new_dtype):
-        """สร้างข้อความอธิบายเหตุผลของการเปลี่ยนแปลง"""
-        if original_dtype in ['INT', 'BIGINT', 'SMALLINT'] and 'DECIMAL' in new_dtype:
-            return "พบข้อมูลทศนิยม"
-        elif 'DATE' in original_dtype and 'NVARCHAR' in new_dtype:
-            return "พบข้อมูลที่ไม่ใช่วันที่"
-        elif original_dtype in ['INT', 'FLOAT'] and 'NVARCHAR' in new_dtype:
-            return "พบข้อมูลที่ไม่ใช่ตัวเลข"
-        elif 'NVARCHAR' in original_dtype and 'NVARCHAR' in new_dtype:
-            return "ข้อมูลยาวเกินขนาดที่กำหนด"
-        else:
-            return "ปรับปรุงความเข้ากันได้"
+    # ฟังก์ชัน auto-fix ถูกยกเลิก
 
-    def _save_updated_dtype_settings(self, logic_type):
-        """บันทึกการตั้งค่า dtype ที่อัพเดทแล้ว"""
-        try:
-            dtype_file = PathConstants.DTYPE_SETTINGS_FILE
-            with open(dtype_file, 'w', encoding='utf-8') as f:
-                json.dump(self.dtype_settings, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            self.log_with_time(f"❌ ไม่สามารถบันทึกการตั้งค่าได้: {e}")
+    # ฟังก์ชัน auto-fix ถูกยกเลิก
 
-    def process_with_auto_fix(self, df, logic_type):
-        """
-        ประมวลผลข้อมูลพร้อมระบบแก้ไขอัตโนมัติ
-        
-        Args:
-            df: DataFrame ที่ต้องการประมวลผล  
-            logic_type: ประเภทไฟล์
-            
-        Returns:
-            Tuple[DataFrame, Dict]: (DataFrame ที่ประมวลผลแล้ว, รายงานการแก้ไข)
-        """
-        processing_report = {
-            'auto_fixes_applied': False,
-            'changes_made': {},
-            'processing_steps': []
-        }
-        
-        try:
-            # ขั้นตอนที่ 1: ตรวจสอบและแก้ไขชนิดข้อมูลอัตโนมัติ
-            self.log_with_time(f"🔍 ขั้นตอนที่ 1: ตรวจสอบความเข้ากันได้ของชนิดข้อมูล")
-            df, changes_made, change_details = self.auto_detect_and_fix_data_types(df, logic_type)
-            
-            if changes_made:
-                processing_report['auto_fixes_applied'] = True
-                processing_report['changes_made'] = change_details
-                processing_report['processing_steps'].append("อัพเดทชนิดข้อมูลอัตโนมัติ")
-                
-                # แจ้งเตือนผู้ใช้
-                self._notify_user_about_changes(change_details)
-            
-            # ขั้นตอนที่ 2: ประมวลผลข้อมูลแบบปกติ
-            self.log_with_time(f"🔄 ขั้นตอนที่ 2: ประมวลผลข้อมูล")
-            
-            # โหลดการตั้งค่าใหม่ (หลังจากอัพเดท)
-            self.load_settings()
-            
-            # ทำความสะอาดและแปลงข้อมูล
-            df = self.process_dataframe_in_chunks(df, self.clean_numeric_columns, logic_type)
-            df = self.process_dataframe_in_chunks(df, self.clean_and_validate_datetime_columns, logic_type)
-            df = self.process_dataframe_in_chunks(df, self.truncate_long_strings, logic_type)
-            df = self.process_dataframe_in_chunks(df, self.apply_dtypes, logic_type)
-            
-            processing_report['processing_steps'].extend([
-                "ทำความสะอาดข้อมูลตัวเลข",
-                "ทำความสะอาดข้อมูลวันที่",
-                "ตัดข้อมูล string ที่ยาวเกิน", 
-                "แปลงชนิดข้อมูล"
-            ])
-            
-            return df, processing_report
-            
-        except Exception as e:
-            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการประมวลผลอัตโนมัติ: {e}")
-            return df, processing_report
+    # ฟังก์ชัน auto-fix ถูกยกเลิก
 
-    def _notify_user_about_changes(self, change_details):
-        """แจ้งเตือนผู้ใช้เกี่ยวกับการเปลี่ยนแปลงที่เกิดขึ้น"""
-        if not change_details['modified_columns']:
-            return
-            
-        self.log_with_time(f"\n🚨 แจ้งเตือน: ระบบได้ปรับปรุงการตั้งค่าชนิดข้อมูลอัตโนมัติ")
-        self.log_callback(f"═" * 60)
-        
-        for col, details in change_details['modified_columns'].items():
-            self.log_callback(f"📊 คอลัมน์: {col}")
-            self.log_callback(f"   • เดิม: {details['original']}")
-            self.log_callback(f"   • ใหม่: {details['new']}")
-            self.log_callback(f"   • เหตุผล: {details['reason']}")
-            self.log_callback(f"─" * 40)
-            
-        self.log_with_time(f"💡 การตั้งค่าใหม่จะถูกใช้ในการสร้างตารางฐานข้อมูล")
-        self.log_with_time(f"📁 ไฟล์การตั้งค่า: {PathConstants.DTYPE_SETTINGS_FILE}")
-        self.log_callback(f"═" * 60)
+    # ฟังก์ชัน auto-fix ถูกยกเลิก
 
     def process_dataframe_in_chunks(self, df, process_func, logic_type, chunk_size=5000):
         """ประมวลผล DataFrame แบบ chunk เพื่อประหยัด memory"""

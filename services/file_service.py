@@ -77,15 +77,14 @@ class FileService:
     # Main Interface Methods
     # ========================
 
-    def read_excel_file(self, file_path, logic_type, use_auto_fix=True):
+    def read_excel_file(self, file_path, logic_type):
         """
-        อ่านไฟล์ Excel หรือ CSV ตามประเภทที่กำหนด พร้อมระบบแก้ไขอัตโนมัติ
-        (Main method ที่รักษา interface เดิมไว้ พร้อมเพิ่มฟีเจอร์ใหม่)
+        อ่านไฟล์ Excel หรือ CSV ตามประเภทที่กำหนด โดยไม่ใช้ระบบแก้ไขอัตโนมัติ
         
         Args:
             file_path: ที่อยู่ไฟล์
             logic_type: ประเภทไฟล์
-            use_auto_fix: ใช้ระบบแก้ไขอัตโนมัติหรือไม่ (default: True)
+            ไม่มีการใช้งานระบบแก้ไขอัตโนมัติ
         """
         try:
             # รีเซ็ต log flags สำหรับไฟล์ใหม่
@@ -112,46 +111,14 @@ class FileService:
             # ปรับปรุง memory usage
             df = self.performance_optimizer.optimize_memory_usage(df)
             
-            # สร้างรายงานก่อนประมวลผล
+            # สร้างรายงานก่อนประมวลผล (ไม่ทำ auto-fix อีกต่อไป)
             validation_passed = self.data_processor.generate_pre_processing_report(df, logic_type)
             
             if not validation_passed:
-                self.log_callback("\n⚠️  พบปัญหาในการตรวจสอบข้อมูล")
-                if use_auto_fix:
-                    self.log_callback("🤖 เปิดใช้งานระบบแก้ไขอัตโนมัติ...")
-                else:
-                    self.log_callback("⚠️  ดำเนินการประมวลผลต่อไป แต่อาจมีข้อผิดพลาด")
+                self.log_callback("\n⚠️ ตรวจสอบพบประเด็นในข้อมูล (จะนำเข้าเป็น NVARCHAR(MAX) แล้วแปลงใน SQL)")
             
-            # เลือกระบบประมวลผล
-            if use_auto_fix and not validation_passed:
-                # ใช้ระบบแก้ไขอัตโนมัติ
-                self.log_callback(f"\n🤖 ประมวลผลด้วยระบบแก้ไขอัตโนมัติ...")
-                df, processing_report = self.data_processor.process_with_auto_fix(df, logic_type)
-                
-                # แสดงรายงานผลการแก้ไข
-                if processing_report['auto_fixes_applied']:
-                    self.log_callback(f"\n✅ ระบบแก้ไขอัตโนมัติทำงานเสร็จสิ้น")
-                    steps = ', '.join(processing_report['processing_steps'])
-                    self.log_callback(f"📝 ขั้นตอนที่ดำเนินการ: {steps}")
-                else:
-                    self.log_callback(f"\n✅ ไม่พบปัญหาที่ต้องแก้ไข - ดำเนินการประมวลผลปกติ")
-                    
-            else:
-                # ใช้ระบบเดิม
-                self.log_callback(f"\n🔄 ประมวลผลด้วยระบบปกติ...")
-                
-                # Clean และ apply dtypes แบบ chunked
-                self.log_callback(f"🧹 ทำความสะอาดข้อมูลตัวเลข...")
-                df = self.data_processor.process_dataframe_in_chunks(df, self.data_processor.clean_numeric_columns, logic_type)
-                
-                self.log_callback(f"📅 ทำความสะอาดข้อมูลวันที่...")
-                df = self.data_processor.process_dataframe_in_chunks(df, self.data_processor.clean_and_validate_datetime_columns, logic_type)
-                
-                # ตัดข้อมูล string ที่ยาวเกิน
-                df = self.data_processor.process_dataframe_in_chunks(df, self.data_processor.truncate_long_strings, logic_type)
-                
-                self.log_callback(f"🔄 แปลงประเภทข้อมูล...")
-                df = self.data_processor.process_dataframe_in_chunks(df, self.data_processor.apply_dtypes, logic_type)
+            # โหมดใหม่: ไม่แปลงข้อมูลก่อนอัปโหลด ปล่อยให้ SQL Server แปลงหลังนำเข้า (ผ่าน TRY_CONVERT/REPLACE)
+            self.log_callback(f"\n🚚 นำเข้าเป็น NVARCHAR(MAX) ทั้งหมด แล้วแปลงบน SQL Server ตาม dtype")
             
             # ทำความสะอาด memory
             self.performance_optimizer.cleanup_memory()
@@ -262,9 +229,7 @@ class FileService:
         """ตัดข้อมูล string ที่ยาวเกินกำหนด"""
         return self.data_processor.truncate_long_strings(df, logic_type)
 
-    def process_with_auto_fix(self, df, logic_type):
-        """ประมวลผลข้อมูลพร้อมระบบแก้ไขอัตโนมัติ (wrapper method)"""
-        return self.data_processor.process_with_auto_fix(df, logic_type)
+    # ลบฟังก์ชันที่เกี่ยวข้องกับ auto-fix ออก (decommissioned)
 
     def upload_data_with_auto_schema_update(self, df, logic_type, processing_report=None, schema_name='bronze'):
         """
@@ -273,7 +238,7 @@ class FileService:
         Args:
             df: DataFrame ที่จะอัปโหลด
             logic_type: ประเภทไฟล์
-            processing_report: รายงานการประมวลผล (จาก process_with_auto_fix)
+            processing_report: (ไม่ใช้งาน)
             schema_name: ชื่อ schema ในฐานข้อมูล
             
         Returns:
@@ -295,11 +260,8 @@ class FileService:
             if not required_cols:
                 return False, "ไม่พบการตั้งค่าประเภทข้อมูล"
             
-            # ตรวจสอบว่าต้องสร้างตารางใหม่หรือไม่
+            # ไม่รองรับ auto-fix อีกต่อไป จึงไม่ใช้ force_recreate จาก processing_report
             force_recreate = False
-            if processing_report and processing_report.get('auto_fixes_applied', False):
-                force_recreate = True
-                self.log_callback(f"\n🔄 ระบบแก้ไขอัตโนมัติได้ปรับปรุงชนิดข้อมูล - จะสร้างตารางใหม่")
             
             # อัปโหลดข้อมูล
             success, upload_msg = db_service.upload_data(
@@ -318,73 +280,7 @@ class FileService:
             self.log_callback(error_msg)
             return False, error_msg
 
-    def read_and_upload_with_auto_fix(self, file_path, logic_type, schema_name='bronze', use_auto_fix=True):
-        """
-        อ่านไฟล์ และอัปโหลดพร้อมระบบแก้ไขอัตโนมัติครบวงจร
-        
-        Args:
-            file_path: ที่อยู่ไฟล์
-            logic_type: ประเภทไฟล์
-            schema_name: ชื่อ schema ในฐานข้อมูล
-            use_auto_fix: ใช้ระบบแก้ไขอัตโนมัติหรือไม่
-            
-        Returns:
-            Dict: รายงานผลการดำเนินการ
-        """
-        result = {
-            'success': False,
-            'read_success': False,
-            'upload_success': False,
-            'auto_fixes_applied': False,
-            'processing_report': {},
-            'upload_message': '',
-            'error_message': ''
-        }
-        
-        try:
-            self.log_callback(f"\n🚀 เริ่มประมวลผลไฟล์: {file_path}")
-            self.log_callback(f"📂 ประเภท: {logic_type} | Schema: {schema_name}")
-            
-            # ขั้นตอนที่ 1: อ่านและประมวลผลไฟล์
-            read_success, df_or_error = self.read_excel_file(file_path, logic_type, use_auto_fix)
-            
-            if not read_success:
-                result['error_message'] = df_or_error
-                return result
-            
-            result['read_success'] = True
-            df = df_or_error
-            
-            # ตรวจสอบว่ามีการใช้ระบบแก้ไขอัตโนมัติหรือไม่
-            processing_report = {}
-            if use_auto_fix:
-                # ได้รายงานจากการประมวลผล (ถ้ามี)
-                result['auto_fixes_applied'] = True  # สมมติว่ามีการใช้งาน
-            
-            # ขั้นตอนที่ 2: อัปโหลดข้อมูล
-            self.log_callback(f"\n📤 เริ่มอัปโหลดข้อมูลไปยังฐานข้อมูล...")
-            upload_success, upload_msg = self.upload_data_with_auto_schema_update(
-                df, logic_type, processing_report, schema_name
-            )
-            
-            result['upload_success'] = upload_success
-            result['upload_message'] = upload_msg
-            result['success'] = upload_success
-            
-            if upload_success:
-                self.log_callback(f"\n🎉 ประมวลผลและอัปโหลดเสร็จสิ้น!")
-                self.log_callback(f"✅ {upload_msg}")
-            else:
-                self.log_callback(f"\n❌ การอัปโหลดล้มเหลว: {upload_msg}")
-                result['error_message'] = upload_msg
-            
-            return result
-            
-        except Exception as e:
-            error_msg = f"เกิดข้อผิดพลาดในกระบวนการ: {e}"
-            result['error_message'] = error_msg
-            self.log_callback(f"❌ {error_msg}")
-            return result
+    # ลบเมธอด read_and_upload_with_auto_fix (decommissioned)
 
     def print_detailed_validation_report(self, df, logic_type):
         """แสดงรายงานการตรวจสอบข้อมูลแบบละเอียด (legacy method)"""
