@@ -169,352 +169,44 @@ class DataProcessorService:
         return dtypes
 
     def apply_dtypes(self, df, file_type):
-        """แปลงประเภทข้อมูลตามการตั้งค่า พร้อมรายงานข้อผิดพลาดละเอียด"""
+        """
+        แปลงประเภทข้อมูลตามการตั้งค่า (เปลี่ยนเป็น SQL-based conversion)
+        
+        หมายเหตุ: ฟังก์ชันนี้จะถูกย้ายไปในอนาคต เนื่องจากการแปลงข้อมูลจะทำใน staging table แล้วแปลงด้วย SQL
+        ตอนนี้เพียงคืนค่า DataFrame เดิม (no-op function)
+        """
         if not file_type or file_type not in self.dtype_settings:
             return df
-            
-        # อ่านค่า format จาก config (default UK)
-        date_format = self.dtype_settings[file_type].get('_date_format', 'UK').upper()
-        dayfirst = True if date_format == 'UK' else False
-
-        conversion_log = {
-            'successful_conversions': [],
-            'failed_conversions': {},
-            'warnings': []
-        }
-
-        def parse_datetime_safe(val):
-            try:
-                if isinstance(val, str):
-                    val = val.strip()
-                    if not val:
-                        return pd.NaT
-                    return parser.parse(val, dayfirst=dayfirst)
-                return parser.parse(str(val), dayfirst=dayfirst)
-            except:
-                return pd.NaT
-
-        try:
-            # แทนที่ค่าว่างทั้งหมดในครั้งเดียว (เร็วกว่า)
-            df = df.replace(['', 'nan', 'NaN', 'NULL', 'null', None], pd.NA)
-            
-            # แสดง log เฉพาะครั้งแรก (ไม่ซ้ำในแต่ละ chunk)
-            if not hasattr(self, f'_dtype_conversion_log_{file_type}'):
-                self.log_with_time(f"\n🔄 กำลังแปลงประเภทข้อมูลสำหรับไฟล์ประเภท: {file_type}")
-                self.log_callback("-" * 50)
-                setattr(self, f'_dtype_conversion_log_{file_type}', True)
-            
-            # ประมวลผลแต่ละคอลัมน์
-            for col, dtype_str in self.dtype_settings[file_type].items():
-                if col.startswith('_') or col not in df.columns:
-                    continue
-                    
-                dtype_str = dtype_str.upper()
-                original_null_count = df[col].isnull().sum()
-                
-                try:
-                    if 'DATE' in dtype_str:
-                        # ใช้การแปลงข้อมูลวันที่ที่เข้มงวดและปลอดภัยขึ้น
-                        def parse_datetime_safe_strict(val):
-                            try:
-                                if pd.isna(val) or val == '' or str(val).lower() in ['nan', 'null', 'none']:
-                                    return pd.NaT
-                                
-                                # ลองแปลงด้วย pandas
-                                converted_date = parser.parse(str(val), dayfirst=dayfirst)
-                                
-                                # ตรวจสอบช่วงปีที่ SQL Server รองรับ
-                                if converted_date.year < 1753 or converted_date.year > 9999:
-                                    return pd.NaT
-                                
-                                # ตรวจสอบปีที่สมเหตุสมผล (1900-2100)
-                                if converted_date.year < 1900 or converted_date.year > 2100:
-                                    return pd.NaT
-                                
-                                return converted_date
-                                
-                            except (ValueError, OverflowError, TypeError):
-                                return pd.NaT
-                        
-                        df[col] = df[col].astype(str).apply(parse_datetime_safe_strict)
-                        new_null_count = df[col].isnull().sum()
-                        failed_count = new_null_count - original_null_count
-                        
-                        if failed_count > 0:
-                            # ตัวอย่างข้อมูลที่แปลงไม่ได้
-                            original_series = df[col].astype(str)
-                            failed_mask = df[col].isnull() & original_series.notna() & (original_series != 'nan')
-                            failed_examples = original_series.loc[failed_mask].unique()[:3]
-                            
-                            conversion_log['failed_conversions'][col] = {
-                                'expected_type': dtype_str,
-                                'failed_count': failed_count,
-                                'examples': failed_examples.tolist(),
-                                'error_type': 'Invalid date format or out of SQL Server range'
-                            }
-                            
-                            # เพิ่มความเข้มงวด: ถ้ามีข้อมูลวันที่ผิดมากกว่า 5% ให้เตือน
-                            if failed_count > len(df) * 0.05:
-                                conversion_log['warnings'].append(f"คอลัมน์ '{col}' มีข้อมูลวันที่ผิดมากกว่า 5% - ควรเปลี่ยนเป็น STRING")
-                        else:
-                            conversion_log['successful_conversions'].append(f"{col} ({dtype_str})")
-                            
-                    elif dtype_str in ['INT', 'BIGINT', 'SMALLINT', 'FLOAT', 'DECIMAL']:
-                        # ใช้ pd.to_numeric ที่เร็วกว่า
-                        numeric_result = pd.to_numeric(df[col], errors='coerce')
-                        new_null_count = numeric_result.isnull().sum()
-                        failed_count = new_null_count - original_null_count
-                        
-                        if failed_count > 0:
-                            # ตัวอย่างข้อมูลที่แปลงไม่ได้
-                            failed_mask = numeric_result.isnull() & df[col].notna()
-                            failed_examples = df.loc[failed_mask, col].unique()[:3]
-                            
-                            conversion_log['failed_conversions'][col] = {
-                                'expected_type': dtype_str,
-                                'failed_count': failed_count,
-                                'examples': [str(x) for x in failed_examples],
-                                'error_type': 'Invalid numeric format'
-                            }
-                            
-                            if failed_count > len(df) * 0.05:  # มากกว่า 5%
-                                conversion_log['warnings'].append(f"คอลัมน์ '{col}' มีข้อมูลตัวเลขผิดมากกว่า 5%")
-                        else:
-                            conversion_log['successful_conversions'].append(f"{col} ({dtype_str})")
-                        
-                        df[col] = numeric_result
-                        
-                    elif dtype_str == 'BIT':
-                        # แปลง boolean อย่างปลอดภัย
-                        original_series = df[col].copy()
-                        df[col] = df[col].map({'True': True, 'False': False, '1': True, '0': False, 1: True, 0: False})
-                        df[col] = df[col].fillna(False).astype(bool)
-                        
-                        # ตรวจสอบว่ามีข้อมูลที่แปลงไม่ได้หรือไม่
-                        unmapped_mask = df[col].isnull() & original_series.notna()
-                        if unmapped_mask.any():
-                            unmapped_examples = original_series.loc[unmapped_mask].unique()[:3]
-                            conversion_log['warnings'].append(
-                                f"คอลัมน์ '{col}' มีข้อมูลที่ไม่ใช่ boolean: {[str(x) for x in unmapped_examples]}"
-                            )
-                        
-                        conversion_log['successful_conversions'].append(f"{col} (BOOLEAN)")
-                        
-                    else:
-                        # String columns
-                        df[col] = df[col].replace(pd.NA, None)
-                        conversion_log['successful_conversions'].append(f"{col} (STRING)")
-                        
-                except Exception as e:
-                    conversion_log['failed_conversions'][col] = {
-                        'expected_type': dtype_str,
-                        'error': str(e),
-                        'error_type': 'Conversion error'
-                    }
-                    continue
-            
-            # แสดงรายงานการแปลงเฉพาะครั้งสุดท้าย
-            if not hasattr(self, f'_conversion_report_shown_{file_type}'):
-                self._print_conversion_report(conversion_log)
-                setattr(self, f'_conversion_report_shown_{file_type}', True)
-                
-            return df
-            
-        except Exception as e:
-            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการแปลงประเภทข้อมูล: {e}")
-            return df
+        
+        # คืนค่า DataFrame เดิม เนื่องจากการแปลงจะทำใน SQL แล้ว
+        self.log_with_time(f"🔄 การแปลงข้อมูลจะทำใน staging table ด้วย SQL")
+        return df
 
     def clean_and_validate_datetime_columns(self, df, file_type):
-        """ทำความสะอาดและตรวจสอบข้อมูลคอลัมน์วันที่"""
+        """ทำความสะอาดและตรวจสอบข้อมูลคอลัมน์วันที่ (เปลี่ยนเป็น SQL-based validation)"""
         if not file_type or file_type not in self.dtype_settings:
             return df
-            
-        try:
-            for col, dtype_str in self.dtype_settings[file_type].items():
-                if col not in df.columns:
-                    continue
-                    
-                dtype_str_upper = str(dtype_str).upper()
-                if 'DATE' in dtype_str_upper:
-                    
-                    # ตรวจสอบและทำความสะอาดข้อมูลวันที่
-                    original_count = len(df)
-                    problematic_values = []
-                    
-                    def clean_datetime_value(val):
-                        try:
-                            if pd.isna(val) or val == '' or str(val).lower() in ['nan', 'null', 'none', '0']:
-                                return None
-                            
-                            val_str = str(val).strip()
-                            
-                            # ตรวจสอบรูปแบบที่ผิดปกติ
-                            if len(val_str) < 4:  # วันที่ต้องมีอย่างน้อย 4 ตัวอักษร
-                                problematic_values.append(val_str)
-                                return None
-                                
-                            # ตรวจสอบปีที่เป็นไปไม่ได้
-                            if val_str.isdigit() and len(val_str) == 4:
-                                year = int(val_str)
-                                if year < 1753 or year > 9999:
-                                    problematic_values.append(val_str)
-                                    return None
-                            
-                            # ลองแปลงเป็นวันที่
-                            try:
-                                converted_date = pd.to_datetime(val_str, errors='raise')
-                                
-                                # ตรวจสอบช่วงปีที่ SQL Server รองรับ
-                                if converted_date.year < 1753 or converted_date.year > 9999:
-                                    problematic_values.append(val_str)
-                                    return None
-                                    
-                                # ตรวจสอบปีที่สมเหตุสมผล
-                                if converted_date.year < 1900 or converted_date.year > 2100:
-                                    problematic_values.append(val_str)
-                                    return None
-                                
-                                return val_str
-                                
-                            except (ValueError, OverflowError, TypeError):
-                                problematic_values.append(val_str)
-                                return None
-                                
-                        except Exception:
-                            return None
-                    
-                    # ทำความสะอาดข้อมูล
-                    df[col] = df[col].apply(clean_datetime_value)
-                    
-                    # รายงานผล
-                    cleaned_count = df[col].isnull().sum()
-                    if cleaned_count > 0:
-                        problem_percentage = (cleaned_count / original_count) * 100
-                        unique_problems = list(set(problematic_values[:5]))  # แสดงตัวอย่าง 5 ค่า
-                        
-                        if not hasattr(self, f'_datetime_clean_log_{col}'):
-                            self.log_with_time(f"   🧹 ทำความสะอาด '{col}': ลบข้อมูลวันที่ที่ไม่ถูกต้อง {cleaned_count:,} แถว ({problem_percentage:.1f}%)")
-                            if unique_problems:
-                                self.log_callback(f"      ตัวอย่างข้อมูลที่ลบ: {unique_problems}")
-                            setattr(self, f'_datetime_clean_log_{col}', True)
-                        
-                        # ถ้าข้อมูลผิดมากกว่า 30% ให้แนะนำเปลี่ยนเป็น string
-                        if problem_percentage > 30:
-                            self.log_with_time(f"   ⚠️ คำแนะนำ: คอลัมน์ '{col}' มีข้อมูลวันที่ผิดมาก ({problem_percentage:.1f}%) - ควรเปลี่ยนเป็น NVARCHAR")
-                    
-            return df
-        except Exception as e:
-            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการ clean ข้อมูลวันที่: {e}")
-            return df
+        
+        # คืนค่า DataFrame เดิม เนื่องจากการ validation จะทำใน SQL แล้ว
+        self.log_with_time(f"🔍 การตรวจสอบวันที่จะทำใน staging table ด้วย SQL")
+        return df
 
     def clean_numeric_columns(self, df, file_type):
-        """ทำความสะอาดข้อมูลคอลัมน์ตัวเลข"""
+        """ทำความสะอาดข้อมูลคอลัมน์ตัวเลข (เปลี่ยนเป็น SQL-based cleaning)"""
         if not file_type or file_type not in self.dtype_settings:
             return df
-            
-        try:
-            for col, dtype_str in self.dtype_settings[file_type].items():
-                if col not in df.columns:
-                    continue
-                    
-                dtype_str_upper = str(dtype_str).upper()
-                if (dtype_str_upper in ["INT", "BIGINT", "SMALLINT", "FLOAT"] 
-                    or dtype_str_upper.startswith("DECIMAL")):
-                    
-                    # แก้ไขปัญหา Categorical: สร้าง series ใหม่
-                    col_series = df[col].copy()
-                    if col_series.dtype.name == 'category':
-                        # แปลง Categorical เป็น object ก่อน
-                        col_series = col_series.astype('object')
-                    
-                    # ใช้ vectorized operations แทน regex ทีละแถว
-                    # แปลงเป็น string ก่อน
-                    col_str = col_series.astype(str)
-                    
-                    # เอาเฉพาะตัวเลข จุด และเครื่องหมายลบ
-                    cleaned = col_str.str.replace(r"[^\d.-]", "", regex=True)
-                    
-                    # แปลงเป็นตัวเลข
-                    df[col] = pd.to_numeric(cleaned, errors='coerce')
-                    
-            return df
-        except Exception as e:
-            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการ clean ข้อมูลตัวเลข: {e}")
-            return df
+        
+        # คืนค่า DataFrame เดิม เนื่องจากการ cleaning จะทำใน SQL แล้ว
+        self.log_with_time(f"🧹 การทำความสะอาดข้อมูลตัวเลขจะทำใน staging table ด้วย SQL")
+        return df
 
     def truncate_long_strings(self, df, logic_type):
-        """ตัดข้อมูล string ที่ยาวเกินกำหนดและแสดงรายงาน"""
+        """ตัดข้อมูล string ที่ยาวเกินกำหนดและแสดงรายงาน (เปลี่ยนเป็น SQL-based truncation)"""
         if not logic_type or logic_type not in self.dtype_settings:
             return df
-            
-        dtypes = self.get_required_dtypes(logic_type)
-        truncation_report = {
-            'truncated_columns': {},
-            'total_truncated': 0
-        }
         
-        # แสดง log เฉพาะครั้งแรก (ไม่ซ้ำในแต่ละ chunk)
-        if not hasattr(self, '_truncation_log_shown'):
-            self.log_with_time(f"\n✂️ ตรวจสอบและตัดข้อมูล string ที่ยาวเกิน...")
-            self._truncation_log_shown = True
-        
-        for col, dtype in dtypes.items():
-            if col not in df.columns:
-                continue
-                
-            # ข้ามคอลัมน์ที่เป็น Text() (NVARCHAR(MAX)) เพราะไม่ต้องตัด
-            if isinstance(dtype, Text):
-                # แสดง log เฉพาะครั้งแรก
-                if not hasattr(self, f'_text_skip_log_{col}'):
-                    self.log_with_time(f"   ✅ ข้าม '{col}': เป็น Text() (NVARCHAR(MAX)) ไม่จำกัดความยาว")
-                    setattr(self, f'_text_skip_log_{col}', True)
-                continue
-                
-            if isinstance(dtype, NVARCHAR):
-                max_length = dtype.length if hasattr(dtype, 'length') else 255
-                
-                # หาข้อมูลที่ยาวเกินกำหนด
-                string_series = df[col].astype(str)
-                too_long_mask = string_series.str.len() > max_length
-                too_long_count = too_long_mask.sum()
-                
-                if too_long_count > 0:
-                    # เก็บตัวอย่างก่อนตัด
-                    original_examples = string_series.loc[too_long_mask].str[:100].head(3).tolist()
-                    max_original_length = string_series.str.len().max()
-                    
-                    # แก้ไขปัญหา Categorical: สร้าง series ใหม่แทนการใช้ loc assignment
-                    new_series = df[col].copy()
-                    if new_series.dtype.name == 'category':
-                        # แปลง Categorical เป็น object ก่อน
-                        new_series = new_series.astype('object')
-                    
-                    # ตัดข้อมูลที่ยาวเกิน
-                    new_series.loc[too_long_mask] = string_series.loc[too_long_mask].str[:max_length]
-                    df[col] = new_series
-                    
-                    truncation_report['truncated_columns'][col] = {
-                        'max_allowed': max_length,
-                        'max_original': max_original_length,
-                        'truncated_count': too_long_count,
-                        'examples': original_examples
-                    }
-                    truncation_report['total_truncated'] += too_long_count
-                    
-                    # แสดง log เฉพาะครั้งแรกสำหรับคอลัมน์นี้
-                    if not hasattr(self, f'_truncate_log_{col}'):
-                        self.log_with_time(f"   ✂️ ตัดข้อมูลคอลัมน์ '{col}': {too_long_count:,} แถว (เหลือ {max_length} ตัวอักษร)")
-                        setattr(self, f'_truncate_log_{col}', True)
-        
-        # แสดงสรุปเฉพาะครั้งสุดท้าย (เมื่อไม่มีข้อมูลที่ต้องตัด)
-        if truncation_report['total_truncated'] == 0 and not hasattr(self, '_no_truncation_log_shown'):
-            self.log_with_time(f"   ✅ ไม่พบข้อมูล string ที่ยาวเกินกำหนด")
-            self._no_truncation_log_shown = True
-        elif truncation_report['total_truncated'] > 0 and not hasattr(self, '_truncation_summary_shown'):
-            self.log_with_time(f"\n⚠️ สรุป: ตัดข้อมูลทั้งหมด {truncation_report['total_truncated']:,} แถว ใน {len(truncation_report['truncated_columns'])} คอลัมน์")
-            self.log_with_time(f"   📝 ข้อมูลที่ตัดจะยังคงอยู่ใน DataFrame แต่จะถูกย่อให้เข้ากับฐานข้อมูล")
-            self._truncation_summary_shown = True
-            
+        # คืนค่า DataFrame เดิม เนื่องจากการตัดข้อมูลจะทำใน SQL แล้ว
+        self.log_with_time(f"✂️ การตัดข้อมูล string จะทำใน staging table ด้วย SQL")
         return df
 
     def comprehensive_data_validation(self, df, logic_type):
@@ -693,58 +385,15 @@ class DataProcessorService:
 
     def generate_pre_processing_report(self, df, logic_type):
         """สร้างรายงานสรุปก่อนประมวลผลข้อมูล"""
-        self.log_callback("=" * 70)
-        self.log_callback("📋 รายงานการตรวจสอบข้อมูลก่อนประมวลผล")
-        self.log_callback("=" * 70)
-        
-        # ข้อมูลทั่วไป
-        self.log_callback(f"📄 ไฟล์ประเภท: {logic_type}")
-        self.log_callback(f"📊 จำนวนแถว: {len(df):,}")
-        self.log_callback(f"📊 จำนวนคอลัมน์: {len(df.columns)}")
-        self.log_callback(f"⏰ เวลาตรวจสอบ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        self.log_callback("-" * 70)
-        
-        # ตรวจสอบคอลัมน์
+        # ตรวจสอบคอลัมน์เบื้องต้นเท่านั้น
         validation_result = self.validate_columns(df, logic_type)
+        
         if not validation_result[0]:
-            self.log_callback(f"❌ {validation_result[1]}")
+            self.log_callback(f"❌ ปัญหาคอลัมน์: {validation_result[1]}")
+            return False
         else:
-            self.log_callback("✅ คอลัมน์ครบถ้วนตามที่กำหนด")
-        
-        # ตรวจสอบข้อมูลตัวเลข
-        numeric_validation = self.check_invalid_numeric(df, logic_type)
-        if numeric_validation['has_issues']:
-            self.log_callback("\n⚠️  พบปัญหาข้อมูลตัวเลข:")
-            for msg in numeric_validation['summary']:
-                self.log_callback(f"   • {msg}")
-                
-            # แสดงรายละเอียดเพิ่มเติม
-            self.log_callback("\n📝 รายละเอียดปัญหา:")
-            for col, details in numeric_validation['invalid_data'].items():
-                self.log_callback(f"   🔸 คอลัมน์ '{col}':")
-                self.log_callback(f"      - ชนิดข้อมูลที่ต้องการ: {details['expected_type']}")
-                self.log_callback(f"      - ตัวอย่างข้อมูลที่ผิด: {details['examples']}")
-                self.log_callback(f"      - แถวที่มีปัญหา (ตัวอย่าง): {details['problem_rows']}")
-        else:
-            self.log_callback("\n✅ ข้อมูลตัวเลขถูกต้องทั้งหมด")
-        
-        # ตรวจสอบข้อมูลอย่างละเอียด
-        comprehensive_result = self.comprehensive_data_validation(df, logic_type)
-        if not comprehensive_result['status']:
-            self.log_callback("\n🔍 การตรวจสอบเพิ่มเติม:")
-            for msg in comprehensive_result['summary']:
-                self.log_callback(f"   • {msg}")
-        
-        self.log_callback("=" * 70)
-        overall_status = validation_result[0] and not numeric_validation['has_issues'] and comprehensive_result['status']
-        
-        if overall_status:
-            self.log_callback("🎉 ผ่านการตรวจสอบทั้งหมด พร้อมประมวลผล")
-        else:
-            self.log_callback("⚠️  พบปัญหาที่ต้องแก้ไขก่อนประมวลผล")
-        
-        self.log_callback("=" * 70)
-        return overall_status
+            self.log_callback("✅ ตรวจสอบคอลัมน์เบื้องต้นผ่าน - รายละเอียดจะตรวจสอบใน staging table ด้วย SQL")
+            return True
 
     def check_invalid_numeric(self, df, logic_type):
         """ตรวจสอบค่าที่ไม่ใช่ตัวเลขในคอลัมน์ที่เป็นตัวเลข พร้อมรายงานละเอียด"""

@@ -163,11 +163,13 @@ class FileHandler:
                         
                         df = result
                         
-                        # ตรวจสอบคอลัมน์
+                        # ตรวจสอบคอลัมน์เบื้องต้น (เฉพาะ column existence)
                         success, result = self.file_service.validate_columns(df, logic_type)
                         if not success:
                             self.log(f"❌ {result}")
                             continue
+                        
+                        # หมายเหตุ: การตรวจสอบข้อมูลรายละเอียดจะทำใน staging table ด้วย SQL
                         
                         all_dfs.append(df)
                         self.log(f"✅ อ่านข้อมูลจากไฟล์: {os.path.basename(file_path)}")
@@ -361,11 +363,13 @@ class FileHandler:
                     
                     df = result
                     
-                    # ตรวจสอบคอลัมน์
+                    # ตรวจสอบคอลัมน์เบื้องต้น (เฉพาะ column existence)
                     success, result = self.file_service.validate_columns(df, logic_type)
                     if not success:
                         self.log(f"❌ คอลัมน์ไม่ถูกต้อง: {result}")
                         continue
+                    
+                    # หมายเหตุ: การตรวจสอบข้อมูลรายละเอียดจะทำใน staging table ด้วย SQL
                     
                     # อัปโหลดข้อมูล
                     required_cols = self.file_service.get_required_dtypes(logic_type)

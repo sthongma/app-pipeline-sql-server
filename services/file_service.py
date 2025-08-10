@@ -111,14 +111,8 @@ class FileService:
             # ปรับปรุง memory usage
             df = self.performance_optimizer.optimize_memory_usage(df)
             
-            # สร้างรายงานก่อนประมวลผล (ไม่ทำ auto-fix อีกต่อไป)
-            validation_passed = self.data_processor.generate_pre_processing_report(df, logic_type)
-            
-            if not validation_passed:
-                self.log_callback("\n⚠️ ตรวจสอบพบประเด็นในข้อมูล (จะนำเข้าเป็น NVARCHAR(MAX) แล้วแปลงใน SQL)")
-            
-            # โหมดใหม่: ไม่แปลงข้อมูลก่อนอัปโหลด ปล่อยให้ SQL Server แปลงหลังนำเข้า (ผ่าน TRY_CONVERT/REPLACE)
-            self.log_callback(f"\n🚚 นำเข้าเป็น NVARCHAR(MAX) ทั้งหมด แล้วแปลงบน SQL Server ตาม dtype")
+            # หมายเหตุ: การตรวจสอบข้อมูลจะทำใน staging table ด้วย SQL แทน pandas
+            self.log_callback(f"🔄 นำเข้าเป็น NVARCHAR(MAX) ทั้งหมด แล้วตรวจสอบและแปลงด้วย SQL")
             
             # ทำความสะอาด memory
             self.performance_optimizer.cleanup_memory()
@@ -169,7 +163,7 @@ class FileService:
         return self.data_processor.check_invalid_numeric(df, logic_type)
 
     def generate_pre_processing_report(self, df, logic_type):
-        """สร้างรายงานสรุปก่อนประมวลผลข้อมูล"""
+        """สร้างรายงานสรุปก่อนประมวลผลข้อมูล (deprecated - ใช้ SQL validation แทน)"""
         return self.data_processor.generate_pre_processing_report(df, logic_type)
 
     def apply_dtypes(self, df, file_type):
