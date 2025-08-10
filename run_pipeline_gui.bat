@@ -68,7 +68,7 @@ echo Using interpreter: %PYTHON_EXE%
 REM Check requirements
 echo.
 echo Checking dependencies...
-%PYTHON_EXE% -c "import customtkinter, sqlalchemy, pyodbc, pandas, bcpandas" >nul 2>&1
+%PYTHON_EXE% -c "import customtkinter, sqlalchemy, pyodbc, pandas" >nul 2>&1
 if errorlevel 1 (
     echo Dependencies missing, installing...
     call install_requirements.bat
@@ -78,7 +78,7 @@ if errorlevel 1 (
         exit /b 1
     )
     echo Re-checking dependencies...
-    %PYTHON_EXE% -c "import customtkinter, sqlalchemy, pyodbc, pandas, bcpandas" >nul 2>&1
+    %PYTHON_EXE% -c "import customtkinter, sqlalchemy, pyodbc, pandas" >nul 2>&1
     if errorlevel 1 (
         echo ERROR: Dependencies still missing. Please check your Python environment.
         %PYTHON_EXE% -c "import sys; print('Interpreter:', sys.executable); print('Sys.path:', sys.path)"

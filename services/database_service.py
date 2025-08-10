@@ -322,78 +322,34 @@ class DatabaseService:
                 if log_func:
                     log_func(f"📦 สร้างตารางชั่วคราวสำหรับนำเข้า: {schema_name}.{staging_table} (NVARCHAR(MAX) ทุกคอลัมน์)")
 
-            # 2) อัปโหลดข้อมูลเข้า staging ด้วยวิธีที่เร็วที่สุด (bcp → fallback chunked)
-            try:
-                from bcpandas import SqlCreds, to_sql as bcp_to_sql  # type: ignore
-
-                cfg = getattr(self.db_config, 'config', {}) or {}
-                if cfg.get('auth_type') == DatabaseConstants.AUTH_WINDOWS:
-                    # bcpandas expects 'trusted' boolean, not 'trusted_connection'
-                    creds = SqlCreds(
-                        server=cfg.get('server', ''),
-                        database=cfg.get('database', ''),
-                        trusted=True,
-                        driver='ODBC Driver 17 for SQL Server'
-                    )
-                else:
-                    creds = SqlCreds(
-                        server=cfg.get('server', ''),
-                        database=cfg.get('database', ''),
-                        username=cfg.get('username', ''),
-                        password=cfg.get('password', ''),
-                        driver='ODBC Driver 17 for SQL Server'
-                    )
-
-                data_to_load = df[staging_cols]
+            # 2) อัปโหลดข้อมูลเข้า staging ด้วย pandas.to_sql
+            if len(df) > 10000:
                 if log_func:
-                    log_func(f"⚡ ใช้ bcp สำหรับการอัปโหลดแบบเร็ว: {len(data_to_load):,} แถว → {schema_name}.{staging_table}")
-
-                # ใช้ bcp โหมด Unicode (-w) ผ่าน bcpandas (ค่าเริ่มต้นของ bcpandas คือ native bcp, บังคับ unicode ด้วย hint)
-                bcp_to_sql(
-                    data_to_load,
-                    staging_table,
-                    creds,
-                    index=False,
-                    schema=schema_name,
-                    if_exists='append',
-                    batch_size=None,
-                    use_pyodbc_fast_executemany=False
-                )
-            except Exception as be:
-                if log_func:
-                    try:
-                        import sys
-                        interp = sys.executable
-                        log_func(f"⚠️ bcp ไม่พร้อมใช้งาน/ล้มเหลว จะใช้วิธีปกติแทน: {be} (python={interp})")
-                    except Exception:
-                        log_func(f"⚠️ bcp ไม่พร้อมใช้งาน/ล้มเหลว จะใช้วิธีปกติแทน: {be}")
-
-                # Fallback เป็น pandas.to_sql แบบ chunked สำหรับไฟล์ใหญ่
-                if len(df) > 10000:
-                    if log_func:
-                        log_func(f"📊 ไฟล์ขนาดใหญ่ ({len(df):,} แถว) - อัปโหลดแบบ chunked (fallback) ไปยัง staging")
-                    chunk_size = 5000
-                    total_chunks = (len(df) + chunk_size - 1) // chunk_size
-                    for i in range(0, len(df), chunk_size):
-                        chunk = df.iloc[i:i+chunk_size]
-                        chunk[staging_cols].to_sql(
-                            name=staging_table,
-                            con=self.engine,
-                            schema=schema_name,
-                            if_exists='append',
-                            index=False
-                        )
-                        chunk_num = (i // chunk_size) + 1
-                        if log_func:
-                            log_func(f"📤 อัปโหลด staging chunk {chunk_num}/{total_chunks}: {len(chunk):,} แถว")
-                else:
-                    df[staging_cols].to_sql(
+                    log_func(f"📊 ไฟล์ขนาดใหญ่ ({len(df):,} แถว) - อัปโหลดแบบ chunked ไปยัง staging")
+                chunk_size = 5000
+                total_chunks = (len(df) + chunk_size - 1) // chunk_size
+                for i in range(0, len(df), chunk_size):
+                    chunk = df.iloc[i:i+chunk_size]
+                    chunk[staging_cols].to_sql(
                         name=staging_table,
                         con=self.engine,
                         schema=schema_name,
                         if_exists='append',
                         index=False
                     )
+                    chunk_num = (i // chunk_size) + 1
+                    if log_func:
+                        log_func(f"📤 อัปโหลด staging chunk {chunk_num}/{total_chunks}: {len(chunk):,} แถว")
+            else:
+                if log_func:
+                    log_func(f"📤 อัปโหลดข้อมูล: {len(df):,} แถว → {schema_name}.{staging_table}")
+                df[staging_cols].to_sql(
+                    name=staging_table,
+                    con=self.engine,
+                    schema=schema_name,
+                    if_exists='append',
+                    index=False
+                )
 
             # 3) สร้าง/รีสร้างตารางจริงตาม dtype config (ไม่ auto-fix)
             if needs_recreate or not insp.has_table(table_name, schema=schema_name):
