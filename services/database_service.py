@@ -279,11 +279,13 @@ class DatabaseService:
                         cat_db = _type_category(db_type)
                         cat_expected = _type_category(expected_str)
 
-                        # กรณี Text() ต้องเป็น NVARCHAR(MAX)
+                        # กรณี Text() ต้องเป็น NVARCHAR(MAX) - ตรวจสอบเฉพาะกรณีที่ร้ายแรง
                         if isinstance(expected_dtype, SA_Text):
-                            if 'NVARCHAR(MAX)' not in db_type and 'TEXT' not in db_type:
+                            if 'NVARCHAR(MAX)' not in db_type and 'TEXT' not in db_type and 'NVARCHAR' not in db_type:
+                                # เฉพาะกรณีที่ชนิดข้อมูลไม่ใช่ NVARCHAR เลย (เช่น INT, DATE)
                                 if log_func:
-                                    log_func(f"❌ คอลัมน์ '{col_name}' ควรเป็น NVARCHAR(MAX) แต่เป็น {db_type}")
+                                    log_func(f"❌ Schema Mismatch: คอลัมน์ '{col_name}' ควรเป็น NVARCHAR(MAX) แต่ฐานข้อมูลเป็น {db_type}")
+                                    log_func(f"   💡 แนะนำ: อนุญาตให้ระบบสร้างตารางใหม่เพื่อแก้ไขปัญหา")
                                 needs_recreate = True
                                 break
 
@@ -603,6 +605,11 @@ class DatabaseService:
             
             validation_queries = self._build_validation_queries(staging_table, required_cols, schema_name)
             
+            # เพิ่มการตรวจสอบ schema mismatch
+            schema_issues = self._check_schema_mismatch_in_staging(staging_table, required_cols, schema_name, log_func)
+            if schema_issues:
+                validation_results['warnings'].extend(schema_issues)
+            
             with self.engine.connect() as conn:
                 for validation_type, query in validation_queries.items():
                     try:
@@ -628,7 +635,10 @@ class DatabaseService:
                                 
                                 if log_func and issue['error_count'] > 0:
                                     status = "❌" if issue['percentage'] > 10 else "⚠️"
-                                    log_func(f"   {status} {issue['column']}: {issue['error_count']:,} แถวผิด ({issue['percentage']}%) ตัวอย่าง: {issue['examples'][:100]}")
+                                    # รองรับการแสดงผลชื่อคอลัมน์ภาษาไทยอย่างถูกต้อง
+                                    column_name = issue['column'] if isinstance(issue['column'], str) else str(issue['column'])
+                                    examples = issue['examples'][:100] if isinstance(issue['examples'], str) else str(issue['examples'])[:100]
+                                    log_func(f"   {status} {column_name}: {issue['error_count']:,} แถวผิด ({issue['percentage']}%) ตัวอย่าง: {examples}")
                     
                     except Exception as query_error:
                         if log_func:
@@ -689,8 +699,10 @@ class DatabaseService:
         if numeric_columns:
             numeric_cases = []
             for col in numeric_columns:
+                # ใช้ NVARCHAR literal สำหรับชื่อคอลัมน์ภาษาไทย
+                col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
                 numeric_cases.append(f"""
-                    SELECT '{col}' as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
+                    SELECT {col_literal} as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
                     FROM {schema_name}.{staging_table}
                     WHERE TRY_CAST(REPLACE(REPLACE(NULLIF(LTRIM(RTRIM([{col}])), ''), ',', ''), ' ', '') AS FLOAT) IS NULL 
                       AND NULLIF(LTRIM(RTRIM([{col}])), '') IS NOT NULL
@@ -728,8 +740,10 @@ class DatabaseService:
         if date_columns:
             date_cases = []
             for col in date_columns:
+                # ใช้ NVARCHAR literal สำหรับชื่อคอลัมน์ภาษาไทย
+                col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
                 date_cases.append(f"""
-                    SELECT '{col}' as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
+                    SELECT {col_literal} as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
                     FROM {schema_name}.{staging_table}
                     WHERE COALESCE(
                         TRY_CONVERT(DATETIME, NULLIF(LTRIM(RTRIM([{col}])), ''), 121),
@@ -771,8 +785,10 @@ class DatabaseService:
         if string_columns:
             string_cases = []
             for col, max_length in string_columns:
+                # ใช้ NVARCHAR literal สำหรับชื่อคอลัมน์ภาษาไทย
+                col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
                 string_cases.append(f"""
-                    SELECT '{col}' as column_name, LEFT([{col}], 50) + '...' as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
+                    SELECT {col_literal} as column_name, LEFT([{col}], 50) + '...' as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
                     FROM {schema_name}.{staging_table}
                     WHERE LEN(ISNULL([{col}], '')) > {max_length}
                 """)
@@ -809,8 +825,10 @@ class DatabaseService:
         if boolean_columns:
             boolean_cases = []
             for col in boolean_columns:
+                # ใช้ NVARCHAR literal สำหรับชื่อคอลัมน์ภาษาไทย
+                col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
                 boolean_cases.append(f"""
-                    SELECT '{col}' as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
+                    SELECT {col_literal} as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
                     FROM {schema_name}.{staging_table}
                     WHERE UPPER(LTRIM(RTRIM(ISNULL([{col}], '')))) NOT IN ('1','TRUE','Y','YES','0','FALSE','N','NO','')
                 """)
@@ -839,3 +857,61 @@ class DatabaseService:
             """
         
         return queries
+    
+    def _check_schema_mismatch_in_staging(self, staging_table, required_cols, schema_name, log_func=None):
+        """
+        ตรวจสอบ schema mismatch หลังจากนำเข้า staging table แล้ว
+        เหมือนกับการ validation อื่นๆ
+        """
+        from sqlalchemy.types import Text as SA_Text
+        
+        schema_issues = []
+        
+        try:
+            with self.engine.connect() as conn:
+                # ดึงข้อมูล schema ของตารางปลายทาง (ถ้ามี)
+                final_table = staging_table.replace('_staging', '')
+                table_info_query = f"""
+                    SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, COLLATION_NAME
+                    FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_SCHEMA = '{schema_name}' 
+                    AND TABLE_NAME = '{final_table}'
+                """
+                
+                result = conn.execute(text(table_info_query))
+                db_columns = {row.COLUMN_NAME: {
+                    'data_type': row.DATA_TYPE,
+                    'max_length': row.CHARACTER_MAXIMUM_LENGTH,
+                    'collation': row.COLLATION_NAME
+                } for row in result.fetchall()}
+                
+                # ตรวจสอบ schema mismatch สำหรับแต่ละคอลัมน์
+                for col_name, expected_dtype in required_cols.items():
+                    if col_name in db_columns:
+                        db_info = db_columns[col_name]
+                        
+                        # ตรวจสอบ Text (NVARCHAR(MAX)) vs NVARCHAR ธรรมดา
+                        if isinstance(expected_dtype, SA_Text):
+                            if db_info['data_type'] == 'nvarchar' and db_info['max_length'] != -1:
+                                # NVARCHAR(MAX) in SQL Server has max_length = -1
+                                issue = {
+                                    'validation_type': 'schema_mismatch',
+                                    'column': col_name,
+                                    'error_count': 0,  # ไม่ใช่ error แต่เป็น warning
+                                    'percentage': 0,
+                                    'message': f"คอลัมน์ตั้งค่าเป็น NVARCHAR(MAX) แต่ฐานข้อมูลเป็น NVARCHAR({db_info['max_length'] or 'Unknown'})",
+                                    'recommendation': "ข้อมูลจะถูกบันทึกได้ปกติ แต่อาจมีการตัดข้อมูลหากยาวเกินกำหนด",
+                                    'severity': 'info'
+                                }
+                                
+                                schema_issues.append(issue)
+                                
+                                if log_func:
+                                    log_func(f"   ⚠️  {col_name}: {issue['message']}")
+                                    log_func(f"      ℹ️  {issue['recommendation']}")
+        
+        except Exception as e:
+            if log_func:
+                log_func(f"⚠️ ไม่สามารถตรวจสอบ schema mismatch: {e}")
+        
+        return schema_issues

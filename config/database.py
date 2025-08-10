@@ -82,17 +82,19 @@ class DatabaseConfig:
             raise ValueError(f"การตั้งค่าฐานข้อมูลไม่ถูกต้อง: {error_msg}")
             
         if self.config["auth_type"] == DatabaseConstants.AUTH_WINDOWS:
-            # Windows Authentication
+            # Windows Authentication - เพิ่มการรองรับ Unicode
             connection_string = (
                 f'mssql+pyodbc://{self.config["server"]}/{self.config["database"]}'
-                f'?driver={DatabaseConstants.DEFAULT_DRIVER}&Trusted_Connection=yes'
+                f'?driver={DatabaseConstants.DEFAULT_DRIVER}&Trusted_Connection=yes&'
+                f'charset=utf8&autocommit=true'
             )
         else:
-            # SQL Server Authentication
+            # SQL Server Authentication - เพิ่มการรองรับ Unicode
             connection_string = (
                 f'mssql+pyodbc://{self.config["username"]}:{self.config["password"]}'
                 f'@{self.config["server"]}/{self.config["database"]}'
-                f'?driver={DatabaseConstants.DEFAULT_DRIVER}'
+                f'?driver={DatabaseConstants.DEFAULT_DRIVER}&'
+                f'charset=utf8&autocommit=true'
             )
         
         # เปิด fast_executemany เพื่อเร่งการอัปโหลด Unicode ผ่าน pyodbc
