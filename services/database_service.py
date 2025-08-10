@@ -7,7 +7,7 @@ Database Service สำหรับ PIPELINE_SQLSERVER
 import logging
 import os
 from tkinter import messagebox
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 import pandas as pd
 from sqlalchemy import create_engine, text

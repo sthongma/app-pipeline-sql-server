@@ -15,6 +15,7 @@ from .file_reader_service import FileReaderService
 from .data_processor_service import DataProcessorService
 from .file_management_service import FileManagementService
 from .permission_checker_service import PermissionCheckerService
+from .preload_service import PreloadService
 
 __all__ = [
     'DatabaseService', 
@@ -22,5 +23,6 @@ __all__ = [
     'FileReaderService',
     'DataProcessorService', 
     'FileManagementService',
-    'PermissionCheckerService'
+    'PermissionCheckerService',
+    'PreloadService'
 ]

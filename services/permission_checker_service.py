@@ -5,11 +5,8 @@ Permission Checker Service สำหรับ PIPELINE_SQLSERVER
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
-
-from constants import DatabaseConstants
+from typing import Dict, List
+from sqlalchemy import text
 
 
 class PermissionCheckerService:

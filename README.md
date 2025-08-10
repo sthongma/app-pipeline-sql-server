@@ -1,6 +1,6 @@
 # PIPELINE_SQLSERVER
 
-ระบบ ETL (Extract, Transform, Load) ที่ออกแบบเพื่อให้ AI ทำงานได้ง่าย สำหรับประมวลผลและอัปโหลดไฟล์ Excel/CSV ไปยัง SQL Server ด้วย GUI และ CLI
+ระบบ ETL (Extract, Transform, Load) ที่ออกแบบเพื่อให้ AI ทำงานได้ง่าย สำหรับประมวลผลและอัปโหลดไฟล์ Excel/CSV ไปยัง SQL Server ผ่าน GUI
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -24,7 +24,7 @@
 ✅ อัปโหลดข้อมูลไปยัง SQL Server พร้อม schema validation  
 ✅ ย้ายไฟล์ที่ประมวลผลแล้วไปยังโฟลเดอร์ที่จัดระเบียบ  
 ✅ GUI ที่ใช้งานง่ายด้วย CustomTkinter  
-✅ CLI สำหรับการประมวลผลแบบ batch  
+✅ เตรียมรองรับ CLI (จะเพิ่มภายหลัง)  
 ✅ การตรวจสอบสิทธิ์และความปลอดภัย  
 ✅ Error handling และ logging ที่ครบถ้วน  
 ✅ Performance optimization สำหรับไฟล์ขนาดใหญ่
@@ -33,43 +33,58 @@
 
 ```
 PIPELINE_SQLSERVER/
-├── __init__.py                    # Main package initialization
-├── constants.py                   # ค่าคงที่ทั้งหมดของระบบ
-├── requirements.txt               # Dependencies
-├── pyproject.toml                # Project configuration
-├── ARCHITECTURE.md               # เอกสารสถาปัตยกรรมโดยละเอียด
+├── __init__.py                      # Main package initialization
+├── constants.py                     # ค่าคงที่ทั้งหมดของระบบ
+├── requirements.txt                 # Dependencies
+├── pyproject.toml                   # Project configuration
+├── install_requirements.bat         # สคริปต์ติดตั้งสำหรับ Windows
+├── run_pipeline_gui.bat             # สคริปรัน GUI สำหรับ Windows
 │
-├── config/                       # การตั้งค่าและ configuration
+├── config/                          # การตั้งค่าและ configuration
 │   ├── __init__.py
-│   ├── database.py              # การจัดการการเชื่อมต่อฐานข้อมูล
-│   └── settings.py              # Settings manager แบบรวมศูนย์
+│   ├── database.py                  # การจัดการการเชื่อมต่อฐานข้อมูล
+│   └── settings.py                  # Settings manager แบบรวมศูนย์
 │
-├── services/                    # Business logic และ services
+├── services/                        # Business logic และ services
 │   ├── __init__.py
-│   ├── database_service.py      # บริการฐานข้อมูล
-│   ├── file_service.py          # บริการจัดการไฟล์หลัก
-│   ├── file_reader_service.py   # บริการอ่านและตรวจจับไฟล์
-│   ├── data_processor_service.py # บริการประมวลผลข้อมูล
-│   ├── file_management_service.py # บริการจัดการไฟล์
-│   └── README.md                # เอกสาร services โดยละเอียด
+│   ├── database_service.py          # บริการฐานข้อมูล
+│   ├── file_service.py              # Orchestrator หลัก (ยังรองรับโค้ดเดิม)
+│   ├── file_reader_service.py       # บริการอ่านและตรวจจับไฟล์
+│   ├── data_processor_service.py    # บริการประมวลผลข้อมูล
+│   ├── file_management_service.py   # บริการจัดการไฟล์
+│   ├── permission_checker_service.py# ตรวจสอบสิทธิ์ฐานข้อมูล
+│   └── preload_service.py           # โหลดการตั้งค่า/ประเภทไฟล์ล่วงหน้า
 │
-├── ui/                          # User interface
+│   └── README.md                    # เอกสาร services โดยละเอียด
+│
+├── ui/                              # User interface
 │   ├── __init__.py
-│   ├── main_window.py           # หน้าต่างหลัก GUI
-│   ├── login_window.py          # หน้าต่างการตั้งค่า
-│   └── components/              # UI components
+│   ├── login_window.py              # หน้าต่างล็อกอิน/ตั้งค่าฐานข้อมูล
+│   ├── main_window.py               # หน้าต่างหลัก GUI
+│   ├── loading_dialog.py            # หน้าต่างโหลด/แสดงความคืบหน้าเบื้องหลัง
+│   ├── components/                  # UI components
+│   │   ├── __init__.py
+│   │   ├── file_list.py
+│   │   ├── progress_bar.py
+│   │   └── status_bar.py
+│   ├── handlers/                    # จัดการ events/logic ของ UI
+│   │   ├── __init__.py
+│   │   ├── file_handler.py
+│   │   └── settings_handler.py
+│   └── tabs/                        # แท็บต่างๆ ของ UI
 │       ├── __init__.py
-│       ├── file_list.py
-│       ├── progress_bar.py
-│       └── status_bar.py
+│       ├── main_tab.py
+│       ├── log_tab.py
+│       └── settings_tab.py
 │
-├── utils/                       # Utility functions
+├── utils/                           # Utility functions
 │   ├── __init__.py
-│   ├── helpers.py              # Helper functions
-│   └── validators.py           # Validation functions
+│   ├── helpers.py                   # Helper functions
+│   ├── logger.py                    # Logging helpers/handlers
+│   └── validators.py                # Validation functions
 │
-├── pipeline_cli_app.py         # CLI application entry point
-└── pipeline_gui_app.py         # GUI application entry point
+├── test_column_mapping.py           # ตัวอย่างไฟล์ทดสอบ
+└── pipeline_gui_app.py              # GUI application entry point
 ```
 
 ## การติดตั้ง
@@ -77,7 +92,7 @@ PIPELINE_SQLSERVER/
 ### ความต้องการของระบบ
 - Python 3.8+ (แนะนำ 3.9+)
 - SQL Server หรือ SQL Server Express
-- ODBC Driver 17 for SQL Server
+- ODBC Driver 17 หรือ 18 for SQL Server
 - Windows OS (สำหรับ GUI)
 
 ### ขั้นตอนการติดตั้ง
@@ -88,16 +103,16 @@ git clone <repository-url>
 cd PIPELINE_SQLSERVER
 ```
 
-2. **ติดตั้ง dependencies**:
+2. **ติดตั้ง dependencies (Windows แนะนำใช้สคริปต์อัตโนมัติ)**:
 ```bash
-# แบบปกติ
+# วิธีแนะนำ (Windows)
+install_requirements.bat
+
+# หรือแบบปกติ
 pip install -r requirements.txt
 
-# หรือใช้ pip-tools สำหรับ production
+# ติดตั้งเป็น package (ถ้าต้องการ)
 pip install -e .
-
-# หรือใช้ batch file
-install_requirements.bat
 ```
 
 3. **ติดตั้ง development dependencies** (optional):
@@ -110,22 +125,14 @@ pip install -e ".[dev]"
 ### GUI Application
 
 ```bash
-# รันผ่าน Python
-python pipeline_gui_app.py
-
-# หรือใช้ batch file
+# วิธีแนะนำ (Windows)
 run_pipeline_gui.bat
+
+# หรือรันด้วย Python โดยตรง
+python pipeline_gui_app.py
 ```
 
-### CLI Application
-
-```bash
-# รันผ่าน Python
-python pipeline_cli_app.py
-
-# หรือใช้ batch file
-run_pipeline_cli.bat
-```
+หมายเหตุ: เวอร์ชันนี้รองรับเฉพาะ GUI. ส่วน CLI จะเพิ่มภายหลัง (ยังไม่มีไฟล์ `pipeline_cli_app.py`).
 
 ### การตั้งค่าการเชื่อมต่อฐานข้อมูล
 
@@ -151,9 +158,11 @@ run_pipeline_cli.bat
 }
 ```
 
-## การกำหนดค่าไฟล์ข้อมูล
+## การกำหนดค่าและไฟล์ข้อมูล
 
-### Column Settings (config/column_settings.json)
+หลังจากล็อกอิน ระบบจะบันทึกไฟล์ตั้งค่าที่โฟลเดอร์ `config/` อัตโนมัติ เช่น `sql_config.json`, `app_settings.json`, `column_settings.json`, `dtype_settings.json`.
+
+### Column Settings (`config/column_settings.json`)
 ```json
 {
     "sales_data": {
@@ -170,7 +179,7 @@ run_pipeline_cli.bat
 }
 ```
 
-### Data Type Settings (config/dtype_settings.json)
+### Data Type Settings (`config/dtype_settings.json`)
 ```json
 {
     "sales_data": {
@@ -234,13 +243,13 @@ class NewComponent(ctk.CTkFrame):
 ### Testing
 
 ```bash
-# รัน tests
-pytest tests/
+# รัน tests ทั้งโปรเจกต์
+pytest -q
 
-# รัน tests พร้อม coverage
-pytest --cov=. tests/
+# รันเฉพาะไฟล์ตัวอย่าง
+pytest -q test_column_mapping.py
 
-# ตรวจสอบ code style
+# ตัวตรวจสไตล์โค้ด (ถ้าติดตั้ง optional deps)
 black .
 flake8 .
 mypy .
@@ -282,12 +291,8 @@ mypy .
 
 ## License
 
-โครงการนี้ใช้ license MIT - ดูรายละเอียดใน [LICENSE](LICENSE) file
-
-## Architecture
-
-สำหรับข้อมูลโดยละเอียดเกี่ยวกับสถาปัตยกรรมของระบบ โปรดดู [ARCHITECTURE.md](ARCHITECTURE.md)
+โครงการนี้ใช้ MIT License (อ้างอิงที่ `https://opensource.org/licenses/MIT`).
 
 ---
 
-**หมายเหตุ**: โครงการนี้ออกแบบมาเพื่อให้ AI สามารถเข้าใจ ปรับปรุง และขยายได้ง่าย ด้วยโครงสร้างที่ชัดเจนและ documentation ที่ครบถ้วน
+**หมายเหตุ**: โครงการนี้ออกแบบมาเพื่อให้ AI สามารถเข้าใจ ปรับปรุง และขยายได้ง่าย ด้วยโครงสร้างที่ชัดเจนและเอกสารที่ครบถ้วน

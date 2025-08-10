@@ -7,10 +7,9 @@ Data Processor Service สำหรับ PIPELINE_SQLSERVER
 
 import json
 import os
-import re
 import threading
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import pandas as pd
 from dateutil import parser
@@ -483,11 +482,6 @@ class DataProcessorService:
                 if hasattr(self, attr):
                     delattr(self, attr)
 
-    # ฟังก์ชัน auto-fix ถูกยกเลิก
-
-    # ฟังก์ชัน auto-fix ถูกยกเลิก
-
-    # ฟังก์ชัน auto-fix ถูกยกเลิก
 
     def _extract_varchar_length(self, dtype_str):
         """ดึงความยาวจาก NVARCHAR(n)"""
@@ -499,11 +493,6 @@ class DataProcessorService:
         except:
             return 255
 
-    # ฟังก์ชัน auto-fix ถูกยกเลิก
-
-    # ฟังก์ชัน auto-fix ถูกยกเลิก
-
-    # ฟังก์ชัน auto-fix ถูกยกเลิก
 
     # ฟังก์ชัน auto-fix ถูกยกเลิก
 

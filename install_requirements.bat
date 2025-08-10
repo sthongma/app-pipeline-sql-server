@@ -77,6 +77,5 @@ if %ERRORLEVEL% NEQ 0 (
 echo.
 echo Installation completed successfully!
 echo You can now run the application using:
-echo - run_pipeline_gui.bat (for GUI version)
-echo - run_pipeline_cli.bat (for CLI version)
+echo - run_pipeline_gui.bat (GUI)
 echo.

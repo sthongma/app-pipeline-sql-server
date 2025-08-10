@@ -51,7 +51,6 @@ Repository = "https://github.com/your-org/pipeline-sqlserver.git"
 "Bug Tracker" = "https://github.com/your-org/pipeline-sqlserver/issues"
 
 [project.scripts]
-pipeline-cli = "pipeline_cli_app:main_cli"
 pipeline-gui = "pipeline_gui_app:main"
 
 [tool.setuptools.packages.find]

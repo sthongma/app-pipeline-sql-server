@@ -21,9 +21,8 @@ File Service สำหรับ PIPELINE_SQLSERVER (รุ่นใหม่ท�
     validation = file_service.validate_file_before_processing("data.xlsx", "sales_data")
 """
 
-from typing import Optional, Tuple, Any, Dict
+from typing import Optional, Tuple
 import logging
-import pandas as pd
 
 from .file_reader_service import FileReaderService
 from .data_processor_service import DataProcessorService  
@@ -117,7 +116,7 @@ class FileService:
             # ทำความสะอาด memory
             self.performance_optimizer.cleanup_memory()
             
-            self.log_callback(f"\n🎉 ประมวลผลไฟล์เสร็จสิ้น")
+            self.log_callback(f"🎉 ประมวลผลไฟล์เสร็จสิ้น")
             return True, df
             
         except Exception as e:
@@ -223,7 +222,6 @@ class FileService:
         """ตัดข้อมูล string ที่ยาวเกินกำหนด"""
         return self.data_processor.truncate_long_strings(df, logic_type)
 
-    # ลบฟังก์ชันที่เกี่ยวข้องกับ auto-fix ออก (decommissioned)
 
     def upload_data_with_auto_schema_update(self, df, logic_type, processing_report=None, schema_name='bronze'):
         """
@@ -274,7 +272,6 @@ class FileService:
             self.log_callback(error_msg)
             return False, error_msg
 
-    # ลบเมธอด read_and_upload_with_auto_fix (decommissioned)
 
     def print_detailed_validation_report(self, df, logic_type):
         """แสดงรายงานการตรวจสอบข้อมูลแบบละเอียด (legacy method)"""

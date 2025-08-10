@@ -5,7 +5,6 @@ File Reader Service สำหรับ PIPELINE_SQLSERVER
 แยกออกมาจาก FileService เพื่อให้แต่ละ service มีหน้าที่ชัดเจน
 """
 
-import glob
 import json
 import os
 import re
@@ -14,7 +13,7 @@ from typing import Optional, Dict, Any
 
 import pandas as pd
 
-from constants import FileConstants, PathConstants, RegexPatterns
+from constants import PathConstants
 
 
 class FileReaderService:
@@ -106,11 +105,7 @@ class FileReaderService:
             
             return xlsx_files + xls_files + csv_files
         except Exception:
-            # Fallback ใช้ glob แบบเดิม
-            xlsx_files = glob.glob(os.path.join(self.search_path, '*.xlsx'))
-            xls_files = glob.glob(os.path.join(self.search_path, '*.xls'))
-            csv_files = glob.glob(os.path.join(self.search_path, '*.csv'))
-            return xlsx_files + xls_files + csv_files
+            return []
 
     def standardize_column_name(self, col_name):
         """แปลงชื่อคอลัมน์ให้เป็นรูปแบบมาตรฐาน"""
