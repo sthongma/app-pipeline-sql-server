@@ -1,9 +1,8 @@
 import customtkinter as ctk
-from ui import theme
 
 class StatusBar(ctk.CTkLabel):
     def __init__(self, master, **kwargs):
-        super().__init__(master, text="Status: Not checked", text_color="#7a7a7a", font=theme.FONT_SMALL, **kwargs)
+        super().__init__(master, text="Status: Not checked", text_color="#7a7a7a", **kwargs)
 
     def update_status(self, message, is_error=False):
         """อัปเดตสถานะ"""

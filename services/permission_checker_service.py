@@ -39,49 +39,49 @@ class PermissionCheckerService:
         self.required_permissions = [
             {
                 'name': 'CREATE SCHEMA',
-                'description': 'สิทธิ์ในการสร้าง schema ใหม่',
+                'description': 'Permission to create new schema',
                 'test_query': self._test_create_schema_permission,
                 'critical': True
             },
             {
                 'name': 'CREATE TABLE',
-                'description': 'สิทธิ์ในการสร้างตาราง',
+                'description': 'Permission to create tables',
                 'test_query': self._test_create_table_permission,
                 'critical': True
             },
             {
                 'name': 'DROP TABLE',
-                'description': 'สิทธิ์ในการลบตาราง',
+                'description': 'Permission to drop tables',
                 'test_query': self._test_drop_table_permission,
                 'critical': True
             },
             {
                 'name': 'INSERT',
-                'description': 'สิทธิ์ในการเพิ่มข้อมูล',
+                'description': 'Permission to insert data',
                 'test_query': self._test_insert_permission,
                 'critical': True
             },
             {
                 'name': 'UPDATE',
-                'description': 'สิทธิ์ในการแก้ไขข้อมูล',
+                'description': 'Permission to update data',
                 'test_query': self._test_update_permission,
                 'critical': False
             },
             {
                 'name': 'DELETE',
-                'description': 'สิทธิ์ในการลบข้อมูล',
+                'description': 'Permission to delete data',
                 'test_query': self._test_delete_permission,
                 'critical': False
             },
             {
                 'name': 'ALTER TABLE',
-                'description': 'สิทธิ์ในการแก้ไขโครงสร้างตาราง',
+                'description': 'Permission to alter table structure',
                 'test_query': self._test_alter_table_permission,
                 'critical': True
             },
             {
                 'name': 'TRUNCATE TABLE',
-                'description': 'สิทธิ์ในการล้างข้อมูลตาราง',
+                'description': 'Permission to truncate tables',
                 'test_query': self._test_truncate_permission,
                 'critical': True
             }
@@ -100,13 +100,13 @@ class PermissionCheckerService:
         if not self.engine:
             return {
                 'success': False,
-                'error': 'ไม่พบการเชื่อมต่อฐานข้อมูล',
+                'error': 'Database connection not found',
                 'permissions': [],
                 'missing_critical': [],
                 'missing_optional': []
             }
         
-        self.log_callback("🔐 เริ่มตรวจสอบสิทธิ์ SQL Server...")
+        self.log_callback("🔐 Starting SQL Server permission check...")
         
         results = {
             'success': True,
@@ -147,22 +147,22 @@ class PermissionCheckerService:
                 except Exception as e:
                     self.logger.error(f"Error testing {permission['name']}: {e}")
                     results['missing_critical'].append(permission['name'])
-                    self.log_callback(f"  ❌ {permission['name']}: ไม่สามารถทดสอบได้ - {e}")
+                    self.log_callback(f"  ❌ {permission['name']}: Cannot test - {e}")
             
             # สรุปผล
             if results['missing_critical']:
                 results['success'] = False
                 results['recommendations'] = self._generate_recommendations(results)
-                self.log_callback(f"\n❌ พบสิทธิ์ที่จำเป็นขาดหายไป: {', '.join(results['missing_critical'])}")
+                self.log_callback(f"\n❌ Missing critical permissions: {', '.join(results['missing_critical'])}")
             else:
-                self.log_callback("\n✅ ผู้ใช้มีสิทธิ์ครบถ้วนสำหรับการใช้งานแอปพลิเคชัน")
+                self.log_callback("\n✅ User has sufficient permissions for application use")
                 
                 if results['missing_optional']:
-                    self.log_callback(f"⚠️ สิทธิ์เสริม (ไม่บังคับ) ที่ขาดหายไป: {', '.join(results['missing_optional'])}")
+                    self.log_callback(f"⚠️ Missing optional (non-critical) permissions: {', '.join(results['missing_optional'])}")
             
         except Exception as e:
             results['success'] = False
-            results['error'] = f"เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์: {e}"
+            results['error'] = f"An error occurred while checking permissions: {e}"
             self.logger.error(f"Permission check failed: {e}")
         
         return results

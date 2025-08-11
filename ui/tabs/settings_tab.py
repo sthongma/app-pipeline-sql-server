@@ -2,7 +2,6 @@
 import os
 import json
 import customtkinter as ctk
-from ui import theme
 from tkinter import messagebox, filedialog
 import pandas as pd
 from constants import DatabaseConstants, FileConstants
@@ -73,13 +72,13 @@ class SettingsTab:
     def _create_buttons(self, button_row):
         """สร้างปุ่มควบคุม"""
         # ปุ่มควบคุมด้านซ้าย
-        add_type_btn = ctk.CTkButton(button_row, text="➕ Add file type", command=self._add_file_type, font=theme.FONT_BUTTON)
+        add_type_btn = ctk.CTkButton(button_row, text="➕ Add file type", command=self._add_file_type)
         add_type_btn.pack(side="left", padx=5)
-        del_type_btn = ctk.CTkButton(button_row, text="➖ Remove file type", command=self._delete_file_type, font=theme.FONT_BUTTON)
+        del_type_btn = ctk.CTkButton(button_row, text="➖ Remove file type", command=self._delete_file_type)
         del_type_btn.pack(side="left", padx=5)
-        save_dtype_btn = ctk.CTkButton(button_row, text="✅ Save data types", command=self._save_all_dtype_settings, font=theme.FONT_BUTTON)
+        save_dtype_btn = ctk.CTkButton(button_row, text="✅ Save data types", command=self._save_all_dtype_settings)
         save_dtype_btn.pack(side="left", padx=5)
-        edit_type_btn = ctk.CTkButton(button_row, text="✏️ Rename file type", command=self._edit_file_type, font=theme.FONT_BUTTON)
+        edit_type_btn = ctk.CTkButton(button_row, text="✏️ Rename file type", command=self._edit_file_type)
         edit_type_btn.pack(side="left", padx=5)
         
         if self.ui_progress_callback:
@@ -97,7 +96,6 @@ class SettingsTab:
             values=["Select a file type..."],
             command=self._on_file_type_selected,
             width=300,
-            font=theme.FONT_BODY
         )
         self.file_type_selector.pack(side="right", padx=5)
         
@@ -136,13 +134,13 @@ class SettingsTab:
         button_row.pack(fill="x", pady=5)
         
         # ปุ่มควบคุมด้านซ้าย
-        add_type_btn = ctk.CTkButton(button_row, text="➕ เพิ่มประเภทไฟล์", command=self._add_file_type, font=theme.FONT_BUTTON)
+        add_type_btn = ctk.CTkButton(button_row, text="➕ เพิ่มประเภทไฟล์", command=self._add_file_type)
         add_type_btn.pack(side="left", padx=5)
-        del_type_btn = ctk.CTkButton(button_row, text="🗑️ ลบประเภทไฟล์", command=self._delete_file_type, font=theme.FONT_BUTTON)
+        del_type_btn = ctk.CTkButton(button_row, text="🗑️ ลบประเภทไฟล์", command=self._delete_file_type)
         del_type_btn.pack(side="left", padx=5)
-        save_dtype_btn = ctk.CTkButton(button_row, text="✅ บันทึกชนิดข้อมูล", command=self._save_all_dtype_settings, font=theme.FONT_BUTTON)
+        save_dtype_btn = ctk.CTkButton(button_row, text="✅ บันทึกชนิดข้อมูล", command=self._save_all_dtype_settings)
         save_dtype_btn.pack(side="left", padx=5)
-        edit_type_btn = ctk.CTkButton(button_row, text="แก้ไขชื่อประเภทไฟล์", command=self._edit_file_type, font=theme.FONT_BUTTON)
+        edit_type_btn = ctk.CTkButton(button_row, text="แก้ไขชื่อประเภทไฟล์", command=self._edit_file_type)
         edit_type_btn.pack(side="left", padx=5)
         
         # Dropdown สำหรับเลือกประเภทไฟล์
@@ -153,7 +151,6 @@ class SettingsTab:
             values=["เลือกประเภทไฟล์..."],
             command=self._on_file_type_selected,
             width=300,
-            font=theme.FONT_BODY
         )
         self.file_type_selector.pack(side="right", padx=5)
         
@@ -465,7 +462,7 @@ class SettingsTab:
         loading_frame = ctk.CTkFrame(self.content_frame)
         loading_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
-        loading_label = ctk.CTkLabel(loading_frame, text=f"Building UI for {file_type}...", font=theme.FONT_BODY)
+        loading_label = ctk.CTkLabel(loading_frame, text=f"Building UI for {file_type}...")
         loading_label.pack(expand=True)
         
         # ใช้ after เพื่อสร้าง UI จริงโดยไม่บล็อค
@@ -487,7 +484,7 @@ class SettingsTab:
             loading_frame.destroy()
             error_frame = ctk.CTkFrame(self.content_frame)
             error_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-            ctk.CTkLabel(error_frame, text=f"Error: {e}", font=theme.FONT_BODY).pack(expand=True)
+            ctk.CTkLabel(error_frame, text=f"Error: {e}").pack(expand=True)
 
     def _create_and_cache_ui(self, file_type):
         """สร้างและแคช UI สำหรับประเภทไฟล์"""
@@ -522,7 +519,6 @@ class SettingsTab:
             text="⏰ Date Format (US / MM-DD or UK / DD-MM)", 
             width=400, 
             anchor="w",
-            font=theme.FONT_BODY
         )
         date_format_label.pack(side="left", padx=(15, 10), pady=12, expand=True, fill="x")
         
@@ -530,7 +526,6 @@ class SettingsTab:
             date_format_frame,
             values=[FileConstants.DATE_FORMAT_UK, FileConstants.DATE_FORMAT_US],
             width=220,
-            font=theme.FONT_BODY
         )
         date_format_menu.set(
             self.dtype_settings.get(file_type, {}).get("_date_format", FileConstants.DATE_FORMAT_UK)
@@ -560,10 +555,10 @@ class SettingsTab:
             row_frame = ctk.CTkFrame(outer_frame, corner_radius=8)
             row_frame.pack(fill="x", pady=3, padx=3)
             
-            col_label = ctk.CTkLabel(row_frame, text=col, width=400, anchor="w", font=theme.FONT_BODY)
+            col_label = ctk.CTkLabel(row_frame, text=col, width=400, anchor="w")
             col_label.pack(side="left", padx=(15, 10), pady=12, expand=True, fill="x")
             
-            dtype_menu = ctk.CTkOptionMenu(row_frame, values=supported_dtypes, width=220, font=theme.FONT_BODY)
+            dtype_menu = ctk.CTkOptionMenu(row_frame, values=supported_dtypes, width=220)
             dtype_menu.set(self.dtype_settings.get(file_type, {}).get(col, "NVARCHAR(255)"))
             dtype_menu.pack(side="right", padx=(0, 15), pady=12)
             

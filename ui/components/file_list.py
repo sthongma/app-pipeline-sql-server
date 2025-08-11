@@ -1,6 +1,5 @@
 import os
 import customtkinter as ctk
-from ui import theme
 from tkinter import ttk
 from datetime import datetime
 import logging
@@ -43,7 +42,6 @@ class FileList(ctk.CTkScrollableFrame):
             frame,
             text=logic_type.upper(),
             text_color="#2B86F5",
-            font=theme.FONT_BODY
         )
         type_label.grid(row=0, column=1, padx=(0, 20), sticky="w")
         
@@ -51,7 +49,6 @@ class FileList(ctk.CTkScrollableFrame):
         filename_label = ctk.CTkLabel(
             frame,
             text=os.path.basename(file_path),
-            font=theme.FONT_BODY
         )
         filename_label.grid(row=0, column=2, sticky="w")
         
@@ -60,7 +57,6 @@ class FileList(ctk.CTkScrollableFrame):
             frame,
             text=f"Created at: {created_time_str}",
             text_color="#7a7a7a",
-            font=theme.FONT_SMALL
         )
         time_label.grid(row=0, column=3, padx=(10, 5), sticky="e")
         

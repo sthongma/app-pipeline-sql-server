@@ -1,5 +1,4 @@
 import customtkinter as ctk
-from ui import theme
 import threading
 import time
 from typing import Callable, Any
@@ -63,12 +62,6 @@ class LoadingDialog(ctk.CTkToplevel):
         self._create_ui(message)
         self._start_ts = time.perf_counter()
 
-        # บังคับใช้ฟอนต์กับทุกวิดเจ็ตใน dialog
-        try:
-            from ui import theme
-            theme.apply_fonts(self)
-        except Exception:
-            pass
         
     def _center_window(self):
         """จัดหน้าต่างให้อยู่กึ่งกลางของ parent window"""
@@ -93,7 +86,7 @@ class LoadingDialog(ctk.CTkToplevel):
         main_frame.pack(expand=True, fill="both", padx=20, pady=16)
         
         # หัวเรื่อง
-        self.title_label = ctk.CTkLabel(main_frame, text=self.title(), font=theme.FONT_SUBTITLE)
+        self.title_label = ctk.CTkLabel(main_frame, text=self.title())
         self.title_label.pack(pady=(0, 6))
         
         # Progress bar
@@ -108,7 +101,6 @@ class LoadingDialog(ctk.CTkToplevel):
         self.message_label = ctk.CTkLabel(
             main_frame, 
             text=message, 
-            font=theme.FONT_BODY,
             wraplength=300
         )
         self.message_label.pack(pady=(2, 8))

@@ -1,7 +1,6 @@
 """Log Tab UI Component"""
 import customtkinter as ctk
 from tkinter import messagebox
-from ui import theme
 
 
 class LogTab:
@@ -23,14 +22,14 @@ class LogTab:
         toolbar = ctk.CTkFrame(self.parent)
         toolbar.pack(fill="x", padx=10, pady=(8, 0))
 
-        copy_btn = ctk.CTkButton(toolbar, text="Copy log", command=self._copy_log_to_clipboard, width=120, font=theme.FONT_BUTTON)
+        copy_btn = ctk.CTkButton(toolbar, text="Copy log", command=self._copy_log_to_clipboard, width=120)
         copy_btn.pack(side="left")
 
-        clear_btn = ctk.CTkButton(toolbar, text="Clear log", command=self._clear_log, width=120, font=theme.FONT_BUTTON)
+        clear_btn = ctk.CTkButton(toolbar, text="Clear log", command=self._clear_log, width=120)
         clear_btn.pack(side="left", padx=5)
 
         # กล่องข้อความสำหรับแสดง Log
-        self.log_textbox = ctk.CTkTextbox(self.parent, font=theme.FONT_BODY)
+        self.log_textbox = ctk.CTkTextbox(self.parent)
         self.log_textbox.pack(pady=8, padx=10, fill="both", expand=True)
     
     def _copy_log_to_clipboard(self):

@@ -7,7 +7,6 @@ except ImportError as e:
     ) from e
 
 from ui.login_window import LoginWindow
-from ui import theme
 import logging
 from utils.logger import setup_logging
 import os
@@ -32,13 +31,6 @@ def main():
     # สร้างหน้าต่างล็อกอิน
     login_window = LoginWindow()
     
-    # ตั้งค่า font ส่วนกลาง (Kanit > Segoe UI > Arial) หลังสร้าง window แล้ว
-    try:
-        theme.init_fonts()
-        # บังคับใช้ฟอนต์กับ login window
-        theme.apply_fonts(login_window)
-    except Exception:
-        pass
     login_window.mainloop()
 
 if __name__ == '__main__':

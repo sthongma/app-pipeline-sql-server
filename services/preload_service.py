@@ -22,25 +22,25 @@ class PreloadService:
         """
         try:
             if progress_callback:
-                progress_callback("กำลังโหลดการตั้งค่าคอลัมน์...")
+                progress_callback("Loading column settings...")
             
             # โหลดการตั้งค่าคอลัมน์
             column_settings = self._load_column_settings()
             
             if progress_callback:
-                progress_callback("กำลังโหลดการตั้งค่าประเภทข้อมูล...")
+                progress_callback("Loading data type settings...")
             
             # โหลดการตั้งค่าประเภทข้อมูล
             dtype_settings = self._load_dtype_settings()
             
             if progress_callback:
-                progress_callback("กำลังโหลด path ล่าสุด...")
+                progress_callback("Loading latest path...")
             
             # โหลด path ล่าสุด
             last_path = self._load_last_path()
             
             if progress_callback:
-                progress_callback("กำลังเตรียมข้อมูลสำหรับสร้าง UI...")
+                progress_callback("Preparing data for UI creation...")
             
             # รวมข้อมูลทั้งหมด
             data = {
@@ -53,12 +53,12 @@ class PreloadService:
             self._cached_data = data
             
             if progress_callback:
-                progress_callback("โหลดข้อมูลเสร็จสิ้น กำลังเตรียมสร้าง UI...")
+                progress_callback("Data loading completed, preparing UI...")
             
-            return True, "โหลดข้อมูลสำเร็จ", data
+            return True, "Data loaded successfully", data
             
         except Exception as e:
-            return False, f"เกิดข้อผิดพลาดในการโหลดข้อมูล: {str(e)}", {}
+            return False, f"An error occurred while loading data: {str(e)}", {}
     
     def _load_column_settings(self) -> Dict[str, Any]:
         """โหลดการตั้งค่าคอลัมน์"""

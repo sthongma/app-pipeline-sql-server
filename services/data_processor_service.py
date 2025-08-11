@@ -232,12 +232,12 @@ class DataProcessorService:
                 if validation_report['missing_columns']:
                     validation_report['status'] = False
                     validation_report['summary'].append(
-                        f"❌ คอลัมน์ที่ขาดหายไป: {', '.join(validation_report['missing_columns'])}"
+                        f"❌ Missing columns: {', '.join(validation_report['missing_columns'])}"
                     )
                 
                 if validation_report['extra_columns']:
                     validation_report['summary'].append(
-                        f"⚠️  คอลัมน์เพิ่มเติมที่ไม่ได้กำหนดไว้: {', '.join(validation_report['extra_columns'])}"
+                        f"⚠️  Extra columns not defined: {', '.join(validation_report['extra_columns'])}"
                     )
             
             # ตรวจสอบชนิดข้อมูลแต่ละคอลัมน์
@@ -251,7 +251,7 @@ class DataProcessorService:
                         validation_report['status'] = False
                         
                         # เพิ่มข้อความสรุป
-                        issue_summary = f"❌ คอลัมน์ '{col}': {issues['summary']}"
+                        issue_summary = f"❌ Column '{col}': {issues['summary']}"
                         validation_report['summary'].append(issue_summary)
             
             # สรุปภาพรวม
@@ -264,7 +264,7 @@ class DataProcessorService:
             
         except Exception as e:
             validation_report['status'] = False
-            validation_report['summary'].append(f"❌ เกิดข้อผิดพลาดในการตรวจสอบ: {str(e)}")
+            validation_report['summary'].append(f"❌ An error occurred during validation: {str(e)}")
         
         return validation_report
 
@@ -352,7 +352,7 @@ class DataProcessorService:
                         'too_long_count': too_long_count,
                         'total_rows': total_rows,
                         'percentage': round((too_long_count / total_rows) * 100, 2),
-                        'examples': [f"{ex}... (ความยาว: {len(string_series.loc[string_series.str.startswith(ex[:10])].iloc[0])})" for ex in too_long_examples],
+                        'examples': [f"{ex}... (length: {len(string_series.loc[string_series.str.startswith(ex[:10])].iloc[0])})" for ex in too_long_examples],
                         'actual_lengths': sorted(actual_lengths, reverse=True),
                         'problem_rows': [r + 2 for r in problem_rows],
                         'summary': f"Found strings exceeding {max_length} chars: {too_long_count:,} rows ({round((too_long_count / total_rows) * 100, 2)}%) Max length: {max_actual_length}"
@@ -377,7 +377,7 @@ class DataProcessorService:
             issues = {
                 'type': 'validation_error',
                 'error': str(e),
-                'summary': f"เกิดข้อผิดพลาดในการตรวจสอบ: {str(e)}"
+                'summary': f"An error occurred during validation: {str(e)}"
             }
         
         return issues

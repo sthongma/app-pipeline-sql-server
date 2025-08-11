@@ -1,6 +1,5 @@
 """Main Tab UI Component"""
 import customtkinter as ctk
-from ui import theme
 from ui.components.file_list import FileList
 from ui.components.progress_bar import ProgressBar
 from ui.components.status_bar import StatusBar
@@ -42,7 +41,7 @@ class MainTab:
         self.progress_bar.pack(pady=5, fill="x", padx=10)
         
         # --- Log Textbox ---
-        self.textbox = ctk.CTkTextbox(self.parent, height=200, font=theme.FONT_BODY)
+        self.textbox = ctk.CTkTextbox(self.parent, height=200)
         self.textbox.pack(pady=10, padx=10, fill="x")
     
     def _create_control_buttons(self):
@@ -56,7 +55,6 @@ class MainTab:
             text="Select all",
             command=self.callbacks.get('toggle_select_all'),
             state="disabled",
-            font=theme.FONT_BUTTON
         )
         self.select_all_button.pack(side="left", padx=4)
 
@@ -65,7 +63,6 @@ class MainTab:
             button_frame,
             text="📁 Choose folder",
             command=self.callbacks.get('browse_excel_path'),
-            font=theme.FONT_BUTTON
         )
         self.folder_btn.pack(side="left", padx=4)
 
@@ -75,7 +72,6 @@ class MainTab:
             text="🔍 Check files in folder",
             command=self.callbacks.get('run_check_thread'),
             width=160,
-            font=theme.FONT_BUTTON
         )
         self.check_btn.pack(side="left", padx=4)
 
@@ -84,7 +80,6 @@ class MainTab:
             button_frame,
             text="📤 Upload selected files",
             command=self.callbacks.get('confirm_upload'),
-            font=theme.FONT_BUTTON
         )
         self.upload_button.pack(side="left", padx=4)
 
@@ -94,7 +89,6 @@ class MainTab:
             text="🤖 Auto process",
             command=self.callbacks.get('start_auto_process'),
             width=160,
-            font=theme.FONT_BUTTON
         )
         self.auto_process_button.pack(side="left", padx=4)
     
