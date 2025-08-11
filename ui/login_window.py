@@ -45,7 +45,7 @@ class LoginWindow(ctk.CTk):
         label_width = 140
 
         # หัวข้อ
-        title_label = ctk.CTkLabel(main_frame, text="Sign in to SQL Server")
+        title_label = ctk.CTkLabel(main_frame, text="Sign in to SQL Server", font=ctk.CTkFont(size=20))
         title_label.grid(row=1, column=0, columnspan=2, pady=(0, 6), sticky="n")
 
         # Server
