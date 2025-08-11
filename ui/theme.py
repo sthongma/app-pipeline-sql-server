@@ -135,11 +135,11 @@ def init_fonts() -> None:
     
     # สร้าง CTkFont objects (จะทำงานได้เฉพาะเมื่อมี root window แล้ว)
     try:
-        FONT_TITLE = ctk.CTkFont(family=FONT_FAMILY, size=20, weight="bold")
-        FONT_SUBTITLE = ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold")
+        FONT_TITLE = ctk.CTkFont(family=FONT_FAMILY, size=20)
+        FONT_SUBTITLE = ctk.CTkFont(family=FONT_FAMILY, size=14)
         FONT_BODY = ctk.CTkFont(family=FONT_FAMILY, size=12)
         FONT_SMALL = ctk.CTkFont(family=FONT_FAMILY, size=10)
-        FONT_BUTTON = ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold")
+        FONT_BUTTON = ctk.CTkFont(family=FONT_FAMILY, size=12)
         FONT_UNIFORM = ctk.CTkFont(family=FONT_FAMILY, size=12)
     except Exception:
         # สร้าง placeholder objects ที่จะถูกสร้างใหม่ภายหลัง
@@ -218,11 +218,11 @@ def ensure_font_objects():
     
     if FONT_BODY is None and FONT_FAMILY is not None:
         try:
-            FONT_TITLE = ctk.CTkFont(family=FONT_FAMILY, size=20, weight="bold")
-            FONT_SUBTITLE = ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold")
+            FONT_TITLE = ctk.CTkFont(family=FONT_FAMILY, size=20)
+            FONT_SUBTITLE = ctk.CTkFont(family=FONT_FAMILY, size=14)
             FONT_BODY = ctk.CTkFont(family=FONT_FAMILY, size=12)
             FONT_SMALL = ctk.CTkFont(family=FONT_FAMILY, size=10)
-            FONT_BUTTON = ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold")
+            FONT_BUTTON = ctk.CTkFont(family=FONT_FAMILY, size=12)
             FONT_UNIFORM = ctk.CTkFont(family=FONT_FAMILY, size=12)
             
             # Patch CustomTkinter defaults ตอนนี้
