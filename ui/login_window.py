@@ -8,6 +8,7 @@ from ui.loading_dialog import LoadingDialog
 from services.preload_service import PreloadService
 from constants import PathConstants, AppConstants
 import logging
+from ui import theme
 
 class LoginWindow(ctk.CTk):
     def __init__(self):
@@ -17,6 +18,9 @@ class LoginWindow(ctk.CTk):
         self.title("เข้าสู่ระบบ SQL Server")
         self.geometry(f"{AppConstants.LOGIN_WINDOW_SIZE[0]}x{AppConstants.LOGIN_WINDOW_SIZE[1]}")
         self.resizable(False, False)
+        # มินิมอลโทน: เพิ่มระยะห่างทั่วๆ ไป
+        self._base_padx = 12
+        self._base_pady = 10
         
         # สร้างบริการ
         self.db_service = DatabaseService()
@@ -27,10 +31,16 @@ class LoginWindow(ctk.CTk):
         
         # โหลดการตั้งค่าที่บันทึกไว้
         self._load_saved_settings()
+
+        # บังคับใช้ฟอนต์กับทุกวิดเจ็ตภายในหน้าต่างนี้
+        try:
+            theme.apply_fonts(self)
+        except Exception:
+            pass
         
     def _create_ui(self):
         main_frame = ctk.CTkFrame(self)
-        main_frame.pack(expand=True, fill="both")
+        main_frame.pack(expand=True, fill="both", padx=self._base_padx, pady=self._base_pady)
 
         # กำหนด column/row ให้ขยายได้ เพื่อจัดกึ่งกลาง
         main_frame.grid_columnconfigure(0, weight=1)
@@ -41,42 +51,42 @@ class LoginWindow(ctk.CTk):
         label_width = 140
 
         # หัวข้อ
-        title_label = ctk.CTkLabel(main_frame, text="เข้าสู่ระบบ SQL Server", font=("Arial", 22, "bold"))
-        title_label.grid(row=1, column=0, columnspan=2, pady=(0, 10), sticky="n")
+        title_label = ctk.CTkLabel(main_frame, text="เข้าสู่ระบบ SQL Server", font=theme.FONT_TITLE)
+        title_label.grid(row=1, column=0, columnspan=2, pady=(0, 6), sticky="n")
 
         # Server
-        server_label = ctk.CTkLabel(main_frame, text="เซิร์ฟเวอร์:", width=label_width, anchor="w")
-        server_label.grid(row=2, column=0, sticky="e", padx=5, pady=5)
-        self.server_entry = ctk.CTkEntry(main_frame, width=220, placeholder_text="ชื่อเซิร์ฟเวอร์")
-        self.server_entry.grid(row=2, column=1, sticky="w", padx=5, pady=5)
+        server_label = ctk.CTkLabel(main_frame, text="เซิร์ฟเวอร์", width=label_width, anchor="w", font=theme.FONT_BODY)
+        server_label.grid(row=2, column=0, sticky="e", padx=6, pady=4)
+        self.server_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="ชื่อเซิร์ฟเวอร์")
+        self.server_entry.grid(row=2, column=1, sticky="w", padx=6, pady=4)
 
         # Database
-        db_label = ctk.CTkLabel(main_frame, text="ฐานข้อมูล:", width=label_width, anchor="w")
-        db_label.grid(row=3, column=0, sticky="e", padx=5, pady=5)
-        self.db_entry = ctk.CTkEntry(main_frame, width=220, placeholder_text="ชื่อฐานข้อมูล")
-        self.db_entry.grid(row=3, column=1, sticky="w", padx=5, pady=5)
+        db_label = ctk.CTkLabel(main_frame, text="ฐานข้อมูล", width=label_width, anchor="w", font=theme.FONT_BODY)
+        db_label.grid(row=3, column=0, sticky="e", padx=6, pady=4)
+        self.db_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="ชื่อฐานข้อมูล")
+        self.db_entry.grid(row=3, column=1, sticky="w", padx=6, pady=4)
 
         # Authentication
-        auth_label = ctk.CTkLabel(main_frame, text="วิธีการยืนยันตัวตน:", width=label_width, anchor="w")
-        auth_label.grid(row=4, column=0, sticky="e", padx=5, pady=5)
-        self.auth_menu = ctk.CTkOptionMenu(main_frame, values=["Windows", "SQL Server"], command=self._on_auth_change, width=220)
-        self.auth_menu.grid(row=4, column=1, sticky="w", padx=5, pady=5)
+        auth_label = ctk.CTkLabel(main_frame, text="ยืนยันตัวตน", width=label_width, anchor="w", font=theme.FONT_BODY)
+        auth_label.grid(row=4, column=0, sticky="e", padx=6, pady=4)
+        self.auth_menu = ctk.CTkOptionMenu(main_frame, values=["Windows", "SQL Server"], command=self._on_auth_change, width=240)
+        self.auth_menu.grid(row=4, column=1, sticky="w", padx=6, pady=4)
 
         # Username (row 5)
-        self.username_label = ctk.CTkLabel(main_frame, text="ชื่อผู้ใช้:", width=label_width, anchor="w")
-        self.username_entry = ctk.CTkEntry(main_frame, width=220, placeholder_text="ชื่อผู้ใช้")
+        self.username_label = ctk.CTkLabel(main_frame, text="ชื่อผู้ใช้", width=label_width, anchor="w", font=theme.FONT_BODY)
+        self.username_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="ชื่อผู้ใช้")
         # Password (row 6)
-        self.password_label = ctk.CTkLabel(main_frame, text="รหัสผ่าน:", width=label_width, anchor="w")
-        self.password_entry = ctk.CTkEntry(main_frame, width=220, show="*", placeholder_text="รหัสผ่าน")
+        self.password_label = ctk.CTkLabel(main_frame, text="รหัสผ่าน", width=label_width, anchor="w", font=theme.FONT_BODY)
+        self.password_entry = ctk.CTkEntry(main_frame, width=240, show="*", placeholder_text="รหัสผ่าน")
 
         # Remember me
         self.remember_var = ctk.BooleanVar(value=True)
-        remember_check = ctk.CTkCheckBox(main_frame, text="จดจำการตั้งค่า", variable=self.remember_var)
-        remember_check.grid(row=7, column=0, columnspan=2, pady=5, sticky="")
+        remember_check = ctk.CTkCheckBox(main_frame, text="จดจำการตั้งค่า", variable=self.remember_var, font=theme.FONT_BODY)
+        remember_check.grid(row=7, column=0, columnspan=2, pady=6, sticky="")
 
         # Connect button
-        connect_button = ctk.CTkButton(main_frame, text="เชื่อมต่อ", command=self._connect, width=220)
-        connect_button.grid(row=8, column=0, columnspan=2, pady=10, sticky="", ipadx=30)
+        connect_button = ctk.CTkButton(main_frame, text="เชื่อมต่อ", command=self._connect, width=260, font=theme.FONT_BUTTON)
+        connect_button.grid(row=8, column=0, columnspan=2, pady=12, sticky="", ipadx=30)
 
         self._on_auth_change("Windows")
 

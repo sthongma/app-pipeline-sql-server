@@ -1,5 +1,6 @@
 """Main Tab UI Component"""
 import customtkinter as ctk
+from ui import theme
 from ui.components.file_list import FileList
 from ui.components.progress_bar import ProgressBar
 from ui.components.status_bar import StatusBar
@@ -27,70 +28,75 @@ class MainTab:
         """สร้างส่วนประกอบ UI ทั้งหมดใน Main Tab"""
         # --- Status Bar ---
         self.status_bar = StatusBar(self.parent)
-        self.status_bar.pack(pady=10)
+        self.status_bar.pack(pady=8)
         
         # --- Control Buttons (Import/Upload) ---
         self._create_control_buttons()
         
         # --- File List ---
-        self.file_list = FileList(self.parent, width=850, height=350)
-        self.file_list.pack(pady=10)
+        self.file_list = FileList(self.parent, width=860, height=360)
+        self.file_list.pack(pady=8, padx=10)
         
         # --- Progress Bar ---
         self.progress_bar = ProgressBar(self.parent)
         self.progress_bar.pack(pady=5, fill="x", padx=10)
         
         # --- Log Textbox ---
-        self.textbox = ctk.CTkTextbox(self.parent, width=850, height=200)
-        self.textbox.pack(pady=10)
+        self.textbox = ctk.CTkTextbox(self.parent, height=200, font=theme.FONT_BODY)
+        self.textbox.pack(pady=10, padx=10, fill="x")
     
     def _create_control_buttons(self):
         """สร้างปุ่มควบคุมและปุ่มจัดการโฟลเดอร์ในแถวเดียวกัน"""
         button_frame = ctk.CTkFrame(self.parent)
-        button_frame.pack(pady=5)
+        button_frame.pack(pady=4)
         
         # ปุ่มเลือก/ยกเลิกการเลือกทั้งหมด
         self.select_all_button = ctk.CTkButton(
             button_frame,
             text="เลือกทั้งหมด",
             command=self.callbacks.get('toggle_select_all'),
-            state="disabled"
+            state="disabled",
+            font=theme.FONT_BUTTON
         )
-        self.select_all_button.pack(side="left", padx=5)
+        self.select_all_button.pack(side="left", padx=4)
 
         # ปุ่มเลือกโฟลเดอร์
         self.folder_btn = ctk.CTkButton(
             button_frame,
             text="📁 เลือกโฟลเดอร์",
-            command=self.callbacks.get('browse_excel_path')
+            command=self.callbacks.get('browse_excel_path'),
+            font=theme.FONT_BUTTON
         )
-        self.folder_btn.pack(side="left", padx=5)
+        self.folder_btn.pack(side="left", padx=4)
 
         # ปุ่มตรวจสอบไฟล์ในโฟลเดอร์
         self.check_btn = ctk.CTkButton(
             button_frame,
             text="🔍 ตรวจสอบไฟล์ในโฟลเดอร์",
             command=self.callbacks.get('run_check_thread'),
-            width=160
+            width=160,
+            font=theme.FONT_BUTTON
         )
-        self.check_btn.pack(side="left", padx=5)
+        self.check_btn.pack(side="left", padx=4)
 
         # ปุ่มอัปโหลดไฟล์
         self.upload_button = ctk.CTkButton(
             button_frame,
             text="📤 อัปโหลดไฟล์ที่เลือก",
-            command=self.callbacks.get('confirm_upload')
+            command=self.callbacks.get('confirm_upload'),
+            font=theme.FONT_BUTTON
         )
-        self.upload_button.pack(side="left", padx=5)
+        self.upload_button.pack(side="left", padx=4)
 
         # ปุ่มประมวลผลอัตโนมัติ
         self.auto_process_button = ctk.CTkButton(
             button_frame,
             text="🤖 ประมวลผลอัตโนมัติ",
             command=self.callbacks.get('start_auto_process'),
-            width=160
+            width=160,
+            font=theme.FONT_BUTTON
         )
-        self.auto_process_button.pack(side="left", padx=5)
+        self.auto_process_button.pack(side="left", padx=4)
     
     def enable_controls(self):
         """เปิดการใช้งานปุ่มทั้งหมด"""

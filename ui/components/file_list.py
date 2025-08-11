@@ -1,17 +1,13 @@
 import os
 import customtkinter as ctk
+from ui import theme
 from tkinter import ttk
 from datetime import datetime
 import logging
 
 class FileList(ctk.CTkScrollableFrame):
     def __init__(self, master, **kwargs):
-        super().__init__(
-            master,
-            scrollbar_button_color="#2B2B2B",  # สีเดียวกับพื้นหลัง
-            scrollbar_button_hover_color="#2B2B2B",  # สีเดียวกับพื้นหลัง
-            **kwargs
-        )
+        super().__init__(master, **kwargs)
         self.file_checkboxes = []
         self.select_all_var = ctk.BooleanVar(value=False)
 
@@ -29,7 +25,7 @@ class FileList(ctk.CTkScrollableFrame):
         
         # สร้าง frame สำหรับจัดวาง
         frame = ctk.CTkFrame(self, fg_color="transparent")
-        frame.pack(fill="x", pady=5)
+        frame.pack(fill="x", pady=6, padx=4)
         frame.grid_columnconfigure(2, weight=1)  # ให้คอลัมน์ชื่อไฟล์ยืดหยุ่น
         
         # checkbox
@@ -38,7 +34,7 @@ class FileList(ctk.CTkScrollableFrame):
             frame,
             text="",
             variable=var,
-            width=30
+            width=28
         )
         chk.grid(row=0, column=0, padx=(5, 10))
         
@@ -46,15 +42,16 @@ class FileList(ctk.CTkScrollableFrame):
         type_label = ctk.CTkLabel(
             frame,
             text=logic_type.upper(),
-            text_color="#2B86F5",  # สีฟ้าเดียวกับปุ่ม
-            font=("Arial Bold", 12)  # ตัวหนา
+            text_color="#2B86F5",
+            font=theme.FONT_BODY
         )
         type_label.grid(row=0, column=1, padx=(0, 20), sticky="w")
         
         # ชื่อไฟล์ (ตรงกลาง)
         filename_label = ctk.CTkLabel(
             frame,
-            text=os.path.basename(file_path)
+            text=os.path.basename(file_path),
+            font=theme.FONT_BODY
         )
         filename_label.grid(row=0, column=2, sticky="w")
         
@@ -62,7 +59,8 @@ class FileList(ctk.CTkScrollableFrame):
         time_label = ctk.CTkLabel(
             frame,
             text=f"สร้างเมื่อ: {created_time_str}",
-            text_color="#666666"  # สีเทาเข้ม
+            text_color="#7a7a7a",
+            font=theme.FONT_SMALL
         )
         time_label.grid(row=0, column=3, padx=(10, 5), sticky="e")
         

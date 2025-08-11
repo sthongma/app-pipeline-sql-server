@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from ui import theme
 import threading
 import time
 from typing import Callable, Any
@@ -50,7 +51,7 @@ class LoadingDialog(ctk.CTkToplevel):
         
         # ตั้งค่าหน้าต่าง
         self.title(title)
-        self.geometry("350x150")
+        self.geometry("360x160")
         self.resizable(False, False)
         self.transient(parent)  # ทำให้เป็น dialog ของ parent
         self.grab_set()  # ทำให้ dialog เป็น modal
@@ -61,6 +62,13 @@ class LoadingDialog(ctk.CTkToplevel):
         # สร้าง UI
         self._create_ui(message)
         self._start_ts = time.perf_counter()
+
+        # บังคับใช้ฟอนต์กับทุกวิดเจ็ตใน dialog
+        try:
+            from ui import theme
+            theme.apply_fonts(self)
+        except Exception:
+            pass
         
     def _center_window(self):
         """จัดหน้าต่างให้อยู่กึ่งกลางของ parent window"""
@@ -85,7 +93,7 @@ class LoadingDialog(ctk.CTkToplevel):
         main_frame.pack(expand=True, fill="both", padx=20, pady=16)
         
         # หัวเรื่อง
-        self.title_label = ctk.CTkLabel(main_frame, text=self.title(), font=("Arial", 16, "bold"))
+        self.title_label = ctk.CTkLabel(main_frame, text=self.title(), font=theme.FONT_SUBTITLE)
         self.title_label.pack(pady=(0, 6))
         
         # Progress bar
@@ -100,7 +108,7 @@ class LoadingDialog(ctk.CTkToplevel):
         self.message_label = ctk.CTkLabel(
             main_frame, 
             text=message, 
-            font=("Arial", 12),
+            font=theme.FONT_BODY,
             wraplength=300
         )
         self.message_label.pack(pady=(2, 8))
@@ -121,10 +129,10 @@ class LoadingDialog(ctk.CTkToplevel):
         # เวลาและเคล็ดลับ
         bottom_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         bottom_frame.pack(fill="x", pady=(4, 0))
-        self.elapsed_label = ctk.CTkLabel(bottom_frame, text="เวลา: 0.0 วินาที", text_color="#888888")
+        self.elapsed_label = ctk.CTkLabel(bottom_frame, text="เวลา: 0.0 วินาที", text_color="#7a7a7a")
         self.elapsed_label.pack(side="left")
         if self._show_tips and self._tips:
-            self.tip_label = ctk.CTkLabel(bottom_frame, text=self._tips[0], text_color="#888888")
+            self.tip_label = ctk.CTkLabel(bottom_frame, text=self._tips[0], text_color="#7a7a7a")
             self.tip_label.pack(side="right")
             self._schedule_tip_rotation()
         

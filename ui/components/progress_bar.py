@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from ui import theme
 
 
 class ProgressBar(ctk.CTkFrame):
@@ -6,17 +7,17 @@ class ProgressBar(ctk.CTkFrame):
         super().__init__(master, **kwargs)
 
         # ข้อความสถานะหลัก
-        self.status_label = ctk.CTkLabel(self, text="สถานะ: -", anchor="w")
-        self.status_label.pack(fill="x", padx=5)
+        self.status_label = ctk.CTkLabel(self, text="สถานะ: -", anchor="w", font=theme.FONT_BODY)
+        self.status_label.pack(fill="x", padx=8)
 
         # Progress Bar
-        self.progress_bar = ctk.CTkProgressBar(self, width=850, height=10)
-        self.progress_bar.pack(pady=5)
+        self.progress_bar = ctk.CTkProgressBar(self, height=10)
+        self.progress_bar.pack(pady=6, fill="x", padx=8)
         self.progress_bar.set(0)
 
         # ข้อความรายละเอียดใต้แถบความคืบหน้า
-        self.detail_label = ctk.CTkLabel(self, text="", text_color="#888888", anchor="w")
-        self.detail_label.pack(fill="x", padx=5)
+        self.detail_label = ctk.CTkLabel(self, text="", text_color="#7a7a7a", anchor="w", font=theme.FONT_SMALL)
+        self.detail_label.pack(fill="x", padx=8)
 
     def update(self, progress, status_text="", detail_text=""):
         """อัปเดต Progress Bar และข้อความสถานะ"""

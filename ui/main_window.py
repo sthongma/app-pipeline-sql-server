@@ -7,6 +7,7 @@ import threading
 import logging
 from datetime import datetime
 import customtkinter as ctk
+from ui import theme
 from tkinter import messagebox
 
 # Import UI components
@@ -86,6 +87,9 @@ class MainWindow(ctk.CTkToplevel):
         
         self._create_ui(ui_progress_callback, on_ready_callback)
         
+        # บังคับใช้ฟอนต์กับวิดเจ็ตทั้งหมดในหน้าต่างหลัก (หลังสร้าง UI เสร็จแล้ว)
+        self.after(200, self._apply_fonts_to_all_widgets)
+
         # ตรวจสอบการเชื่อมต่อ SQL Server หลังสร้าง UI เสร็จ (ทำแบบ async เพื่อลดการค้าง)
         if ui_progress_callback:
             ui_progress_callback("ตรวจสอบการเชื่อมต่อ SQL Server...")
@@ -93,17 +97,22 @@ class MainWindow(ctk.CTkToplevel):
     
     def _create_ui(self, ui_progress_callback=None, on_ready_callback=None):
         """สร้างส่วนประกอบ UI ทั้งหมด"""
+        # ให้แน่ใจว่า theme ถูก init แล้ว
+        try:
+            theme.init_fonts()
+        except Exception:
+            pass
         if ui_progress_callback:
             ui_progress_callback("กำลังสร้าง Tab View...")
         
         # สร้าง Tab View
         self.tabview = ctk.CTkTabview(self)
-        self.tabview.pack(fill="both", expand=True, padx=5, pady=5)
+        self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
         
         # สร้าง Tab
-        main_tab_frame = self.tabview.add("Main")
-        log_tab_frame = self.tabview.add("Log")
-        settings_tab_frame = self.tabview.add("Settings")
+        main_tab_frame = self.tabview.add("หลัก")
+        log_tab_frame = self.tabview.add("บันทึก")
+        settings_tab_frame = self.tabview.add("ตั้งค่า")
         
         if ui_progress_callback:
             ui_progress_callback("กำลังสร้าง Main Tab...")
@@ -292,6 +301,14 @@ class MainWindow(ctk.CTkToplevel):
         if hasattr(self, 'log_textbox') and self.log_textbox:
             self.log_textbox.insert("end", message)
             self.log_textbox.see("end")
+
+    def _apply_fonts_to_all_widgets(self):
+        """บังคับใช้ฟอนต์ Kanit กับทุก widget หลังสร้าง UI เสร็จแล้ว"""
+        try:
+            from ui import theme
+            theme.apply_fonts(self)
+        except Exception:
+            pass
 
     def _attach_logging_to_gui(self) -> None:
         """แนบ logging handler ให้ส่ง log ทั้งระบบเข้า GUI"""
