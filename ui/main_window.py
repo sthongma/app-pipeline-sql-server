@@ -33,7 +33,7 @@ class MainWindow(ctk.CTkToplevel):
         super().__init__(master)
         
         # ตั้งค่าหน้าต่างแอปพลิเคชัน
-        self.title("ตรวจสอบและอัปโหลดไฟล์")
+        self.title("PIPELINE SQL SERVER")
         self.geometry(f"{AppConstants.MAIN_WINDOW_SIZE[0]}x{AppConstants.MAIN_WINDOW_SIZE[1]}")
         self.resizable(False, False)
         

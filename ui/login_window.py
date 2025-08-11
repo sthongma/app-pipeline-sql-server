@@ -15,7 +15,7 @@ class LoginWindow(ctk.CTk):
         super().__init__()
         
         # ตั้งค่าหน้าต่าง
-        self.title("เข้าสู่ระบบ SQL Server")
+        self.title("Login SQL Server")
         self.geometry(f"{AppConstants.LOGIN_WINDOW_SIZE[0]}x{AppConstants.LOGIN_WINDOW_SIZE[1]}")
         self.resizable(False, False)
         # มินิมอลโทน: เพิ่มระยะห่างทั่วๆ ไป
