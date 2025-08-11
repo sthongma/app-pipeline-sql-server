@@ -53,7 +53,7 @@ class MainTab:
         # ปุ่มเลือก/ยกเลิกการเลือกทั้งหมด
         self.select_all_button = ctk.CTkButton(
             button_frame,
-            text="เลือกทั้งหมด",
+            text="Select all",
             command=self.callbacks.get('toggle_select_all'),
             state="disabled",
             font=theme.FONT_BUTTON
@@ -63,7 +63,7 @@ class MainTab:
         # ปุ่มเลือกโฟลเดอร์
         self.folder_btn = ctk.CTkButton(
             button_frame,
-            text="📁 เลือกโฟลเดอร์",
+            text="📁 Choose folder",
             command=self.callbacks.get('browse_excel_path'),
             font=theme.FONT_BUTTON
         )
@@ -72,7 +72,7 @@ class MainTab:
         # ปุ่มตรวจสอบไฟล์ในโฟลเดอร์
         self.check_btn = ctk.CTkButton(
             button_frame,
-            text="🔍 ตรวจสอบไฟล์ในโฟลเดอร์",
+            text="🔍 Check files in folder",
             command=self.callbacks.get('run_check_thread'),
             width=160,
             font=theme.FONT_BUTTON
@@ -82,7 +82,7 @@ class MainTab:
         # ปุ่มอัปโหลดไฟล์
         self.upload_button = ctk.CTkButton(
             button_frame,
-            text="📤 อัปโหลดไฟล์ที่เลือก",
+            text="📤 Upload selected files",
             command=self.callbacks.get('confirm_upload'),
             font=theme.FONT_BUTTON
         )
@@ -91,7 +91,7 @@ class MainTab:
         # ปุ่มประมวลผลอัตโนมัติ
         self.auto_process_button = ctk.CTkButton(
             button_frame,
-            text="🤖 ประมวลผลอัตโนมัติ",
+            text="🤖 Auto process",
             command=self.callbacks.get('start_auto_process'),
             width=160,
             font=theme.FONT_BUTTON
@@ -121,15 +121,15 @@ class MainTab:
         self.select_all_var.set(not self.select_all_var.get())
         if self.select_all_var.get():
             self.file_list.select_all()
-            self.select_all_button.configure(text="ยกเลิกการเลือกทั้งหมด")
+            self.select_all_button.configure(text="Deselect all")
         else:
             self.file_list.deselect_all()
-            self.select_all_button.configure(text="เลือกทั้งหมด")
+            self.select_all_button.configure(text="Select all")
     
     def reset_select_all(self):
         """รีเซ็ตปุ่มเลือกทั้งหมด"""
         self.select_all_button.configure(state="disabled")
-        self.select_all_button.configure(text="เลือกทั้งหมด")
+        self.select_all_button.configure(text="Select all")
         self.select_all_var.set(False)
     
     def enable_select_all(self):
@@ -137,4 +137,4 @@ class MainTab:
         self.select_all_button.configure(state="normal")
         self.select_all_var.set(True)
         self.file_list.select_all()
-        self.select_all_button.configure(text="ยกเลิกการเลือกทั้งหมด")
+        self.select_all_button.configure(text="Deselect all")

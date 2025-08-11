@@ -90,7 +90,7 @@ class DatabaseService:
             error_msg = f"{ErrorMessages.DB_CONNECTION_FAILED}: {e}"
             self.logger.error(error_msg)
             if show_warning:
-                messagebox.showwarning("การเชื่อมต่อฐานข้อมูล", error_msg)
+                messagebox.showwarning("Database connection", error_msg)
             return False, error_msg
 
     def test_connection(self, config: Dict[str, Any]) -> bool:
@@ -149,11 +149,11 @@ class DatabaseService:
                             EXEC('CREATE SCHEMA {schema_name}')
                         END
                     """))
-            return True, f"ตรวจสอบ/สร้าง schema ทั้งหมดเรียบร้อย: {', '.join(schema_names)}"
+            return True, f"Verified/created schemas: {', '.join(schema_names)}"
         except Exception as e:
-            error_msg = f"สร้าง schema ไม่สำเร็จ: {e}"
+            error_msg = f"Failed to create schema: {e}"
             self.logger.error(error_msg)
-            messagebox.showwarning("การสร้าง Schema", error_msg)
+            messagebox.showwarning("Schema creation", error_msg)
             return False, error_msg
 
     def _fix_text_columns_to_nvarchar_max(self, table_name, required_cols, schema_name='bronze', log_func=None):
@@ -166,11 +166,11 @@ class DatabaseService:
                     if isinstance(dtype, Text):
                         alter_sql = f"ALTER TABLE {schema_name}.{table_name} ALTER COLUMN [{col_name}] NVARCHAR(MAX)"
                         if log_func:
-                            log_func(f"🔧 แก้ไขคอลัมน์ '{col_name}' เป็น NVARCHAR(MAX)")
+                            log_func(f"🔧 Alter column '{col_name}' to NVARCHAR(MAX)")
                         conn.execute(text(alter_sql))
         except Exception as e:
             if log_func:
-                log_func(f"⚠️ ไม่สามารถแก้ไขคอลัมน์ Text() ได้: {e}")
+                log_func(f"⚠️ Unable to alter Text() column: {e}")
 
     def upload_data(self, df, logic_type, required_cols, schema_name='bronze', log_func=None, force_recreate=False):
         """
@@ -187,7 +187,7 @@ class DatabaseService:
         
         # สิทธิ์ผ่าน ดำเนินการอัปโหลดปกติ
         if log_func:
-            log_func("✅ สิทธิ์การเข้าถึงฐานข้อมูลถูกต้อง")
+            log_func("✅ Database access permissions are correct")
         
         try:
             import json
@@ -196,10 +196,10 @@ class DatabaseService:
             
             # ตรวจสอบข้อมูลเบื้องต้น
             if df is None or df.empty:
-                return False, "ข้อมูลว่างเปล่า"
+                return False, "Empty data"
             
             if not required_cols:
-                return False, "ไม่พบการตั้งค่าประเภทข้อมูล"
+                return False, "Data type settings not found"
             
             # เพิ่มคอลัมน์ timestamp
             current_time = datetime.now()
@@ -221,7 +221,7 @@ class DatabaseService:
             # ตรวจสอบและสร้าง schema หากยังไม่มี
             schema_result = self.ensure_schemas_exist([schema_name])
             if not schema_result[0]:
-                return False, f"ไม่สามารถสร้าง schema ได้: {schema_result[1]}"
+                return False, f"Could not create schema: {schema_result[1]}"
 
             # ตรวจสอบ schema DB ว่าตรงกับ required_cols หรือไม่
             from sqlalchemy import inspect
@@ -236,7 +236,7 @@ class DatabaseService:
                 
                 # ตรวจสอบคอลัมน์
                 if set(db_cols) != set(config_cols):
-                    msg = f"❌ คอลัมน์ของตาราง {schema_name}.{table_name} ไม่ตรงกับ config"
+                    msg = f"❌ Table {schema_name}.{table_name} columns do not match config"
                     needs_recreate = True
                 else:
                     # ตรวจสอบ data types ให้ครอบคลุมทุกรูปแบบ
@@ -284,15 +284,15 @@ class DatabaseService:
                             if 'NVARCHAR(MAX)' not in db_type and 'TEXT' not in db_type and 'NVARCHAR' not in db_type:
                                 # เฉพาะกรณีที่ชนิดข้อมูลไม่ใช่ NVARCHAR เลย (เช่น INT, DATE)
                                 if log_func:
-                                    log_func(f"❌ Schema Mismatch: คอลัมน์ '{col_name}' ควรเป็น NVARCHAR(MAX) แต่ฐานข้อมูลเป็น {db_type}")
-                                    log_func(f"   💡 แนะนำ: อนุญาตให้ระบบสร้างตารางใหม่เพื่อแก้ไขปัญหา")
+                                    log_func(f"❌ Schema Mismatch: Column '{col_name}' should be NVARCHAR(MAX) but database has {db_type}")
+                                    log_func(f"   💡 Suggestion: Allow system to create new table to fix this issue")
                                 needs_recreate = True
                                 break
 
                         # ตรวจจับ mismatch ของหมวดชนิดข้อมูล (เช่น STRING ↔ NUMERIC)
                         if cat_db != cat_expected:
                             if log_func:
-                                log_func(f"❌ ชนิดข้อมูลของคอลัมน์ '{col_name}' ไม่ตรงกัน (DB: {db_type} | Expected: {expected_str})")
+                                log_func(f"❌ Data type mismatch for column '{col_name}' (DB: {db_type} | Expected: {expected_str})")
                             needs_recreate = True
                             break
 
@@ -302,7 +302,7 @@ class DatabaseService:
                             act_len = _parse_varchar_len(db_type)
                             if act_len != -1 and exp_len != -1 and act_len < exp_len:
                                 if log_func:
-                                    log_func(f"❌ ความยาว NVARCHAR ของ '{col_name}' ไม่พอ (DB: {db_type} | Expected: {expected_str})")
+                                    log_func(f"❌ NVARCHAR length for '{col_name}' is insufficient (DB: {db_type} | Expected: {expected_str})")
                                 needs_recreate = True
                                 break
             
@@ -322,12 +322,12 @@ class DatabaseService:
                 cols_sql = ", ".join([f"[{c}] NVARCHAR(MAX) NULL" for c in staging_cols])
                 conn.execute(text(f"CREATE TABLE {schema_name}.{staging_table} ({cols_sql})"))
                 if log_func:
-                    log_func(f"📦 สร้างตารางชั่วคราวสำหรับนำเข้า: {schema_name}.{staging_table} (NVARCHAR(MAX) ทุกคอลัมน์)")
+                    log_func(f"📦 Created staging table: {schema_name}.{staging_table} (NVARCHAR(MAX) for all columns)")
 
             # 2) อัปโหลดข้อมูลเข้า staging ด้วย pandas.to_sql
             if len(df) > 10000:
                 if log_func:
-                    log_func(f"📊 ไฟล์ขนาดใหญ่ ({len(df):,} แถว) - อัปโหลดแบบ chunked ไปยัง staging")
+                    log_func(f"📊 Large file ({len(df):,} rows) - uploading in chunks to staging")
                 chunk_size = 5000
                 total_chunks = (len(df) + chunk_size - 1) // chunk_size
                 for i in range(0, len(df), chunk_size):
@@ -341,10 +341,10 @@ class DatabaseService:
                     )
                     chunk_num = (i // chunk_size) + 1
                     if log_func:
-                        log_func(f"📤 อัปโหลด staging chunk {chunk_num}/{total_chunks}: {len(chunk):,} แถว")
+                        log_func(f"📤 Uploaded staging chunk {chunk_num}/{total_chunks}: {len(chunk):,} rows")
             else:
                 if log_func:
-                    log_func(f"📤 อัปโหลดข้อมูล: {len(df):,} แถว → {schema_name}.{staging_table}")
+                    log_func(f"📤 Uploaded data: {len(df):,} rows → {schema_name}.{staging_table}")
                 df[staging_cols].to_sql(
                     name=staging_table,
                     con=self.engine,
@@ -356,9 +356,9 @@ class DatabaseService:
             # 3) สร้าง/รีสร้างตารางจริงตาม dtype config (ไม่ auto-fix)
             if needs_recreate or not insp.has_table(table_name, schema=schema_name):
                 if needs_recreate and log_func:
-                    log_func(f"🛠️ สร้างตาราง {schema_name}.{table_name} ใหม่ให้ตรงกับการตั้งค่าประเภทข้อมูล")
+                    log_func(f"🛠️ Creating table {schema_name}.{table_name} to match data type settings")
                 elif log_func:
-                    log_func(f"📋 สร้างตาราง {schema_name}.{table_name} ตามการตั้งค่าประเภทข้อมูล")
+                    log_func(f"📋 Creating table {schema_name}.{table_name} from data type settings")
                 
                 df.head(0)[list(required_cols.keys())].to_sql(
                     name=table_name,
@@ -373,13 +373,13 @@ class DatabaseService:
             else:
                 # ล้างข้อมูลเดิมของตารางจริง
                 if log_func:
-                    log_func(f"🧹 ล้างข้อมูลเดิมในตาราง {schema_name}.{table_name}")
+                    log_func(f"🧹 Truncating existing data in table {schema_name}.{table_name}")
                 with self.engine.begin() as conn:
                     conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
 
             # 4) ตรวจสอบข้อมูลใน staging table ด้วย SQL validation
             if log_func:
-                log_func(f"🔍 ตรวจสอบความถูกต้องของข้อมูลใน staging table...")
+                log_func(f"🔍 Validating data in staging table...")
             
             validation_results = self.validate_data_in_staging(staging_table, logic_type, required_cols, schema_name, log_func)
             
@@ -448,9 +448,9 @@ class DatabaseService:
                 # ลบ staging table เมื่อเสร็จสิ้น
                 conn.execute(text(f"DROP TABLE {schema_name}.{staging_table}"))
                 if log_func:
-                    log_func(f"🗑️ ลบตารางชั่วคราว {schema_name}.{staging_table}")
+                    log_func(f"🗑️ Dropped staging table {schema_name}.{staging_table}")
 
-            return True, f"อัปโหลดสำเร็จ → {schema_name}.{table_name} (นำเข้า NVARCHAR(MAX) แล้วแปลงตาม dtype {len(df):,} แถว)"
+            return True, f"Upload successful → {schema_name}.{table_name} (ingested NVARCHAR(MAX) then converted by dtype for {len(df):,} rows)"
         except Exception as e:
             # สรุปข้อความผิดพลาดให้สั้นและชี้เป้าคอลัมน์ที่น่าจะมีปัญหา
             def _short_exception_message(exc: Exception) -> str:
@@ -541,15 +541,15 @@ class DatabaseService:
 
             if problem_hints:
                 lines = [
-                    f"เกิดข้อผิดพลาดจากฐานข้อมูล: {short_msg}",
-                    "คอลัมน์ที่น่าจะมีปัญหา (แสดงบางส่วน):",
+                    f"Database error: {short_msg}",
+                    "Likely problematic columns (partial):",
                 ]
                 for p in problem_hints:
                     ex = ", ".join(p.get("examples", []))
-                    lines.append(f"- {p['column']} (คาดว่า {p['expected']}) ผิด {p['bad_count']:,} แถว ตัวอย่าง: [{ex}]")
+                    lines.append(f"- {p['column']} (expected {p['expected']}) invalid {p['bad_count']:,} rows. Examples: [{ex}]")
                 error_msg = "\n".join(lines)
             else:
-                error_msg = f"เกิดข้อผิดพลาดจากฐานข้อมูล: {short_msg}"
+                error_msg = f"Database error: {short_msg}"
 
             if log_func:
                 log_func(f"❌ {error_msg}")
@@ -597,11 +597,11 @@ class DatabaseService:
             
             if total_rows == 0:
                 validation_results['is_valid'] = False
-                validation_results['summary'] = "ไม่มีข้อมูลใน staging table"
+                validation_results['summary'] = "No data in staging table"
                 return validation_results
             
             if log_func:
-                log_func(f"📊 ตรวจสอบข้อมูล {total_rows:,} แถวใน staging table")
+                log_func(f"📊 Validating {total_rows:,} rows in staging table")
             
             validation_queries = self._build_validation_queries(staging_table, required_cols, schema_name)
             
@@ -635,29 +635,28 @@ class DatabaseService:
                                 
                                 if log_func and issue['error_count'] > 0:
                                     status = "❌" if issue['percentage'] > 10 else "⚠️"
-                                    # รองรับการแสดงผลชื่อคอลัมน์ภาษาไทยอย่างถูกต้อง
                                     column_name = issue['column'] if isinstance(issue['column'], str) else str(issue['column'])
                                     examples = issue['examples'][:100] if isinstance(issue['examples'], str) else str(issue['examples'])[:100]
-                                    log_func(f"   {status} {column_name}: {issue['error_count']:,} แถวผิด ({issue['percentage']}%) ตัวอย่าง: {examples}")
+                                    log_func(f"   {status} {column_name}: {issue['error_count']:,} invalid rows ({issue['percentage']}%) Examples: {examples}")
                     
                     except Exception as query_error:
                         if log_func:
-                            log_func(f"⚠️ ไม่สามารถรัน validation query สำหรับ {validation_type}: {query_error}")
+                            log_func(f"⚠️ Could not run validation query for {validation_type}: {query_error}")
             
             # สร้างสรุปผล
             if not validation_results['is_valid']:
                 serious_issues = len(validation_results['issues'])
                 warnings_count = len(validation_results['warnings'])
-                validation_results['summary'] = f"พบข้อมูลผิดที่ร้ายแรง {serious_issues} ปัญหา และคำเตือน {warnings_count} รายการ - ไม่สามารถนำเข้าข้อมูลได้"
+                validation_results['summary'] = f"Found {serious_issues} serious issues and {warnings_count} warnings - cannot import data"
             elif validation_results['warnings']:
                 warnings_count = len(validation_results['warnings'])
-                validation_results['summary'] = f"พบคำเตือน {warnings_count} รายการ แต่สามารถนำเข้าข้อมูลได้"
+                validation_results['summary'] = f"Found {warnings_count} warnings; data can be imported"
                 if log_func:
-                    log_func(f"✅ ข้อมูลผ่านการตรวจสอบ (มีคำเตือน {warnings_count} รายการ)")
+                    log_func(f"✅ Data validation passed (with {warnings_count} warnings)")
             else:
-                validation_results['summary'] = "ข้อมูลถูกต้องทั้งหมด"
+                validation_results['summary'] = "All data valid"
                 if log_func:
-                    log_func(f"✅ ข้อมูลผ่านการตรวจสอบทั้งหมด")
+                    log_func(f"✅ All data passed validation")
                     
             return validation_results
             
@@ -666,7 +665,7 @@ class DatabaseService:
                 'is_valid': False,
                 'issues': [],
                 'warnings': [],
-                'summary': f"เกิดข้อผิดพลาดในการตรวจสอบข้อมูล: {str(e)}"
+                'summary': f"Error validating data: {str(e)}"
             }
             if log_func:
                 log_func(f"❌ {validation_results['summary']}")
@@ -897,10 +896,10 @@ class DatabaseService:
                                 issue = {
                                     'validation_type': 'schema_mismatch',
                                     'column': col_name,
-                                    'error_count': 0,  # ไม่ใช่ error แต่เป็น warning
+                                    'error_count': 0,  # not an error, informational warning
                                     'percentage': 0,
-                                    'message': f"คอลัมน์ตั้งค่าเป็น NVARCHAR(MAX) แต่ฐานข้อมูลเป็น NVARCHAR({db_info['max_length'] or 'Unknown'})",
-                                    'recommendation': "ข้อมูลจะถูกบันทึกได้ปกติ แต่อาจมีการตัดข้อมูลหากยาวเกินกำหนด",
+                                    'message': f"Configured as NVARCHAR(MAX) but database column is NVARCHAR({db_info['max_length'] or 'Unknown'})",
+                                    'recommendation': "Data will be saved, but may be truncated if it exceeds column length",
                                     'severity': 'info'
                                 }
                                 
@@ -912,6 +911,6 @@ class DatabaseService:
         
         except Exception as e:
             if log_func:
-                log_func(f"⚠️ ไม่สามารถตรวจสอบ schema mismatch: {e}")
+                log_func(f"⚠️ Unable to check schema mismatch: {e}")
         
         return schema_issues

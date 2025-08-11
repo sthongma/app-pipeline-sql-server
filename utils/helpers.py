@@ -26,18 +26,18 @@ def validate_file_path(file_path: str) -> tuple[bool, str]:
     """
     try:
         if not file_path:
-            return False, "ไม่ได้ระบุที่อยู่ไฟล์"
+            return False, "File path not specified"
             
         if not os.path.exists(file_path):
             return False, f"{ErrorMessages.FILE_NOT_FOUND}: {file_path}"
             
         if not os.path.isfile(file_path):
-            return False, "ที่อยู่ที่ระบุไม่ใช่ไฟล์"
+            return False, "The specified path is not a file"
             
-        return True, "ไฟล์ถูกต้อง"
+        return True, "File is valid"
         
     except Exception as e:
-        return False, f"เกิดข้อผิดพลาดในการตรวจสอบไฟล์: {str(e)}"
+        return False, f"Error validating file: {str(e)}"
 
 
 def normalize_column_name(column_name: Union[str, Any]) -> str:
@@ -131,7 +131,7 @@ def format_error_message(error: Exception, context: str = "") -> str:
     if context:
         return f"❌ {context}: {error_msg}"
     else:
-        return f"❌ เกิดข้อผิดพลาด: {error_msg}"
+        return f"❌ Error: {error_msg}"
 
 
 def safe_json_load(file_path: str, default: dict = None) -> dict:

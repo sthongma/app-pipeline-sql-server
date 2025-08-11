@@ -99,28 +99,28 @@ class FileService:
             
             success, df = self.performance_optimizer.read_large_file_chunked(file_path, file_type)
             if not success:
-                return False, "ไม่สามารถอ่านไฟล์ได้"
+                return False, "Unable to read file"
             
             # Apply column mapping (พิจารณาทิศทาง mapping ให้ตรงกับ header ของไฟล์)
             col_map = self.file_reader.build_rename_mapping_for_dataframe(df.columns, logic_type)
             if col_map:
-                self.log_callback(f"🔄 ปรับชื่อคอลัมน์ตาม mapping ({len(col_map)} คอลัมน์)")
+                self.log_callback(f"🔄 Renamed columns by mapping ({len(col_map)} columns)")
                 df.rename(columns=col_map, inplace=True)
             
             # ปรับปรุง memory usage
             df = self.performance_optimizer.optimize_memory_usage(df)
             
             # หมายเหตุ: การตรวจสอบข้อมูลจะทำใน staging table ด้วย SQL แทน pandas
-            self.log_callback(f"🔄 นำเข้าเป็น NVARCHAR(MAX) ทั้งหมด แล้วตรวจสอบและแปลงด้วย SQL")
+            self.log_callback(f"🔄 Ingest as NVARCHAR(MAX) first, then validate/convert using SQL")
             
             # ทำความสะอาด memory
             self.performance_optimizer.cleanup_memory()
             
-            self.log_callback(f"🎉 ประมวลผลไฟล์เสร็จสิ้น")
+            self.log_callback(f"🎉 File processing completed")
             return True, df
             
         except Exception as e:
-            error_msg = f"❌ เกิดข้อผิดพลาดขณะอ่านไฟล์: {e}"
+            error_msg = f"❌ Error while reading file: {e}"
             self.log_callback(error_msg)
             return False, error_msg
     
@@ -245,12 +245,12 @@ class FileService:
             # ตรวจสอบการเชื่อมต่อ
             connection_ok, conn_msg = db_service.check_connection()
             if not connection_ok:
-                return False, f"ไม่สามารถเชื่อมต่อฐานข้อมูลได้: {conn_msg}"
+                return False, f"Unable to connect to database: {conn_msg}"
             
             # ได้ required columns ตามการตั้งค่าล่าสุด
             required_cols = self.get_required_dtypes(logic_type)
             if not required_cols:
-                return False, "ไม่พบการตั้งค่าประเภทข้อมูล"
+                return False, "Data type settings not found"
             
             # ไม่รองรับ auto-fix อีกต่อไป จึงไม่ใช้ force_recreate จาก processing_report
             force_recreate = False
@@ -268,7 +268,7 @@ class FileService:
             return success, upload_msg
             
         except Exception as e:
-            error_msg = f"❌ เกิดข้อผิดพลาดในการอัปโหลด: {e}"
+            error_msg = f"❌ Error during upload: {e}"
             self.log_callback(error_msg)
             return False, error_msg
 
@@ -277,20 +277,20 @@ class FileService:
         """แสดงรายงานการตรวจสอบข้อมูลแบบละเอียด (legacy method)"""
         # สร้างรายงานแบบละเอียด
         self.log_callback("\n" + "="*80)
-        self.log_callback("🔍 รายงานการตรวจสอบข้อมูลแบบละเอียด")
+        self.log_callback("🔍 Detailed data validation report")
         self.log_callback("="*80)
         
         # ข้อมูลพื้นฐาน
-        self.log_callback(f"📊 ข้อมูลพื้นฐาน:")
-        self.log_callback(f"   • จำนวนแถวทั้งหมด: {len(df):,}")
-        self.log_callback(f"   • จำนวนคอลัมน์ทั้งหมด: {len(df.columns)}")
-        self.log_callback(f"   • ประเภทไฟล์: {logic_type}")
+        self.log_callback(f"📊 Basic info:")
+        self.log_callback(f"   • Total rows: {len(df):,}")
+        self.log_callback(f"   • Total columns: {len(df.columns)}")
+        self.log_callback(f"   • File type: {logic_type}")
         
         # ใช้ comprehensive validation
         validation_result = self.comprehensive_data_validation(df, logic_type)
         
         if validation_result['summary']:
-            self.log_callback("\n📋 สรุปการตรวจสอบ:")
+            self.log_callback("\n📋 Validation summary:")
             for msg in validation_result['summary']:
                 self.log_callback(f"   • {msg}")
         

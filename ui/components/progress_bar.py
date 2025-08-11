@@ -7,7 +7,7 @@ class ProgressBar(ctk.CTkFrame):
         super().__init__(master, **kwargs)
 
         # ข้อความสถานะหลัก
-        self.status_label = ctk.CTkLabel(self, text="สถานะ: -", anchor="w", font=theme.FONT_BODY)
+        self.status_label = ctk.CTkLabel(self, text="Status: -", anchor="w", font=theme.FONT_BODY)
         self.status_label.pack(fill="x", padx=8)
 
         # Progress Bar
@@ -28,17 +28,17 @@ class ProgressBar(ctk.CTkFrame):
             # หากส่งค่าไม่ถูกต้อง ให้ข้ามการตั้งค่า progress
             pass
         if status_text:
-            self.status_label.configure(text=f"สถานะ: {status_text}")
+            self.status_label.configure(text=f"Status: {status_text}")
         if detail_text is not None:
             self.detail_label.configure(text=detail_text)
 
     def reset(self):
         """รีเซ็ต Progress Bar และข้อความ"""
         self.progress_bar.set(0)
-        self.status_label.configure(text="สถานะ: -")
+        self.status_label.configure(text="Status: -")
         self.detail_label.configure(text="")
 
     def set_status(self, status_text, detail_text=""):
         """ตั้งค่าเฉพาะข้อความสถานะและรายละเอียด"""
-        self.status_label.configure(text=f"สถานะ: {status_text}")
+        self.status_label.configure(text=f"Status: {status_text}")
         self.detail_label.configure(text=detail_text or "")

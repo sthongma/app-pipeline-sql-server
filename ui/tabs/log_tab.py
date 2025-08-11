@@ -23,10 +23,10 @@ class LogTab:
         toolbar = ctk.CTkFrame(self.parent)
         toolbar.pack(fill="x", padx=10, pady=(8, 0))
 
-        copy_btn = ctk.CTkButton(toolbar, text="คัดลอก Log", command=self._copy_log_to_clipboard, width=120, font=theme.FONT_BUTTON)
+        copy_btn = ctk.CTkButton(toolbar, text="Copy log", command=self._copy_log_to_clipboard, width=120, font=theme.FONT_BUTTON)
         copy_btn.pack(side="left")
 
-        clear_btn = ctk.CTkButton(toolbar, text="ล้าง Log", command=self._clear_log, width=120, font=theme.FONT_BUTTON)
+        clear_btn = ctk.CTkButton(toolbar, text="Clear log", command=self._clear_log, width=120, font=theme.FONT_BUTTON)
         clear_btn.pack(side="left", padx=5)
 
         # กล่องข้อความสำหรับแสดง Log
@@ -41,7 +41,7 @@ class LogTab:
         root.clipboard_clear()
         root.clipboard_append(log_text)
         root.update()  # เพื่อให้ clipboard ทำงาน
-        messagebox.showinfo("คัดลอกแล้ว", "คัดลอก Log เรียบร้อยแล้ว!")
+        messagebox.showinfo("Copied", "Log copied to clipboard")
 
     def _clear_log(self):
         """ล้างข้อความทั้งหมดใน log textbox"""

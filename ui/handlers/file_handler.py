@@ -40,7 +40,7 @@ class FileHandler:
         try:
             # รีเซ็ต UI
             ui_callbacks['reset_progress']()
-            ui_callbacks['set_progress_status']("เริ่มการตรวจสอบไฟล์", "กำลังสแกนโฟลเดอร์...")
+            ui_callbacks['set_progress_status']("Starting file scan", "Scanning folders...")
             
             # โหลดการตั้งค่าใหม่
             self.file_service.load_settings()
@@ -49,14 +49,14 @@ class FileHandler:
             ui_callbacks['reset_select_all']()
             
             # ค้นหาไฟล์ Excel/CSV
-            ui_callbacks['update_progress'](0.2, "กำลังค้นหาไฟล์", "สแกนไฟล์ .xlsx และ .csv...")
+            ui_callbacks['update_progress'](0.2, "Searching for files", "Scanning .xlsx and .csv files...")
             data_files = self.file_service.find_data_files()
             
             if not data_files:
-                ui_callbacks['update_progress'](1.0, "การตรวจสอบเสร็จสิ้น", "ไม่พบไฟล์ .xlsx หรือ .csv")
-                ui_callbacks['update_status']("ไม่พบไฟล์ .xlsx หรือ .csv ในโฟลเดอร์ที่กำหนด", True)
-                self.log("🤷 ไม่พบไฟล์ .xlsx หรือ .csv ในโฟลเดอร์ที่กำหนด")
-                self.log("--- 🏁 ตรวจสอบไฟล์เสร็จสิ้น ---")
+                ui_callbacks['update_progress'](1.0, "Scan completed", "No .xlsx or .csv files found")
+                ui_callbacks['update_status']("No .xlsx or .csv files found in the specified folder", True)
+                self.log("🤷 No .xlsx or .csv files found in the specified folder")
+                self.log("--- 🏁 File scan completed ---")
                 ui_callbacks['enable_auto_process']()
                 return
             
@@ -66,28 +66,28 @@ class FileHandler:
             for i, file in enumerate(data_files):
                 # คำนวณ progress ที่ถูกต้อง (0.2 - 0.8)
                 progress = 0.2 + (0.6 * (i / total_files))  # 20% - 80%
-                ui_callbacks['update_progress'](progress, f"กำลังตรวจสอบไฟล์: {os.path.basename(file)}", f"ไฟล์ที่ {i+1} จาก {total_files}")
+                ui_callbacks['update_progress'](progress, f"Checking file: {os.path.basename(file)}", f"File {i+1} of {total_files}")
                 
                 logic_type = self.file_service.detect_file_type(file)
                 if logic_type:
                     found_files_count += 1
-                    self.log(f"✅ พบไฟล์ตรงเงื่อนไข: {os.path.basename(file)} [{logic_type}]")
+                    self.log(f"✅ Found matching file: {os.path.basename(file)} [{logic_type}]")
                     ui_callbacks['add_file_to_list'](file, logic_type)
             
             if found_files_count > 0:
-                ui_callbacks['update_progress'](1.0, "การตรวจสอบเสร็จสิ้น", f"พบไฟล์ที่ตรงเงื่อนไข {found_files_count} ไฟล์")
-                ui_callbacks['update_status'](f"พบไฟล์ที่ตรงเงื่อนไข {found_files_count} ไฟล์", False)
+                ui_callbacks['update_progress'](1.0, "Scan completed", f"Found {found_files_count} matching files")
+                ui_callbacks['update_status'](f"Found {found_files_count} matching files", False)
                 ui_callbacks['enable_select_all']()
             else:
-                ui_callbacks['update_progress'](1.0, "การตรวจสอบเสร็จสิ้น", "ไม่พบไฟล์ที่ตรงเงื่อนไข")
-                ui_callbacks['update_status']("ไม่พบไฟล์ที่ตรงเงื่อนไข", True)
+                ui_callbacks['update_progress'](1.0, "Scan completed", "No matching files found")
+                ui_callbacks['update_status']("No matching files found", True)
                 ui_callbacks['reset_select_all']()
             
-            self.log("--- 🏁 ตรวจสอบไฟล์เสร็จสิ้น ---")
+            self.log("--- 🏁 File scan completed ---")
             ui_callbacks['enable_auto_process']()
             
         except Exception as e:
-            self.log(f"❌ เกิดข้อผิดพลาดขณะตรวจสอบไฟล์: {e}")
+            self.log(f"❌ An error occurred while scanning files: {e}")
             ui_callbacks['enable_auto_process']()
     
     def confirm_upload(self, get_selected_files_callback, ui_callbacks):
@@ -101,16 +101,16 @@ class FileHandler:
         success, message = self.db_service.check_connection()
         if not success:
             messagebox.showerror(
-                "ข้อผิดพลาด", 
-                f"ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้:\n{message}\n\nกรุณาตรวจสอบการตั้งค่าฐานข้อมูลก่อน"
+                "Error", 
+                f"Cannot connect to database:\n{message}\n\nPlease check database settings first"
             )
             return
             
             
             
         answer = messagebox.askyesno(
-            "ยืนยันการอัปโหลด",
-            f"คุณแน่ใจหรือไม่ว่าต้องการอัปโหลดไฟล์ที่เลือก {len(selected)} ไฟล์?"
+            "Confirm Upload",
+            f"Are you sure you want to upload the selected {len(selected)} files?"
         )
         
         if answer:
@@ -134,15 +134,15 @@ class FileHandler:
         processed_files = 0
         
         # แสดงสถานะเริ่มต้น
-        ui_callbacks['set_progress_status']("เริ่มการอัปโหลด", f"พบไฟล์ {total_files} ไฟล์ จาก {total_types} ประเภท")
+        ui_callbacks['set_progress_status']("Starting upload", f"Found {total_files} files from {total_types} types")
         
         for logic_type, files in files_by_type.items():
             try:
-                self.log(f"📤 กำลังอัปโหลดไฟล์ประเภท {logic_type}")
+                self.log(f"📤 Uploading files of type {logic_type}")
                 
                 # อัปเดต Progress Bar ตามความคืบหน้า
                 progress = completed_types / total_types
-                ui_callbacks['update_progress'](progress, f"กำลังประมวลผลประเภท {logic_type}", f"ประเภทที่ {completed_types + 1} จาก {total_types}")
+                ui_callbacks['update_progress'](progress, f"Processing type {logic_type}", f"Type {completed_types + 1} of {total_types}")
                 
                 # รวมข้อมูลจากทุกไฟล์ในประเภทเดียวกัน
                 all_dfs = []
@@ -153,7 +153,7 @@ class FileHandler:
                         file_progress = (processed_files - 1) / total_files  # เริ่มจาก 0
                         
                         # อัปเดตความคืบหน้าระดับไฟล์
-                        ui_callbacks['update_progress'](file_progress, f"กำลังอ่านไฟล์: {os.path.basename(file_path)}", f"ไฟล์ที่ {processed_files} จาก {total_files}")
+                        ui_callbacks['update_progress'](file_progress, f"Reading file: {os.path.basename(file_path)}", f"File {processed_files} of {total_files}")
                         
                         # อ่านไฟล์ Excel
                         success, result = self.file_service.read_excel_file(file_path, logic_type)
@@ -172,37 +172,37 @@ class FileHandler:
                         # หมายเหตุ: การตรวจสอบข้อมูลรายละเอียดจะทำใน staging table ด้วย SQL
                         
                         all_dfs.append(df)
-                        self.log(f"✅ อ่านข้อมูลจากไฟล์: {os.path.basename(file_path)}")
+                        self.log(f"✅ Read data from file: {os.path.basename(file_path)}")
                         
                     except Exception as e:
-                        self.log(f"❌ เกิดข้อผิดพลาดขณะอ่านไฟล์ {os.path.basename(file_path)}: {e}")
+                        self.log(f"❌ An error occurred while reading file {os.path.basename(file_path)}: {e}")
                 
                 if not all_dfs:
-                    self.log(f"❌ ไม่มีข้อมูลที่ถูกต้องจากไฟล์ประเภท {logic_type}")
+                    self.log(f"❌ No valid data from files of type {logic_type}")
                     continue
                 
                 # รวม DataFrame ทั้งหมด
                 combined_df = pd.concat(all_dfs, ignore_index=True)
                 
                 # แสดงสถานะการรวมข้อมูล
-                ui_callbacks['update_progress'](file_progress, f"กำลังรวมข้อมูลประเภท {logic_type}", f"รวม {len(all_dfs)} ไฟล์ เป็น {len(combined_df)} แถว")
+                ui_callbacks['update_progress'](file_progress, f"Combining data for type {logic_type}", f"Combined {len(all_dfs)} files into {len(combined_df)} rows")
                 
                 # ใช้ dtype ที่ถูกต้อง
                 required_cols = self.file_service.get_required_dtypes(logic_type)
                 
                 # ตรวจสอบว่า required_cols ไม่ว่างเปล่า
                 if not required_cols:
-                    self.log(f"❌ ไม่พบการตั้งค่าประเภทข้อมูลสำหรับ {logic_type}")
+                    self.log(f"❌ No data type configuration found for {logic_type}")
                     continue
                 
                 # ตรวจสอบว่าข้อมูลไม่ว่างเปล่า
                 if combined_df.empty:
-                    self.log(f"❌ ไม่มีข้อมูลที่ถูกต้องจากไฟล์ประเภท {logic_type}")
+                    self.log(f"❌ No valid data from files of type {logic_type}")
                     continue
                 
                 # อัปโหลดข้อมูล
-                ui_callbacks['update_progress'](file_progress, f"กำลังอัปโหลดข้อมูลประเภท {logic_type}", f"ส่งข้อมูล {len(combined_df)} แถว ไปยัง SQL Server")
-                self.log(f"📊 กำลังอัปโหลดข้อมูล {len(combined_df)} แถว สำหรับประเภท {logic_type}")
+                ui_callbacks['update_progress'](file_progress, f"Uploading data for type {logic_type}", f"Sending {len(combined_df)} rows to SQL Server")
+                self.log(f"📊 Uploading {len(combined_df)} rows for type {logic_type}")
                 success, message = self.db_service.upload_data(combined_df, logic_type, required_cols, log_func=self.log)
                 
                 if success:
@@ -215,11 +215,11 @@ class FileHandler:
                             move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
                             if move_success:
                                 for original_path, new_path in move_result:
-                                    self.log(f"📦 ย้ายไฟล์ไปยัง: {os.path.basename(new_path)}")
+                                    self.log(f"📦 Moved file to: {os.path.basename(new_path)}")
                             else:
-                                self.log(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
+                                self.log(f"❌ Could not move file: {move_result}")
                         except Exception as move_error:
-                            self.log(f"❌ เกิดข้อผิดพลาดในการย้ายไฟล์: {move_error}")
+                            self.log(f"❌ An error occurred while moving file: {move_error}")
                 else:
                     # แสดงเฉพาะข้อความสรุปจากบริการฐานข้อมูล ไม่พิมพ์รายการคอลัมน์ทั้งหมด
                     self.log(f"❌ {message}")
@@ -227,12 +227,12 @@ class FileHandler:
                 completed_types += 1
                 
             except Exception as e:
-                self.log(f"❌ เกิดข้อผิดพลาดขณะอัปโหลดไฟล์ประเภท {logic_type}: {e}")
+                self.log(f"❌ An error occurred while uploading files of type {logic_type}: {e}")
         
         # อัปเดต progress เป็น 100% เมื่อเสร็จสิ้น
         successfully_uploaded = sum(1 for files in files_by_type.values() for _ in files)  # Count all processed files
-        ui_callbacks['update_progress'](1.0, "การอัปโหลดเสร็จสิ้น", f"ประมวลผล {total_files} ไฟล์เสร็จสิ้น")
-        self.log("--- 🏁 การอัปโหลดเสร็จสิ้น ---")
+        ui_callbacks['update_progress'](1.0, "Upload completed", f"Processed {total_files} files successfully")
+        self.log("--- 🏁 Upload completed ---")
         
         # เปิดปุ่มทั้งหมดกลับมา
         ui_callbacks['enable_controls']()
@@ -243,8 +243,8 @@ class FileHandler:
         last_path = load_last_path_callback()
         if not last_path or not os.path.isdir(last_path):
             messagebox.showerror(
-                "ข้อผิดพลาด", 
-                f"โฟลเดอร์ต้นทางไม่ถูกต้อง: {last_path}\n\nกรุณาเลือกโฟลเดอร์ต้นทางก่อน"
+                "Error", 
+                f"Invalid source folder: {last_path}\n\nPlease select a source folder first"
             )
             return
         
@@ -252,8 +252,8 @@ class FileHandler:
         success, message = self.db_service.check_connection()
         if not success:
             messagebox.showerror(
-                "ข้อผิดพลาด", 
-                f"ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้:\n{message}\n\nกรุณาตรวจสอบการตั้งค่าฐานข้อมูลก่อน"
+                "Error", 
+                f"Cannot connect to database:\n{message}\n\nPlease check database settings first"
             )
             return
             
@@ -261,19 +261,19 @@ class FileHandler:
         # ตรวจสอบการตั้งค่าประเภทไฟล์
         if not column_settings:
             messagebox.showerror(
-                "ข้อผิดพลาด", 
-                "ไม่พบการตั้งค่าประเภทไฟล์\n\nกรุณาไปที่แท็บ Settings และเพิ่มประเภทไฟล์ก่อน"
+                "Error", 
+                "No file type configuration found\n\nPlease go to Settings tab and add file types first"
             )
             return
         
         # ยืนยันการทำงาน
         result = messagebox.askyesno(
-            "ยืนยันการประมวลผลอัตโนมัติ",
-            f"จะดำเนินการประมวลผลอัตโนมัติในโฟลเดอร์:\n{last_path}\n\n"
-            "ขั้นตอนการทำงาน:\n"
-            "1. ค้นหาไฟล์ข้อมูลทั้งหมด\n"
-            "2. ประมวลผลและอัปโหลดไฟล์ทั้งหมด\n"
-            "ต้องการดำเนินการหรือไม่?"
+            "Confirm Auto Processing",
+            f"Will perform auto processing in folder:\n{last_path}\n\n"
+            "Processing steps:\n"
+            "1. Find all data files\n"
+            "2. Process and upload all files\n"
+            "Do you want to proceed?"
         )
         
         if not result:
@@ -289,22 +289,22 @@ class FileHandler:
             
             # รีเซ็ต progress bar และแสดงสถานะเริ่มต้น
             ui_callbacks['reset_progress']()
-            ui_callbacks['set_progress_status']("เริ่มการประมวลผลอัตโนมัติ", "กำลังเตรียมระบบ...")
+            ui_callbacks['set_progress_status']("Starting auto processing", "Preparing system...")
             
-            self.log("🤖 เริ่มการประมวลผลอัตโนมัติ")
-            self.log(f"📂 โฟลเดอร์ต้นทาง: {folder_path}")
+            self.log("🤖 Starting auto processing")
+            self.log(f"📂 Source folder: {folder_path}")
             
             # === ประมวลผลไฟล์หลัก ===
-            self.log("=== กำลังประมวลผลไฟล์ ===")
+            self.log("=== Processing files ===")
             self._auto_process_main_files(folder_path, ui_callbacks)
             
-            self.log("=== 🏁 การประมวลผลอัตโนมัติเสร็จสิ้น ===")
-            ui_callbacks['update_progress'](1.0, "การประมวลผลอัตโนมัติเสร็จสิ้น", "ทุกขั้นตอนเสร็จสิ้นเรียบร้อย")
-            messagebox.showinfo("สำเร็จ", "การประมวลผลอัตโนมัติเสร็จสิ้นแล้ว")
+            self.log("=== 🏁 Auto processing completed ===")
+            ui_callbacks['update_progress'](1.0, "Auto processing completed", "All steps completed successfully")
+            messagebox.showinfo("Success", "Auto processing completed successfully")
             
         except Exception as e:
-            self.log(f"❌ เกิดข้อผิดพลาดในการประมวลผลอัตโนมัติ: {e}")
-            messagebox.showerror("ข้อผิดพลาด", f"เกิดข้อผิดพลาด: {e}")
+            self.log(f"❌ An error occurred during auto processing: {e}")
+            messagebox.showerror("Error", f"An error occurred: {e}")
         finally:
             # เปิดปุ่มกลับมา
             ui_callbacks['enable_controls']()
@@ -319,10 +319,10 @@ class FileHandler:
             data_files = self.file_service.find_data_files()
             
             if not data_files:
-                self.log("ไม่พบไฟล์ข้อมูลในโฟลเดอร์ต้นทาง")
+                self.log("No data files found in source folder")
                 return
             
-            self.log(f"พบไฟล์ข้อมูล {len(data_files)} ไฟล์ กำลังประมวลผล...")
+            self.log(f"Found {len(data_files)} data files, starting processing...")
             
             total_files = len(data_files)
             processed_files = 0
@@ -335,9 +335,9 @@ class FileHandler:
                     progress = (processed_files - 1) / total_files  # เริ่มจาก 0
                     
                     # อัปเดตความคืบหน้าแบบละเอียด
-                    ui_callbacks['update_progress'](progress, f"กำลังประมวลผล: {os.path.basename(file_path)}", f"ไฟล์ที่ {processed_files} จาก {total_files}")
+                    ui_callbacks['update_progress'](progress, f"Processing file: {os.path.basename(file_path)}", f"File {processed_files} of {total_files}")
                     
-                    self.log(f"📁 กำลังประมวลผล: {os.path.basename(file_path)}")
+                    self.log(f"📁 Processing file: {os.path.basename(file_path)}")
                     
                     # ตรวจหา logic_type
                     logic_type = self.file_service.detect_file_type(file_path)
@@ -350,15 +350,15 @@ class FileHandler:
                                 break
                     
                     if not logic_type:
-                        self.log(f"❌ ไม่สามารถระบุประเภทไฟล์: {os.path.basename(file_path)}")
+                        self.log(f"❌ Could not identify file type: {os.path.basename(file_path)}")
                         continue
                     
-                    self.log(f"📋 ระบุประเภทไฟล์: {logic_type}")
+                    self.log(f"📋 Identified file type: {logic_type}")
                     
                     # อ่านไฟล์
                     success, result = self.file_service.read_excel_file(file_path, logic_type)
                     if not success:
-                        self.log(f"❌ ไม่สามารถอ่านไฟล์: {result}")
+                        self.log(f"❌ Could not read file: {result}")
                         continue
                     
                     df = result
@@ -366,7 +366,7 @@ class FileHandler:
                     # ตรวจสอบคอลัมน์เบื้องต้น (เฉพาะ column existence)
                     success, result = self.file_service.validate_columns(df, logic_type)
                     if not success:
-                        self.log(f"❌ คอลัมน์ไม่ถูกต้อง: {result}")
+                        self.log(f"❌ Invalid columns: {result}")
                         continue
                     
                     # หมายเหตุ: การตรวจสอบข้อมูลรายละเอียดจะทำใน staging table ด้วย SQL
@@ -376,19 +376,19 @@ class FileHandler:
                     
                     # ตรวจสอบว่า required_cols ไม่ว่างเปล่า
                     if not required_cols:
-                        self.log(f"❌ ไม่พบการตั้งค่าประเภทข้อมูลสำหรับ {logic_type}")
+                        self.log(f"❌ No data type configuration found for {logic_type}")
                         continue
                     
                     # ตรวจสอบว่าข้อมูลไม่ว่างเปล่า
                     if df.empty:
-                        self.log(f"❌ ไฟล์ {os.path.basename(file_path)} ไม่มีข้อมูล")
+                        self.log(f"❌ File {os.path.basename(file_path)} has no data")
                         continue
                     
-                    self.log(f"📊 กำลังอัปโหลดข้อมูล {len(df)} แถว สำหรับประเภท {logic_type}")
+                    self.log(f"📊 Uploading {len(df)} rows for type {logic_type}")
                     success, message = self.db_service.upload_data(df, logic_type, required_cols, log_func=self.log)
                     
                     if success:
-                        self.log(f"✅ อัปโหลดสำเร็จ: {message}")
+                        self.log(f"✅ Upload successful: {message}")
                         successful_uploads += 1
                         
                         # ย้ายไฟล์หลังอัปโหลดสำเร็จ
@@ -396,21 +396,21 @@ class FileHandler:
                             move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
                             if move_success:
                                 for original_path, new_path in move_result:
-                                    self.log(f"📦 ย้ายไฟล์ไปยัง: {os.path.basename(new_path)}")
+                                    self.log(f"📦 Moved file to: {os.path.basename(new_path)}")
                             else:
-                                self.log(f"❌ ไม่สามารถย้ายไฟล์: {move_result}")
+                                self.log(f"❌ Could not move file: {move_result}")
                         except Exception as move_error:
-                            self.log(f"❌ เกิดข้อผิดพลาดในการย้ายไฟล์: {move_error}")
+                            self.log(f"❌ An error occurred while moving file: {move_error}")
                     else:
                         # แสดงเฉพาะข้อความสรุปจากบริการฐานข้อมูล ไม่พิมพ์รายการคอลัมน์ทั้งหมด
-                        self.log(f"❌ อัปโหลดไม่สำเร็จ: {message}")
+                        self.log(f"❌ Upload failed: {message}")
                         
                 except Exception as e:
-                    self.log(f"❌ เกิดข้อผิดพลาดขณะประมวลผล {os.path.basename(file_path)}: {e}")
+                    self.log(f"❌ An error occurred while processing {os.path.basename(file_path)}: {e}")
             
             # อัปเดต progress เป็น 100% เมื่อเสร็จสิ้น
-            ui_callbacks['update_progress'](1.0, "การประมวลผลเสร็จสิ้น", f"สำเร็จ {successful_uploads} ไฟล์ จาก {total_files} ไฟล์")
-            self.log(f"✅ ประมวลผลไฟล์เสร็จสิ้น: {successful_uploads}/{total_files} ไฟล์สำเร็จ")
+            ui_callbacks['update_progress'](1.0, "Processing completed", f"Successfully processed {successful_uploads} of {total_files} files")
+            self.log(f"✅ File processing completed: {successful_uploads}/{total_files} files successful")
             
         except Exception as e:
-            self.log(f"❌ เกิดข้อผิดพลาดในการประมวลผลไฟล์: {e}")
+            self.log(f"❌ An error occurred while processing files: {e}")

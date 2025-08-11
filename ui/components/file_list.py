@@ -58,7 +58,7 @@ class FileList(ctk.CTkScrollableFrame):
         # เวลาที่สร้างไฟล์
         time_label = ctk.CTkLabel(
             frame,
-            text=f"สร้างเมื่อ: {created_time_str}",
+            text=f"Created at: {created_time_str}",
             text_color="#7a7a7a",
             font=theme.FONT_SMALL
         )

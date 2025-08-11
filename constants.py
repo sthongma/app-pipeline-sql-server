@@ -9,7 +9,7 @@ import os
 
 # === DATABASE CONSTANTS ===
 class DatabaseConstants:
-    """ค่าคงที่สำหรับฐานข้อมูล"""
+    """Database constants"""
     
     # SQL Server connection settings
     DEFAULT_DRIVER = "ODBC+Driver+17+for+SQL+Server"
@@ -43,7 +43,7 @@ class DatabaseConstants:
 
 # === FILE PROCESSING CONSTANTS ===
 class FileConstants:
-    """ค่าคงที่สำหรับการประมวลผลไฟล์"""
+    """File processing constants"""
     
     # Supported file extensions
     SUPPORTED_EXCEL_EXTENSIONS = ['.xlsx', '.xls']
@@ -70,7 +70,7 @@ class FileConstants:
 
 # === APPLICATION CONSTANTS ===
 class AppConstants:
-    """ค่าคงที่สำหรับแอปพลิเคชัน"""
+    """Application constants"""
     
     # Application info
     APP_NAME = "PIPELINE_SQLSERVER"
@@ -95,7 +95,7 @@ class AppConstants:
 
 # === PATH CONSTANTS ===
 class PathConstants:
-    """ค่าคงที่สำหรับ path และไฟล์"""
+    """Path and file constants"""
     
     # Configuration files
     CONFIG_DIR = "config"
@@ -110,41 +110,41 @@ class PathConstants:
 
 # === ERROR MESSAGES ===
 class ErrorMessages:
-    """ข้อความแสดงข้อผิดพลาดมาตรฐาน"""
+    """Standard error messages"""
     
     # Database errors
-    DB_CONNECTION_FAILED = "ไม่สามารถเชื่อมต่อกับ SQL Server ได้"
-    DB_UPLOAD_FAILED = "การอัปโหลดข้อมูลล้มเหลว"
-    DB_SCHEMA_MISMATCH = "Schema ของตารางไม่ตรงกับการตั้งค่า"
+    DB_CONNECTION_FAILED = "Failed to connect to SQL Server"
+    DB_UPLOAD_FAILED = "Data upload failed"
+    DB_SCHEMA_MISMATCH = "Table schema does not match configuration"
     
     # File errors
-    FILE_NOT_FOUND = "ไม่พบไฟล์ที่ระบุ"
-    FILE_READ_ERROR = "เกิดข้อผิดพลาดขณะอ่านไฟล์"
-    FILE_MOVE_ERROR = "ไม่สามารถย้ายไฟล์ได้"
+    FILE_NOT_FOUND = "File not found"
+    FILE_READ_ERROR = "Error reading file"
+    FILE_MOVE_ERROR = "Unable to move file"
     
     # Data validation errors
-    MISSING_COLUMNS = "คอลัมน์ที่จำเป็นหายไป"
-    INVALID_DATA_TYPE = "ชนิดข้อมูลไม่ถูกต้อง"
-    EMPTY_DATA = "ไม่พบข้อมูลในไฟล์"
+    MISSING_COLUMNS = "Required columns are missing"
+    INVALID_DATA_TYPE = "Invalid data type"
+    EMPTY_DATA = "No data found in file"
     
     # Configuration errors
-    CONFIG_LOAD_ERROR = "ไม่สามารถโหลดการตั้งค่าได้"
-    CONFIG_SAVE_ERROR = "ไม่สามารถบันทึกการตั้งค่าได้"
+    CONFIG_LOAD_ERROR = "Unable to load configuration"
+    CONFIG_SAVE_ERROR = "Unable to save configuration"
 
 
 # === SUCCESS MESSAGES ===
 class SuccessMessages:
-    """ข้อความแสดงความสำเร็จมาตรฐาน"""
+    """Standard success messages"""
     
-    DB_CONNECTION_SUCCESS = "เชื่อมต่อฐานข้อมูลสำเร็จ"
-    FILE_UPLOAD_SUCCESS = "อัปโหลดไฟล์สำเร็จ"
-    FILE_MOVE_SUCCESS = "ย้ายไฟล์สำเร็จ"
-    CONFIG_SAVE_SUCCESS = "บันทึกการตั้งค่าสำเร็จ"
+    DB_CONNECTION_SUCCESS = "Database connection successful"
+    FILE_UPLOAD_SUCCESS = "File upload successful"
+    FILE_MOVE_SUCCESS = "File move successful"
+    CONFIG_SAVE_SUCCESS = "Settings saved successfully"
 
 
 # === REGEX PATTERNS ===
 class RegexPatterns:
-    """Regular expression patterns ที่ใช้บ่อย"""
+    """Commonly used regular expression patterns"""
     
     # Numeric cleaning
     NUMERIC_ONLY = r"[^\d.-]"
@@ -162,7 +162,7 @@ class RegexPatterns:
 
 # === TYPE MAPPINGS ===
 class TypeMappings:
-    """การแมปชนิดข้อมูลระหว่างระบบต่างๆ"""
+    """Data type mappings between different systems"""
     
     # Pandas to SQL Server type mapping
     PANDAS_TO_SQL: Dict[str, str] = {

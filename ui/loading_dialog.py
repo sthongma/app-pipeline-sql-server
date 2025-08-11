@@ -10,8 +10,8 @@ class LoadingDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,
-        title: str = "กำลังโหลด...",
-        message: str = "กรุณารอสักครู่",
+        title: str = "Loading...",
+        message: str = "Please wait...",
         min_display_ms: int = 600,
         min_step_duration_ms: int = 800,
         min_total_duration_ms: int | None = None,
@@ -35,10 +35,10 @@ class LoadingDialog(ctk.CTkToplevel):
         self._step_done_flags = [False] * len(self.steps)
         self._show_tips = bool(show_tips)
         self._tips = tips or [
-            "เคล็ดลับ: คุณสามารถปรับธีม UI ได้จาก Settings",
-            "เคล็ดลับ: ตั้งค่า Date Format ให้ตรงกับไฟล์ใน Settings",
-            "เคล็ดลับ: ใช้ ‘ประมวลผลอัตโนมัติ’ เพื่อลดขั้นตอน",
-            "เคล็ดลับ: ตรวจสอบชนิดข้อมูลให้ตรงกับคอลัมน์ก่อนอัปโหลด",
+            "Tip: You can adjust UI theme in Settings",
+            "Tip: Set Date Format to match your files in Settings",
+            "Tip: Use 'Auto Processing' to reduce steps",
+            "Tip: Check data types match columns before upload",
         ]
         self._tip_index = 0
         self._closing_started = False
@@ -129,7 +129,7 @@ class LoadingDialog(ctk.CTkToplevel):
         # เวลาและเคล็ดลับ
         bottom_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         bottom_frame.pack(fill="x", pady=(4, 0))
-        self.elapsed_label = ctk.CTkLabel(bottom_frame, text="เวลา: 0.0 วินาที", text_color="#7a7a7a")
+        self.elapsed_label = ctk.CTkLabel(bottom_frame, text="Time: 0.0 seconds", text_color="#7a7a7a")
         self.elapsed_label.pack(side="left")
         if self._show_tips and self._tips:
             self.tip_label = ctk.CTkLabel(bottom_frame, text=self._tips[0], text_color="#7a7a7a")
@@ -142,7 +142,7 @@ class LoadingDialog(ctk.CTkToplevel):
         # ปุ่ม Cancel (ซ่อนไว้ก่อน)
         self.cancel_button = ctk.CTkButton(
             main_frame, 
-            text="ยกเลิก", 
+            text="Cancel", 
             command=self._cancel_task,
             width=100
         )
@@ -311,7 +311,7 @@ class LoadingDialog(ctk.CTkToplevel):
         
     def _cancel_task(self):
         """ยกเลิกงาน (ถ้าต้องการ)"""
-        self.error = "ยกเลิกโดยผู้ใช้"
+        self.error = "Cancelled by user"
         self._finish_task()
         
     def _schedule_ui_update(self):
@@ -328,7 +328,7 @@ class LoadingDialog(ctk.CTkToplevel):
             if self.winfo_exists() and self._start_ts is not None:
                 elapsed = time.perf_counter() - self._start_ts
                 if hasattr(self, 'elapsed_label') and self.elapsed_label:
-                    self.elapsed_label.configure(text=f"เวลา: {elapsed:.1f} วินาที")
+                    self.elapsed_label.configure(text=f"Time: {elapsed:.1f} seconds")
                 self.after(200, self._schedule_elapsed_update)
         except Exception:
             pass
@@ -348,10 +348,10 @@ class LoadingDialog(ctk.CTkToplevel):
         try:
             # ตัวอย่างขั้นตอนมาตรฐานตอนเตรียมระบบ
             keywords_map = [
-                (0, ["เชื่อมต่อ", "การเชื่อมต่อ"]),
-                (1, ["สิทธิ์", "สิทธิ์การใช้งาน"]),
-                (2, ["โหลด", "เตรียม", "ตั้งค่า"]),
-                (3, ["สร้าง UI", "สร้าง MainWindow", "สร้าง Tab"]),
+                (0, ["Connect", "Connection"]),
+                (1, ["Permission", "Access rights"]),
+                (2, ["Load", "Prepare", "Setup"]),
+                (3, ["Create UI", "Create MainWindow", "Create Tab"]),
             ]
             if self.steps:
                 for idx, keys in keywords_map:
@@ -359,7 +359,7 @@ class LoadingDialog(ctk.CTkToplevel):
                         # กำลังทำ
                         self.mark_step_running(idx)
                         # ถ้ามีคำบ่งชี้เสร็จสิ้น
-                        if any(done_kw in text for done_kw in ["เสร็จสิ้น", "สำเร็จ", "เรียบร้อย"]):
+                        if any(done_kw in text for done_kw in ["completed", "successful", "done"]):
                             self.mark_step_done(idx)
                         break
         except Exception:

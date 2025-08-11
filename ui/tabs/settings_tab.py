@@ -43,7 +43,7 @@ class SettingsTab:
     def _start_async_ui_building(self, ui_progress_callback):
         """เริ่ม UI building แบบ async"""
         if ui_progress_callback:
-            ui_progress_callback("เริ่มสร้าง UI สำหรับประเภทไฟล์ต่างๆ...")
+            ui_progress_callback("Starting to build UI for file types...")
         
         # เริ่ม pre-build UI สำหรับทุกประเภทไฟล์
         self._prebuild_all_ui_cache_async(ui_progress_callback)
@@ -51,7 +51,7 @@ class SettingsTab:
     def _create_ui_step_by_step(self):
         """สร้าง UI แบบ step-by-step เพื่อไม่บล็อค"""
         if self.ui_progress_callback:
-            self.ui_progress_callback("สร้าง Control Panel...")
+            self.ui_progress_callback("Building Control Panel...")
         
         self.parent.after(10, self._create_control_panel)
     
@@ -66,35 +66,35 @@ class SettingsTab:
         button_row.pack(fill="x", pady=4)
         
         if self.ui_progress_callback:
-            self.ui_progress_callback("สร้างปุ่มควบคุม...")
+            self.ui_progress_callback("Building buttons...")
         
         self.parent.after(10, lambda: self._create_buttons(button_row))
     
     def _create_buttons(self, button_row):
         """สร้างปุ่มควบคุม"""
         # ปุ่มควบคุมด้านซ้าย
-        add_type_btn = ctk.CTkButton(button_row, text="➕ เพิ่มประเภทไฟล์", command=self._add_file_type, font=theme.FONT_BUTTON)
+        add_type_btn = ctk.CTkButton(button_row, text="➕ Add file type", command=self._add_file_type, font=theme.FONT_BUTTON)
         add_type_btn.pack(side="left", padx=5)
-        del_type_btn = ctk.CTkButton(button_row, text="➖ ลบประเภทไฟล์", command=self._delete_file_type, font=theme.FONT_BUTTON)
+        del_type_btn = ctk.CTkButton(button_row, text="➖ Remove file type", command=self._delete_file_type, font=theme.FONT_BUTTON)
         del_type_btn.pack(side="left", padx=5)
-        save_dtype_btn = ctk.CTkButton(button_row, text="✅ บันทึกชนิดข้อมูล", command=self._save_all_dtype_settings, font=theme.FONT_BUTTON)
+        save_dtype_btn = ctk.CTkButton(button_row, text="✅ Save data types", command=self._save_all_dtype_settings, font=theme.FONT_BUTTON)
         save_dtype_btn.pack(side="left", padx=5)
-        edit_type_btn = ctk.CTkButton(button_row, text="✏️ แก้ไขชื่อประเภทไฟล์", command=self._edit_file_type, font=theme.FONT_BUTTON)
+        edit_type_btn = ctk.CTkButton(button_row, text="✏️ Rename file type", command=self._edit_file_type, font=theme.FONT_BUTTON)
         edit_type_btn.pack(side="left", padx=5)
         
         if self.ui_progress_callback:
-            self.ui_progress_callback("สร้าง Dropdown...")
+            self.ui_progress_callback("Building dropdown...")
         
         self.parent.after(10, lambda: self._create_dropdown(button_row))
     
     def _create_dropdown(self, button_row):
         """สร้าง Dropdown"""
         # Dropdown สำหรับเลือกประเภทไฟล์
-        self.file_type_var = ctk.StringVar(value="เลือกประเภทไฟล์...")
+        self.file_type_var = ctk.StringVar(value="Select a file type...")
         self.file_type_selector = ctk.CTkOptionMenu(
             button_row, 
             variable=self.file_type_var,
-            values=["เลือกประเภทไฟล์..."],
+            values=["Select a file type..."],
             command=self._on_file_type_selected,
             width=300,
             font=theme.FONT_BODY
@@ -102,7 +102,7 @@ class SettingsTab:
         self.file_type_selector.pack(side="right", padx=5)
         
         if self.ui_progress_callback:
-            self.ui_progress_callback("สร้าง Content Frame...")
+            self.ui_progress_callback("Building content frame...")
         
         self.parent.after(10, self._create_content_frame)
     
@@ -113,7 +113,7 @@ class SettingsTab:
         self.content_frame.pack(fill="both", expand=True, padx=10, pady=(0, 8))
         
         if self.ui_progress_callback:
-            self.ui_progress_callback("โหลดข้อมูลประเภทไฟล์...")
+            self.ui_progress_callback("Loading file type data...")
         
         self.parent.after(10, self._finish_ui_creation)
     
@@ -123,7 +123,7 @@ class SettingsTab:
         self.refresh_file_type_tabs()
         
         if self.ui_progress_callback:
-            self.ui_progress_callback("Settings Tab พร้อมใช้งาน")
+            self.ui_progress_callback("Settings Tab ready")
     
     def _create_ui(self):
         """สร้างส่วนประกอบใน Settings Tab (เดิม - สำหรับ fallback)"""
@@ -173,7 +173,7 @@ class SettingsTab:
             self._build_next_file_type_ui()
         else:
             if progress_callback:
-                progress_callback("ไม่มีประเภทไฟล์ให้สร้าง UI")
+                progress_callback("No file types to build UI for")
             # กรณีไม่มีประเภทไฟล์ ให้ถือว่า SettingsTab พร้อมทันที
             if callable(self.on_all_ui_built):
                 try:
@@ -189,7 +189,7 @@ class SettingsTab:
             # อัพเดท progress
             if self.ui_progress_callback:
                 self.ui_progress_callback(
-                    f"กำลังสร้าง UI สำหรับ: {file_type} ({self.current_build_index + 1}/{self.total_types})"
+                    f"Building UI for: {file_type} ({self.current_build_index + 1}/{self.total_types})"
                 )
             
             # สร้าง UI สำหรับประเภทไฟล์นี้
@@ -205,7 +205,7 @@ class SettingsTab:
         else:
             # เสร็จสิ้นการสร้างทั้งหมด
             if self.ui_progress_callback:
-                self.ui_progress_callback(f"สร้าง UI สำหรับ {self.total_types} ประเภทไฟล์เสร็จสิ้น")
+                self.ui_progress_callback(f"Built UI for {self.total_types} file types")
             # แจ้ง callback ว่า UI พร้อมแล้ว
             if callable(self.on_all_ui_built):
                 try:
@@ -220,7 +220,7 @@ class SettingsTab:
         
         for i, file_type in enumerate(file_types):
             if progress_callback:
-                progress_callback(f"กำลังสร้าง UI สำหรับประเภทไฟล์: {file_type} ({i+1}/{total_types})")
+                progress_callback(f"Building UI for file type: {file_type} ({i+1}/{total_types})")
                 
             if file_type not in self.ui_cache:
                 self._create_and_cache_ui(file_type)
@@ -228,7 +228,7 @@ class SettingsTab:
                 self.ui_cache[file_type]['scroll_frame'].pack_forget()
         
         if progress_callback and total_types > 0:
-            progress_callback(f"สร้าง UI สำหรับ {total_types} ประเภทไฟล์เสร็จสิ้น")
+            progress_callback(f"Built UI for {total_types} file types")
     
     def refresh_file_type_tabs(self):
         """รีเฟรช tabs ของประเภทไฟล์ (ใช้ข้อมูลแคช)"""
@@ -295,12 +295,12 @@ class SettingsTab:
             inferred_dtypes = self._infer_dtypes(df)
             
             # ให้ผู้ใช้ตั้งชื่อประเภทไฟล์ใหม่
-            file_type = ctk.CTkInputDialog(text="ชื่อประเภทไฟล์ใหม่:").get_input()
+            file_type = ctk.CTkInputDialog(text="New file type name:").get_input()
             if not file_type:
                 return
             
             if file_type in self.column_settings:
-                messagebox.showwarning("ซ้ำ", "มีประเภทไฟล์นี้อยู่แล้ว")
+                messagebox.showwarning("Duplicate", "This file type already exists")
                 return
             
             self.column_settings[file_type] = {col: col for col in columns}
@@ -313,10 +313,10 @@ class SettingsTab:
                 self.callbacks['save_dtype_settings']()
             
             self.refresh_file_type_tabs()
-            messagebox.showinfo("สำเร็จ", "นำเข้าคอลัมน์และชนิดข้อมูลจากไฟล์ตัวอย่างสำเร็จ!")
+            messagebox.showinfo("Success", "Imported columns and data types from the sample file")
             
         except Exception as e:
-            messagebox.showerror("ผิดพลาด", f"ไม่สามารถอ่านไฟล์: {e}")
+            messagebox.showerror("Error", f"Unable to read file: {e}")
     
     def _infer_dtypes(self, df):
         """อนุมานประเภทข้อมูลจาก DataFrame"""
@@ -347,18 +347,18 @@ class SettingsTab:
     def _delete_file_type(self):
         """ลบประเภทไฟล์"""
         if not self.column_settings:
-            messagebox.showinfo("ไม่มีข้อมูล", "ยังไม่มีประเภทไฟล์ให้ลบ")
+            messagebox.showinfo("No data", "No file types to remove")
             return
         
         file_types = list(self.column_settings.keys())
         file_type = ctk.CTkInputDialog(
-            text=f"พิมพ์ชื่อประเภทไฟล์ที่จะลบ (ตัวอย่าง: {file_types[0]}):"
+            text=f"Enter the file type name to remove (e.g., {file_types[0]}):"
         ).get_input()
         
         if not file_type or file_type not in self.column_settings:
             return
         
-        if messagebox.askyesno("ยืนยัน", f"ลบประเภทไฟล์ {file_type}?"):
+        if messagebox.askyesno("Confirm", f"Remove file type {file_type}?"):
             self.column_settings.pop(file_type)
             self.dtype_settings.pop(file_type, None)
             
@@ -372,23 +372,23 @@ class SettingsTab:
     def _edit_file_type(self):
         """แก้ไขชื่อประเภทไฟล์"""
         if not self.column_settings:
-            messagebox.showinfo("ไม่มีข้อมูล", "ยังไม่มีประเภทไฟล์ให้แก้ไข")
+            messagebox.showinfo("No data", "No file types to edit")
             return
         
         file_types = list(self.column_settings.keys())
         old_type = ctk.CTkInputDialog(
-            text=f"พิมพ์ชื่อประเภทไฟล์ที่ต้องการแก้ไข (ตัวอย่าง: {file_types[0]}):"
+            text=f"Enter the file type name to edit (e.g., {file_types[0]}):"
         ).get_input()
         
         if not old_type or old_type not in self.column_settings:
             return
         
         new_type = ctk.CTkInputDialog(
-            text=f"พิมพ์ชื่อประเภทไฟล์ใหม่ (จาก: {old_type}):"
+            text=f"Enter a new file type name (from: {old_type}):"
         ).get_input()
         
         if not new_type or new_type in self.column_settings:
-            messagebox.showwarning("ซ้ำ", "มีประเภทไฟล์นี้อยู่แล้วหรือชื่อไม่ถูกต้อง")
+            messagebox.showwarning("Duplicate", "File type already exists or invalid name")
             return
         
         # เปลี่ยนชื่อ key ใน column_settings และ dtype_settings
@@ -402,12 +402,12 @@ class SettingsTab:
             self.callbacks['save_dtype_settings']()
         
         self.refresh_file_type_tabs()
-        messagebox.showinfo("สำเร็จ", f"เปลี่ยนชื่อประเภทไฟล์ {old_type} เป็น {new_type} เรียบร้อยแล้ว")
+        messagebox.showinfo("Success", f"Renamed file type {old_type} to {new_type}")
     
     def _save_all_dtype_settings(self):
         """บันทึกชนิดข้อมูลสำหรับประเภทไฟล์ที่แสดงอยู่ในขณะนั้น"""
         current_file_type = self.file_type_var.get()
-        if current_file_type != "เลือกประเภทไฟล์..." and current_file_type in self.dtype_menus:
+        if current_file_type != "Select a file type..." and current_file_type in self.dtype_menus:
             if current_file_type not in self.dtype_settings:
                 self.dtype_settings[current_file_type] = {}
             
@@ -426,13 +426,13 @@ class SettingsTab:
             
             if self.callbacks.get('save_dtype_settings'):
                 self.callbacks['save_dtype_settings']()
-            messagebox.showinfo("สำเร็จ", f"บันทึกชนิดข้อมูลสำหรับ {current_file_type} เรียบร้อยแล้ว")
+            messagebox.showinfo("Success", f"Saved data types for {current_file_type}")
         else:
-            messagebox.showwarning("แจ้งเตือน", "กรุณาเลือกประเภทไฟล์ก่อนบันทึก")
+            messagebox.showwarning("Warning", "Please select a file type before saving")
     
     def _on_file_type_selected(self, choice):
         """เมื่อมีการเลือกประเภทไฟล์จาก dropdown"""
-        if choice == "เลือกประเภทไฟล์...":
+        if choice == "Select a file type...":
             return
         self._show_file_type_content(choice)
     
@@ -465,7 +465,7 @@ class SettingsTab:
         loading_frame = ctk.CTkFrame(self.content_frame)
         loading_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
-        loading_label = ctk.CTkLabel(loading_frame, text=f"กำลังสร้าง UI สำหรับ {file_type}...", font=theme.FONT_BODY)
+        loading_label = ctk.CTkLabel(loading_frame, text=f"Building UI for {file_type}...", font=theme.FONT_BODY)
         loading_label.pack(expand=True)
         
         # ใช้ after เพื่อสร้าง UI จริงโดยไม่บล็อค
@@ -487,7 +487,7 @@ class SettingsTab:
             loading_frame.destroy()
             error_frame = ctk.CTkFrame(self.content_frame)
             error_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-            ctk.CTkLabel(error_frame, text=f"เกิดข้อผิดพลาด: {e}", font=theme.FONT_BODY).pack(expand=True)
+            ctk.CTkLabel(error_frame, text=f"Error: {e}", font=theme.FONT_BODY).pack(expand=True)
 
     def _create_and_cache_ui(self, file_type):
         """สร้างและแคช UI สำหรับประเภทไฟล์"""
@@ -519,7 +519,7 @@ class SettingsTab:
         
         date_format_label = ctk.CTkLabel(
             date_format_frame, 
-            text="⏰ Date Format (US / MM-DD หรือ UK / DD-MM)", 
+            text="⏰ Date Format (US / MM-DD or UK / DD-MM)", 
             width=400, 
             anchor="w",
             font=theme.FONT_BODY
@@ -576,17 +576,17 @@ class SettingsTab:
         """อัปเดต dropdown ของประเภทไฟล์"""
         file_types = list(self.column_settings.keys()) if self.column_settings else []
         if file_types:
-            values = ["เลือกประเภทไฟล์..."] + file_types
+            values = ["Select a file type..."] + file_types
             self.file_type_selector.configure(values=values)
             # ถ้ามีเพียงประเภทเดียว ให้เลือกอัตโนมัติ
             if len(file_types) == 1:
                 self.file_type_var.set(file_types[0])
                 self._show_file_type_content(file_types[0])
             else:
-                self.file_type_var.set("เลือกประเภทไฟล์...")
+                self.file_type_var.set("Select a file type...")
         else:
-            self.file_type_selector.configure(values=["เลือกประเภทไฟล์..."])
-            self.file_type_var.set("เลือกประเภทไฟล์...")
+            self.file_type_selector.configure(values=["Select a file type..."])
+            self.file_type_var.set("Select a file type...")
             # ซ่อน UI ที่แคชไว้ในกรณีไม่มีประเภทไฟล์
             self._hide_all_cached_ui()
             self.current_file_type = None

@@ -2,8 +2,8 @@ try:
     import customtkinter as ctk
 except ImportError as e:
     raise SystemExit(
-        "ไม่พบไลบรารี customtkinter จำเป็นต้องติดตั้งก่อนใช้งาน UI.\n"
-        "ติดตั้งด้วยคำสั่ง: pip install customtkinter"
+        "The 'customtkinter' library is required for the UI.\n"
+        "Install with: pip install customtkinter"
     ) from e
 
 from ui.login_window import LoginWindow

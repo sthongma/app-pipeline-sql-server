@@ -178,7 +178,7 @@ class DataProcessorService:
             return df
         
         # คืนค่า DataFrame เดิม เนื่องจากการแปลงจะทำใน SQL แล้ว
-        self.log_with_time(f"🔄 การแปลงข้อมูลจะทำใน staging table ด้วย SQL")
+        self.log_with_time(f"🔄 Conversion will be performed in the staging table using SQL")
         return df
 
     def clean_and_validate_datetime_columns(self, df, file_type):
@@ -187,7 +187,7 @@ class DataProcessorService:
             return df
         
         # คืนค่า DataFrame เดิม เนื่องจากการ validation จะทำใน SQL แล้ว
-        self.log_with_time(f"🔍 การตรวจสอบวันที่จะทำใน staging table ด้วย SQL")
+        self.log_with_time(f"🔍 Date validation will be performed in the staging table using SQL")
         return df
 
     def clean_numeric_columns(self, df, file_type):
@@ -196,7 +196,7 @@ class DataProcessorService:
             return df
         
         # คืนค่า DataFrame เดิม เนื่องจากการ cleaning จะทำใน SQL แล้ว
-        self.log_with_time(f"🧹 การทำความสะอาดข้อมูลตัวเลขจะทำใน staging table ด้วย SQL")
+        self.log_with_time(f"🧹 Numeric cleaning will be performed in the staging table using SQL")
         return df
 
     def truncate_long_strings(self, df, logic_type):
@@ -205,7 +205,7 @@ class DataProcessorService:
             return df
         
         # คืนค่า DataFrame เดิม เนื่องจากการตัดข้อมูลจะทำใน SQL แล้ว
-        self.log_with_time(f"✂️ การตัดข้อมูล string จะทำใน staging table ด้วย SQL")
+        self.log_with_time(f"✂️ String truncation will be performed in the staging table using SQL")
         return df
 
     def comprehensive_data_validation(self, df, logic_type):
@@ -296,7 +296,7 @@ class DataProcessorService:
                         'percentage': round((invalid_count / total_rows) * 100, 2),
                         'examples': [str(x) for x in invalid_examples],
                         'problem_rows': [r + 2 for r in problem_rows],  # +2 สำหรับ header
-                        'summary': f"พบข้อมูลที่ไม่ใช่ตัวเลข {invalid_count:,} แถว ({round((invalid_count / total_rows) * 100, 2)}%)"
+                        'summary': f"Found non-numeric data {invalid_count:,} rows ({round((invalid_count / total_rows) * 100, 2)}%)"
                     }
                     
             elif isinstance(expected_dtype, (DATE, DateTime)):
@@ -326,7 +326,7 @@ class DataProcessorService:
                         'percentage': round((invalid_count / total_rows) * 100, 2),
                         'examples': [str(x) for x in invalid_examples],
                         'problem_rows': [r + 2 for r in problem_rows],
-                        'summary': f"พบข้อมูลวันที่ที่ไม่ถูกต้อง {invalid_count:,} แถว ({round((invalid_count / total_rows) * 100, 2)}%)"
+                        'summary': f"Found invalid dates {invalid_count:,} rows ({round((invalid_count / total_rows) * 100, 2)}%)"
                     }
                     
             elif isinstance(expected_dtype, NVARCHAR):
@@ -355,7 +355,7 @@ class DataProcessorService:
                         'examples': [f"{ex}... (ความยาว: {len(string_series.loc[string_series.str.startswith(ex[:10])].iloc[0])})" for ex in too_long_examples],
                         'actual_lengths': sorted(actual_lengths, reverse=True),
                         'problem_rows': [r + 2 for r in problem_rows],
-                        'summary': f"พบข้อมูลที่ยาวเกิน {max_length} ตัวอักษร จำนวน {too_long_count:,} แถว ({round((too_long_count / total_rows) * 100, 2)}%) ความยาวสูงสุด: {max_actual_length}"
+                        'summary': f"Found strings exceeding {max_length} chars: {too_long_count:,} rows ({round((too_long_count / total_rows) * 100, 2)}%) Max length: {max_actual_length}"
                     }
             elif isinstance(expected_dtype, Text):
                 # ข้ามการตรวจสอบความยาวสำหรับ Text() (NVARCHAR(MAX))
@@ -370,7 +370,7 @@ class DataProcessorService:
                         'null_count': null_rows,
                         'total_rows': total_rows,
                         'percentage': null_percentage,
-                        'summary': f"มีข้อมูลว่าง {null_rows:,} แถว ({null_percentage}%)"
+                        'summary': f"High number of nulls {null_rows:,} rows ({null_percentage}%)"
                     }
         
         except Exception as e:
@@ -504,7 +504,7 @@ class DataProcessorService:
             
             # แสดง log เฉพาะครั้งแรก
             if not hasattr(self, '_chunk_log_shown'):
-                self.log_with_time(f"📊 ประมวลผลแบบ chunk ({chunk_size:,} แถวต่อ chunk)")
+                self.log_with_time(f"📊 Processing in chunks ({chunk_size:,} rows per chunk)")
                 self._chunk_log_shown = True
                 
             chunks = []
@@ -519,7 +519,7 @@ class DataProcessorService:
                 
                 # แสดง progress เฉพาะบางครั้ง (ทุก 5 chunks หรือ chunk สุดท้าย)
                 if chunk_num % 5 == 0 or chunk_num == total_chunks:
-                    self.log_with_time(f"📊 ประมวลผล chunk {chunk_num}/{total_chunks}")
+                    self.log_with_time(f"📊 Processed chunk {chunk_num}/{total_chunks}")
                 
                 # ปล่อย memory ทุก 5 chunks
                 if chunk_num % 5 == 0:
@@ -535,5 +535,5 @@ class DataProcessorService:
             return result
             
         except Exception as e:
-            self.log_with_time(f"❌ เกิดข้อผิดพลาดในการประมวลผลแบบ chunk: {e}")
+            self.log_with_time(f"❌ Error processing in chunks: {e}")
             return df

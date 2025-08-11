@@ -83,7 +83,7 @@ class MainWindow(ctk.CTkToplevel):
         
         # สร้าง UI พร้อมแสดง progress
         if ui_progress_callback:
-            ui_progress_callback("กำลังสร้าง Tab View...")
+            ui_progress_callback("Building Tab View...")
         
         self._create_ui(ui_progress_callback, on_ready_callback)
         
@@ -92,7 +92,7 @@ class MainWindow(ctk.CTkToplevel):
 
         # ตรวจสอบการเชื่อมต่อ SQL Server หลังสร้าง UI เสร็จ (ทำแบบ async เพื่อลดการค้าง)
         if ui_progress_callback:
-            ui_progress_callback("ตรวจสอบการเชื่อมต่อ SQL Server...")
+            ui_progress_callback("Checking SQL Server connection...")
         self.after(100, self._run_check_sql_connection_async)
     
     def _create_ui(self, ui_progress_callback=None, on_ready_callback=None):
@@ -103,30 +103,30 @@ class MainWindow(ctk.CTkToplevel):
         except Exception:
             pass
         if ui_progress_callback:
-            ui_progress_callback("กำลังสร้าง Tab View...")
+            ui_progress_callback("Building Tab View...")
         
         # สร้าง Tab View
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
         
         # สร้าง Tab
-        main_tab_frame = self.tabview.add("หลัก")
-        log_tab_frame = self.tabview.add("บันทึก")
-        settings_tab_frame = self.tabview.add("ตั้งค่า")
+        main_tab_frame = self.tabview.add("Main")
+        log_tab_frame = self.tabview.add("Logs")
+        settings_tab_frame = self.tabview.add("Settings")
         
         if ui_progress_callback:
-            ui_progress_callback("กำลังสร้าง Main Tab...")
+            ui_progress_callback("Building Main Tab...")
         
         # สร้างส่วนประกอบในแต่ละ Tab
         self._create_main_tab(main_tab_frame)
         
         if ui_progress_callback:
-            ui_progress_callback("กำลังสร้าง Log Tab...")
+            ui_progress_callback("Building Log Tab...")
             
         self._create_log_tab(log_tab_frame)
         
         if ui_progress_callback:
-            ui_progress_callback("กำลังสร้าง Settings Tab...")
+            ui_progress_callback("Building Settings Tab...")
             
         # แบ่งการสร้าง Settings Tab ออกเป็นขั้นตอน
         self.after(10, lambda: self._create_settings_tab_async(settings_tab_frame, ui_progress_callback, on_ready_callback))
@@ -163,7 +163,7 @@ class MainWindow(ctk.CTkToplevel):
     def _create_settings_tab_async(self, parent, ui_progress_callback=None, on_ready_callback=None):
         """สร้างส่วนประกอบใน Settings Tab แบบ async"""
         if ui_progress_callback:
-            ui_progress_callback("กำลังเตรียม Settings Tab...")
+            ui_progress_callback("Preparing Settings Tab...")
             
         # Create settings tab with callbacks
         callbacks = {
@@ -183,9 +183,9 @@ class MainWindow(ctk.CTkToplevel):
         
         if ui_progress_callback:
             if self.column_settings:
-                ui_progress_callback("Settings Tab เสร็จสิ้น")
+                ui_progress_callback("Settings Tab completed")
             else:
-                ui_progress_callback("ไม่มีประเภทไฟล์ — ข้ามการสร้าง Settings UI และพร้อมใช้งานทันที")
+                ui_progress_callback("No file types — skipping Settings UI; ready immediately")
 
     def _on_all_ui_built(self, on_ready_callback):
         """ถูกเรียกเมื่อ SettingsTab สร้าง UI ทั้งหมดเสร็จ เพื่อแจ้งว่า MainWindow พร้อมใช้งาน"""
@@ -336,7 +336,7 @@ class MainWindow(ctk.CTkToplevel):
         else:
             self.log("❌ " + message)
             messagebox.showerror(
-                "ข้อผิดพลาด",
-                f"ไม่สามารถเชื่อมต่อกับ SQL Server ได้:\n{message}\n\nกรุณาตรวจสอบการเชื่อมต่อและลองใหม่อีกครั้ง"
+                "Error",
+                f"Unable to connect to SQL Server:\n{message}\n\nPlease check your connection and try again"
             )
             self.after(2000, self.destroy)

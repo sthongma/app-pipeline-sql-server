@@ -51,41 +51,41 @@ class LoginWindow(ctk.CTk):
         label_width = 140
 
         # หัวข้อ
-        title_label = ctk.CTkLabel(main_frame, text="เข้าสู่ระบบ SQL Server", font=theme.FONT_TITLE)
+        title_label = ctk.CTkLabel(main_frame, text="Sign in to SQL Server", font=theme.FONT_TITLE)
         title_label.grid(row=1, column=0, columnspan=2, pady=(0, 6), sticky="n")
 
         # Server
-        server_label = ctk.CTkLabel(main_frame, text="เซิร์ฟเวอร์", width=label_width, anchor="w", font=theme.FONT_BODY)
+        server_label = ctk.CTkLabel(main_frame, text="Server", width=label_width, anchor="w", font=theme.FONT_BODY)
         server_label.grid(row=2, column=0, sticky="e", padx=6, pady=4)
-        self.server_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="ชื่อเซิร์ฟเวอร์")
+        self.server_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="Server name")
         self.server_entry.grid(row=2, column=1, sticky="w", padx=6, pady=4)
 
         # Database
-        db_label = ctk.CTkLabel(main_frame, text="ฐานข้อมูล", width=label_width, anchor="w", font=theme.FONT_BODY)
+        db_label = ctk.CTkLabel(main_frame, text="Database", width=label_width, anchor="w", font=theme.FONT_BODY)
         db_label.grid(row=3, column=0, sticky="e", padx=6, pady=4)
-        self.db_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="ชื่อฐานข้อมูล")
+        self.db_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="Database name")
         self.db_entry.grid(row=3, column=1, sticky="w", padx=6, pady=4)
 
         # Authentication
-        auth_label = ctk.CTkLabel(main_frame, text="ยืนยันตัวตน", width=label_width, anchor="w", font=theme.FONT_BODY)
+        auth_label = ctk.CTkLabel(main_frame, text="Authentication", width=label_width, anchor="w", font=theme.FONT_BODY)
         auth_label.grid(row=4, column=0, sticky="e", padx=6, pady=4)
         self.auth_menu = ctk.CTkOptionMenu(main_frame, values=["Windows", "SQL Server"], command=self._on_auth_change, width=240)
         self.auth_menu.grid(row=4, column=1, sticky="w", padx=6, pady=4)
 
         # Username (row 5)
-        self.username_label = ctk.CTkLabel(main_frame, text="ชื่อผู้ใช้", width=label_width, anchor="w", font=theme.FONT_BODY)
-        self.username_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="ชื่อผู้ใช้")
+        self.username_label = ctk.CTkLabel(main_frame, text="Username", width=label_width, anchor="w", font=theme.FONT_BODY)
+        self.username_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="Username")
         # Password (row 6)
-        self.password_label = ctk.CTkLabel(main_frame, text="รหัสผ่าน", width=label_width, anchor="w", font=theme.FONT_BODY)
-        self.password_entry = ctk.CTkEntry(main_frame, width=240, show="*", placeholder_text="รหัสผ่าน")
+        self.password_label = ctk.CTkLabel(main_frame, text="Password", width=label_width, anchor="w", font=theme.FONT_BODY)
+        self.password_entry = ctk.CTkEntry(main_frame, width=240, show="*", placeholder_text="Password")
 
         # Remember me
         self.remember_var = ctk.BooleanVar(value=True)
-        remember_check = ctk.CTkCheckBox(main_frame, text="จดจำการตั้งค่า", variable=self.remember_var, font=theme.FONT_BODY)
+        remember_check = ctk.CTkCheckBox(main_frame, text="Remember settings", variable=self.remember_var, font=theme.FONT_BODY)
         remember_check.grid(row=7, column=0, columnspan=2, pady=6, sticky="")
 
         # Connect button
-        connect_button = ctk.CTkButton(main_frame, text="เชื่อมต่อ", command=self._connect, width=260, font=theme.FONT_BUTTON)
+        connect_button = ctk.CTkButton(main_frame, text="Connect", command=self._connect, width=260, font=theme.FONT_BUTTON)
         connect_button.grid(row=8, column=0, columnspan=2, pady=12, sticky="", ipadx=30)
 
         self._on_auth_change("Windows")
@@ -149,11 +149,11 @@ class LoginWindow(ctk.CTk):
         
         # ตรวจสอบข้อมูลที่จำเป็น
         if not config["server"] or not config["database"]:
-            messagebox.showerror("Error", "กรุณากรอก Server และ Database")
+            messagebox.showerror("Error", "Please fill in Server and Database")
             return
             
         if config["auth_type"] == "SQL Server" and (not config["username"] or not config["password"]):
-            messagebox.showerror("Error", "กรุณากรอก Username และ Password")
+            messagebox.showerror("Error", "Please fill in Username and Password")
             return
             
         # บันทึกการตั้งค่า
@@ -163,17 +163,17 @@ class LoginWindow(ctk.CTk):
         try:
             loading_dialog = LoadingDialog(
                 self,
-                "กำลังเตรียมระบบ",
-                "กำลังทดสอบการเชื่อมต่อกับฐานข้อมูล...",
+                "Preparing system",
+                "Testing database connection...",
                 min_display_ms=1200,
                 min_step_duration_ms=900,
                 min_total_duration_ms=3800,
                 auto_close_on_task_done=False,
                 steps=[
-                    "เชื่อมต่อฐานข้อมูล",
-                    "ตรวจสอบสิทธิ์การใช้งาน",
-                    "โหลดการตั้งค่าระบบและประเภทไฟล์",
-                    "สร้างส่วนประกอบของหน้าหลัก"
+                    "Connect to database",
+                    "Check permissions",
+                    "Load app/file settings",
+                    "Build main UI components"
                 ]
             )
 
@@ -200,28 +200,28 @@ class LoginWindow(ctk.CTk):
             if error:
                 loading_dialog.release_and_close()
                 self.wait_window(loading_dialog)
-                messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(error)}")
+                messagebox.showerror("Error", f"Error occurred: {str(error)}")
                 return
 
             if loading_dialog.error:
-                messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(loading_dialog.error)}")
+                messagebox.showerror("Error", f"Error occurred: {str(loading_dialog.error)}")
                 return
 
             if not result.get('connection_ok', False):
                 loading_dialog.release_and_close()
                 self.wait_window(loading_dialog)
-                messagebox.showerror("Error", "ไม่สามารถเชื่อมต่อกับ SQL Server ได้")
+                messagebox.showerror("Error", "Unable to connect to SQL Server")
                 return
 
             if not result.get('permissions_ok', False):
                 missing_permissions = result.get('missing_permissions', [])
                 recommendations = result.get('recommendations', [])
-                detail_msg = f"ขาดสิทธิ์ที่จำเป็น: {', '.join(missing_permissions)}\n\n"
+                detail_msg = f"Missing required permissions: {', '.join(missing_permissions)}\n\n"
                 if recommendations:
-                    detail_msg += "คำแนะนำการแก้ไข:\n" + "\n".join(recommendations[:3])
+                    detail_msg += "Recommendations:\n" + "\n".join(recommendations[:3])
                 loading_dialog.release_and_close()
                 self.wait_window(loading_dialog)
-                messagebox.showerror("สิทธิ์ไม่เพียงพอ", f"เชื่อมต่อสำเร็จ แต่สิทธิ์ไม่เพียงพอ\n\n{detail_msg}")
+                messagebox.showerror("Insufficient permissions", f"Connected, but permissions are insufficient\n\n{detail_msg}")
                 return
 
             # ส่งข้อมูลที่โหลดไว้ให้ MainWindow
@@ -230,17 +230,17 @@ class LoginWindow(ctk.CTk):
             # แสดง loading dialog และสร้าง MainWindow ใน main thread
             self.ui_loading_dialog = LoadingDialog(
                 self,
-                "กำลังสร้าง UI",
-                "กำลังเตรียม MainWindow และสร้าง UI ทุกประเภทไฟล์...",
+                "Building UI",
+                "Preparing MainWindow and building UI for file types...",
                 min_display_ms=900,
                 min_step_duration_ms=700,
                 min_total_duration_ms=2200,
                 auto_close_on_task_done=False,
                 steps=[
-                    "สร้าง Tab View",
-                    "สร้าง Main Tab",
-                    "สร้าง Log Tab",
-                    "สร้าง Settings Tab"
+                    "Build Tab View",
+                    "Build Main Tab",
+                    "Build Log Tab",
+                    "Build Settings Tab"
                 ]
             )
 
@@ -248,22 +248,22 @@ class LoginWindow(ctk.CTk):
             self.preloaded_data = preloaded_data
             self.after(100, self._start_ui_creation)
         except Exception as e:
-            messagebox.showerror("Error", f"เกิดข้อผิดพลาด: {str(e)}")
+            messagebox.showerror("Error", f"An error occurred: {str(e)}")
             
     def _start_ui_creation(self):
         """เริ่มการสร้าง UI ใน main thread"""
         try:
             # อัพเดท progress
-            self.ui_loading_dialog.update_message("กำลังเริ่มสร้าง MainWindow...")
+            self.ui_loading_dialog.update_message("Starting MainWindow creation...")
             self.after(50, self._create_main_window_step1)
         except Exception as e:
             self.ui_loading_dialog.destroy()
-            messagebox.showerror("Error", f"เกิดข้อผิดพลาดในการสร้าง UI: {str(e)}")
+            messagebox.showerror("Error", f"Error creating UI: {str(e)}")
     
     def _create_main_window_step1(self):
         """สร้าง MainWindow ขั้นตอนที่ 1"""
         try:
-            self.ui_loading_dialog.update_message("กำลังสร้าง MainWindow...")
+            self.ui_loading_dialog.update_message("Creating MainWindow...")
             # สร้าง MainWindow พร้อม progress callback
             def progress_callback(message):
                 self.ui_loading_dialog.update_message(message)
@@ -295,12 +295,12 @@ class LoginWindow(ctk.CTk):
             
         except Exception as e:
             self.ui_loading_dialog.destroy()
-            messagebox.showerror("Error", f"เกิดข้อผิดพลาดในการสร้าง UI: {str(e)}")
+            messagebox.showerror("Error", f"Error creating UI: {str(e)}")
     
     def _finish_ui_creation(self):
         """เสร็จสิ้นการสร้าง UI"""
         try:
-            self.ui_loading_dialog.update_message("สร้าง MainWindow และ UI เสร็จสิ้น!")
+            self.ui_loading_dialog.update_message("MainWindow and UI created!")
             
             # ปล่อยให้ dialog ปิดตัวเองเมื่อครบเวลาขั้นต่ำแล้ว
             try:
@@ -314,7 +314,7 @@ class LoginWindow(ctk.CTk):
             
         except Exception as e:
             self.ui_loading_dialog.destroy()
-            messagebox.showerror("Error", f"เกิดข้อผิดพลาดในการสร้าง UI: {str(e)}")
+            messagebox.showerror("Error", f"Error creating UI: {str(e)}")
             
     def _on_main_window_close(self, main_window):
         """จัดการเมื่อปิดหน้าต่างหลัก"""
@@ -326,14 +326,14 @@ class LoginWindow(ctk.CTk):
         """รวมขั้นตอน: เชื่อมต่อ -> ตรวจสิทธิ์ -> preload ข้อมูล"""
         # 1) ทดสอบการเชื่อมต่อ
         if progress_callback:
-            progress_callback("กำลังทดสอบการเชื่อมต่อกับฐานข้อมูล...")
+            progress_callback("Testing database connection...")
         connection_ok = self.db_service.test_connection(config)
         if not connection_ok:
             return {"connection_ok": False}
 
         # 2) ตรวจสิทธิ์
         if progress_callback:
-            progress_callback("กำลังตรวจสอบสิทธิ์การใช้งานฐานข้อมูล...")
+            progress_callback("Checking database permissions...")
         permission_results = self.db_service.check_permissions('bronze', log_callback=progress_callback)
         permissions_ok = permission_results.get('success', False)
         if not permissions_ok:
@@ -346,7 +346,7 @@ class LoginWindow(ctk.CTk):
 
         # 3) Preload ข้อมูล
         if progress_callback:
-            progress_callback("กำลังโหลดประเภทไฟล์และการตั้งค่าทั้งหมด...")
+            progress_callback("Loading file types and settings...")
         preload_success, _msg, data = self.preload_service.preload_file_settings(progress_callback=progress_callback)
 
         return {
