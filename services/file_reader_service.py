@@ -387,7 +387,7 @@ class FileReaderService:
         try:
             # ตรวจสอบไฟล์มีอยู่หรือไม่
             if not os.path.exists(file_path):
-                return False, f"ไม่พบไฟล์: {file_path}"
+                return False, f"File not found: {file_path}"
             
             # Auto-detect file type
             if file_type == 'auto':
@@ -416,14 +416,14 @@ class FileReaderService:
                 df = pd.read_excel(file_path, sheet_name=0)
             
             if df.empty:
-                return False, "ไฟล์ว่างเปล่า"
+                return False, "File is empty"
             
-            self.log_callback(f"✅ อ่านไฟล์สำเร็จ: {os.path.basename(file_path)} ({len(df):,} แถว, {len(df.columns)} คอลัมน์)")
+            self.log_callback(f"✅ Read File Success: {os.path.basename(file_path)} ({len(df):,} rows, {len(df.columns)} columns)")
             
             return True, df
             
         except Exception as e:
-            error_msg = f"ไม่สามารถอ่านไฟล์ {os.path.basename(file_path)}: {str(e)}"
+            error_msg = f"Cannot read file {os.path.basename(file_path)}: {str(e)}"
             self.log_callback(f"❌ {error_msg}")
             return False, error_msg
 
@@ -449,13 +449,13 @@ class FileReaderService:
             # Apply column mapping (เลือกทิศทางอัตโนมัติให้ตรงกับ header)
             col_map = self.build_rename_mapping_for_dataframe(df.columns, logic_type)
             if col_map:
-                self.log_callback(f"🔄 ปรับชื่อคอลัมน์ตาม mapping ({len(col_map)} คอลัมน์)")
+                self.log_callback(f"🔄 Apply column mapping ({len(col_map)} columns)")
                 df.rename(columns=col_map, inplace=True)
             
             return True, df
             
         except Exception as e:
-            error_msg = f"ไม่สามารถประมวลผล mapping สำหรับ {os.path.basename(file_path)}: {str(e)}"
+            error_msg = f"Cannot process mapping for {os.path.basename(file_path)}: {str(e)}"
             self.log_callback(f"❌ {error_msg}")
             return False, error_msg
 
@@ -473,7 +473,7 @@ class FileReaderService:
         try:
             # ตรวจสอบไฟล์มีอยู่หรือไม่
             if not os.path.exists(file_path):
-                return {"error": f"ไม่พบไฟล์: {file_path}"}
+                return {"error": f"File not found: {file_path}"}
             
             if file_path.lower().endswith('.csv'):
                 file_type = 'csv'
@@ -513,7 +513,7 @@ class FileReaderService:
             return structure_info
             
         except Exception as e:
-            return {"error": f"ไม่สามารถอ่านโครงสร้างไฟล์: {str(e)}"}
+            return {"error": f"Cannot read file structure: {str(e)}"}
 
     def get_file_info(self, file_path):
         """
@@ -527,7 +527,7 @@ class FileReaderService:
         """
         try:
             if not os.path.exists(file_path):
-                return {"error": f"ไม่พบไฟล์: {file_path}"}
+                return {"error": f"File not found: {file_path}"}
             
             file_stats = os.stat(file_path)
             if file_path.lower().endswith('.csv'):
@@ -551,7 +551,7 @@ class FileReaderService:
                     df_shape = pd.read_excel(file_path, sheet_name=0).shape
                     row_count = df_shape[0]
             except:
-                row_count = "ไม่สามารถนับได้"
+                row_count = "Cannot count"
             
             # ตรวจจับประเภทไฟล์
             detected_type = self.detect_file_type(file_path)
@@ -567,7 +567,7 @@ class FileReaderService:
             }
             
         except Exception as e:
-            return {"error": f"ไม่สามารถดูข้อมูลไฟล์: {str(e)}"}
+            return {"error": f"Cannot read file info: {str(e)}"}
 
     def validate_file_before_processing(self, file_path, logic_type):
         """
@@ -590,24 +590,24 @@ class FileReaderService:
         try:
             # ตรวจสอบไฟล์มีอยู่หรือไม่
             if not os.path.exists(file_path):
-                validation_result["issues"].append(f"ไม่พบไฟล์: {file_path}")
+                validation_result["issues"].append(f"File not found: {file_path}")
                 return validation_result
             
             # ตรวจสอบขนาดไฟล์
             file_size = os.path.getsize(file_path)
             if file_size == 0:
-                validation_result["issues"].append("ไฟล์ว่างเปล่า")
+                validation_result["issues"].append("File is empty")
                 return validation_result
             
             if file_size > 100 * 1024 * 1024:  # 100 MB
-                validation_result["warnings"].append("ไฟล์ขนาดใหญ่ (>100MB) อาจใช้เวลานาน")
+                validation_result["warnings"].append("Large file (>100MB) may take a long time")
             
             # ตรวจสอบประเภทไฟล์
             detected_type = self.detect_file_type(file_path)
             if not detected_type:
-                validation_result["warnings"].append("ไม่สามารถตรวจจับประเภทไฟล์อัตโนมัติได้")
+                validation_result["warnings"].append("Cannot auto-detect file type")
             elif detected_type != logic_type:
-                validation_result["warnings"].append(f"ประเภทไฟล์ที่ตรวจจับได้ ({detected_type}) ไม่ตรงกับที่ระบุ ({logic_type})")
+                validation_result["warnings"].append(f"Detected file type ({detected_type}) does not match specified ({logic_type})")
             
             # ตรวจสอบโครงสร้างพื้นฐาน
             structure = self.peek_file_structure(file_path, 1)
@@ -628,15 +628,15 @@ class FileReaderService:
                 
                 missing_cols = required_normalized - file_normalized
                 if missing_cols:
-                    validation_result["issues"].append(f"คอลัมน์ที่ขาดหายไป: {missing_cols}")
+                    validation_result["issues"].append(f"Columns missing: {missing_cols}")
                 else:
                     validation_result["valid"] = True
             else:
-                validation_result["warnings"].append(f"ไม่มีการตั้งค่าสำหรับประเภทไฟล์ '{logic_type}'")
+                validation_result["warnings"].append(f"No configuration for file type '{logic_type}'")
                 validation_result["valid"] = True  # ยอมรับไฟล์ที่ไม่มี config
             
         except Exception as e:
-            validation_result["issues"].append(f"เกิดข้อผิดพลาดในการตรวจสอบ: {str(e)}")
+            validation_result["issues"].append(f"Error in validation: {str(e)}")
         
         return validation_result
 

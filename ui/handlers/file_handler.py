@@ -28,7 +28,7 @@ class FileHandler:
         if folder:
             self.file_service.set_search_path(folder)
             save_callback(folder)
-            messagebox.showinfo("สำเร็จ", f"ตั้งค่า path สำหรับค้นหาไฟล์ Excel เป็น\n{folder}")
+            messagebox.showinfo("Success", f"Set search path for Excel files to\n{folder}")
     
     def run_check_thread(self, ui_callbacks):
         """เริ่มการตรวจสอบไฟล์ใน thread แยก"""
@@ -94,7 +94,7 @@ class FileHandler:
         """ยืนยันการอัปโหลดไฟล์ที่เลือก"""
         selected = get_selected_files_callback()
         if not selected:
-            messagebox.showwarning("ไม่มีไฟล์", "กรุณาเลือกไฟล์ที่ต้องการอัปโหลด")
+            messagebox.showwarning("No files", "Please select files to upload")
             return
         
         # ตรวจสอบการเชื่อมต่อฐานข้อมูล
@@ -232,7 +232,7 @@ class FileHandler:
         # อัปเดต progress เป็น 100% เมื่อเสร็จสิ้น
         successfully_uploaded = sum(1 for files in files_by_type.values() for _ in files)  # Count all processed files
         ui_callbacks['update_progress'](1.0, "Upload completed", f"Processed {total_files} files successfully")
-        self.log("--- 🏁 Upload completed ---")
+        self.log("========= Upload Ended ==========")
         
         # เปิดปุ่มทั้งหมดกลับมา
         ui_callbacks['enable_controls']()
@@ -295,10 +295,10 @@ class FileHandler:
             self.log(f"📂 Source folder: {folder_path}")
             
             # === ประมวลผลไฟล์หลัก ===
-            self.log("=== Processing files ===")
+            self.log("========= Processing files ==========")
             self._auto_process_main_files(folder_path, ui_callbacks)
             
-            self.log("=== 🏁 Auto processing completed ===")
+            self.log("==== Auto processing completed ======") 
             ui_callbacks['update_progress'](1.0, "Auto processing completed", "All steps completed successfully")
             messagebox.showinfo("Success", "Auto processing completed successfully")
             

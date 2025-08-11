@@ -46,16 +46,16 @@ class PerformanceOptimizer:
             file_size = os.path.getsize(file_path)
             file_size_mb = file_size / (1024 * 1024)
             
-            self.log_callback(f"📂 อ่านไฟล์: {os.path.basename(file_path)} ({file_size_mb:.1f} MB)")
+            self.log_callback(f"📂 Read File: {os.path.basename(file_path)} ({file_size_mb:.1f} MB)")
             
             if file_size_mb > 100:  # ไฟล์ใหญ่กว่า 100MB
-                self.log_callback(f"⚠️ ไฟล์ใหญ่ ใช้วิธีอ่านแบบ chunked")
+                self.log_callback(f"⚠️ Large File, Use Chunked Reading")
                 return self._read_large_file_chunked(file_path, file_type)
             else:
                 return self._read_small_file(file_path, file_type)
                 
         except Exception as e:
-            error_msg = f"❌ เกิดข้อผิดพลาดขณะอ่านไฟล์: {e}"
+            error_msg = f"❌ Error Reading File: {e}"
             self.log_callback(error_msg)
             return False, pd.DataFrame()
     
@@ -69,11 +69,11 @@ class PerformanceOptimizer:
             else:
                 df = pd.read_excel(file_path, header=0, sheet_name=0, engine='openpyxl')
             
-            self.log_callback(f"✅ อ่านไฟล์สำเร็จ: {len(df):,} แถว, {len(df.columns)} คอลัมน์")
+            self.log_callback(f"✅ Read File Success: {len(df):,} rows, {len(df.columns)} columns")
             return True, df
             
         except Exception as e:
-            self.log_callback(f"❌ เกิดข้อผิดพลาด: {e}")
+            self.log_callback(f"❌ Error Reading File: {e}")
             return False, pd.DataFrame()
     
     def _read_large_file_chunked(self, file_path: str, file_type: str) -> Tuple[bool, pd.DataFrame]:
@@ -95,21 +95,21 @@ class PerformanceOptimizer:
                     except UnicodeDecodeError:
                         total_rows = sum(1 for _ in open(file_path, 'r', encoding='latin1')) - 1
                         encoding_used = 'latin1'
-                self.log_callback(f"📊 จำนวนแถวทั้งหมด: {total_rows:,} (encoding={encoding_used})")
+                self.log_callback(f"📊 Total Rows: {total_rows:,} (encoding={encoding_used})")
                 
                 # อ่านแบบ chunk
                 chunk_reader = pd.read_csv(file_path, header=0, encoding=encoding_used, chunksize=self.chunk_size)
                 
                 for i, chunk in enumerate(chunk_reader):
                     if self.cancellation_token.is_set():
-                        self.log_callback("❌ การทำงานถูกยกเลิก")
+                        self.log_callback("❌ Work Cancelled")
                         return False, pd.DataFrame()
                     
                     chunks.append(chunk)
                     processed_rows = (i + 1) * self.chunk_size
                     progress = min(processed_rows / total_rows, 1.0)
                     
-                    self.log_callback(f"📖 อ่าน chunk {i+1}: {len(chunk):,} แถว ({progress*100:.1f}%)")
+                    self.log_callback(f"📖 Read Chunk {i+1}: {len(chunk):,} rows ({progress*100:.1f}%)")
                     
                     # ปล่อย memory ทุก 10 chunks
                     if (i + 1) % 10 == 0:
@@ -132,7 +132,7 @@ class PerformanceOptimizer:
                 chunk_data = []
                 for row_idx in range(1, worksheet.nrows):
                     if self.cancellation_token.is_set():
-                        self.log_callback("❌ การทำงานถูกยกเลิก")
+                        self.log_callback("❌ Work Cancelled")
                         return False, pd.DataFrame()
                     
                     row_data = []
@@ -148,7 +148,7 @@ class PerformanceOptimizer:
                         chunks.append(chunk_df)
                         chunk_data = []
                         
-                        self.log_callback(f"📖 อ่าน chunk {len(chunks)}: {len(chunk_df):,} แถว")
+                        self.log_callback(f"📖 Read Chunk {len(chunks)}: {len(chunk_df):,} rows")
                         
                         # ปล่อย memory
                         gc.collect()
@@ -175,7 +175,7 @@ class PerformanceOptimizer:
                 chunk_data = []
                 for row_idx in range(2, worksheet.max_row + 1):
                     if self.cancellation_token.is_set():
-                        self.log_callback("❌ การทำงานถูกยกเลิก")
+                        self.log_callback("❌ Work Cancelled")
                         workbook.close()
                         return False, pd.DataFrame()
                     
@@ -192,7 +192,7 @@ class PerformanceOptimizer:
                         chunks.append(chunk_df)
                         chunk_data = []
                         
-                        self.log_callback(f"📖 อ่าน chunk {len(chunks)}: {len(chunk_df):,} แถว")
+                        self.log_callback(f"📖 Read Chunk {len(chunks)}: {len(chunk_df):,} rows")
                         
                         # ปล่อย memory
                         gc.collect()
@@ -207,19 +207,19 @@ class PerformanceOptimizer:
             
             # รวม chunks
             if chunks:
-                self.log_callback("🔄 กำลังรวม chunks...")
+                self.log_callback("🔄 Combining chunks...")
                 df = pd.concat(chunks, ignore_index=True)
                 del chunks  # ปล่อย memory
                 gc.collect()
                 
-                self.log_callback(f"✅ อ่านไฟล์สำเร็จ - {len(df):,} แถว, {len(df.columns)} คอลัมน์")
+                self.log_callback(f"✅ Read File Success - {len(df):,} rows, {len(df.columns)} columns")
                 return True, df
             else:
-                self.log_callback("❌ ไม่มีข้อมูลในไฟล์")
+                self.log_callback("❌ No data in file")
                 return False, pd.DataFrame()
                 
         except Exception as e:
-            self.log_callback(f"❌ เกิดข้อผิดพลาดในการอ่านไฟล์แบบ chunked: {e}")
+            self.log_callback(f"❌ Error Reading File: {e}")
             return False, pd.DataFrame()
     
     def process_dataframe_in_chunks(self, df: pd.DataFrame, chunk_size: int = 5000) -> List[pd.DataFrame]:
@@ -273,7 +273,7 @@ class PerformanceOptimizer:
             # รอผลลัพธ์
             for future in as_completed(future_to_file):
                 if self.cancellation_token.is_set():
-                    self.log_callback("❌ การทำงานถูกยกเลิก")
+                    self.log_callback("❌ Work Cancelled")
                     break
                 
                 file_path = future_to_file[future]
@@ -281,13 +281,13 @@ class PerformanceOptimizer:
                     result = future.result()
                     results.append((True, result))
                 except Exception as e:
-                    self.log_callback(f"❌ เกิดข้อผิดพลาดในการประมวลผล {os.path.basename(file_path)}: {e}")
+                    self.log_callback(f"❌ Error Processing File: {os.path.basename(file_path)}: {e}")
                     results.append((False, str(e)))
                 
                 completed += 1
                 if progress_callback:
                     progress = completed / total_files
-                    progress_callback(progress, f"ประมวลผลไฟล์ {completed}/{total_files}")
+                    progress_callback(progress, f"Processing File {completed}/{total_files}")
         
         return results
     
@@ -303,7 +303,7 @@ class PerformanceOptimizer:
         """
         try:
             initial_memory = df.memory_usage(deep=True).sum() / 1024 / 1024  # MB
-            self.log_callback(f"💾 Memory เริ่มต้น: {initial_memory:.2f} MB")
+            self.log_callback(f"💾 Memory Start: {initial_memory:.2f} MB")
             
             # ลดขนาดของ numeric columns
             for col in df.select_dtypes(include=['int64']).columns:
@@ -320,12 +320,12 @@ class PerformanceOptimizer:
             final_memory = df.memory_usage(deep=True).sum() / 1024 / 1024  # MB
             memory_saved = initial_memory - final_memory
             
-            self.log_callback(f"💾 Memory หลังปรับปรุง: {final_memory:.2f} MB (ประหยัด {memory_saved:.2f} MB)")
+            self.log_callback(f"💾 Memory After Optimization: {final_memory:.2f} MB (Saved {memory_saved:.2f} MB)")
             
             return df
             
         except Exception as e:
-            self.log_callback(f"⚠️ ไม่สามารถปรับปรุง memory ได้: {e}")
+            self.log_callback(f"⚠️ Cannot optimize memory: {e}")
             return df
     
     def create_progress_tracker(self, total_items: int, description: str = "") -> Callable:
@@ -359,16 +359,16 @@ class PerformanceOptimizer:
                     
                     return progress, message + time_info
                 else:
-                    return 0.0, f"{description}: เริ่มต้น..."
+                    return 0.0, f"{description}: Start..."
             else:
-                return 1.0, f"{description}: เสร็จสิ้น"
+                return 1.0, f"{description}: Finished"
         
         return update_progress
     
     def cleanup_memory(self):
         """ทำความสะอาด memory"""
         gc.collect()
-        self.log_callback("🧹 ทำความสะอาด memory เรียบร้อย")
+        self.log_callback("🧹 Cleaned up memory")
 
 
 class LargeFileProcessor:
@@ -403,10 +403,10 @@ class LargeFileProcessor:
             # ขั้นตอนที่ 3: ประมวลผลตามขั้นตอนที่กำหนด
             for i, step_func in enumerate(processing_steps):
                 if self.optimizer.cancellation_token.is_set():
-                    self.log_callback("❌ การทำงานถูกยกเลิก")
+                    self.log_callback("❌ Work Cancelled")
                     return False, pd.DataFrame()
                 
-                self.log_callback(f"🔄 ขั้นตอน {i+1}/{len(processing_steps)}: {step_func.__name__}")
+                self.log_callback(f"🔄 Step {i+1}/{len(processing_steps)}: {step_func.__name__}")
                 df = step_func(df)
                 
                 # ทำความสะอาด memory หลังแต่ละขั้นตอน
@@ -415,7 +415,7 @@ class LargeFileProcessor:
             return True, df
             
         except Exception as e:
-            self.log_callback(f"❌ เกิดข้อผิดพลาดในการประมวลผลไฟล์: {e}")
+            self.log_callback(f"❌ Error Processing File: {e}")
             return False, pd.DataFrame()
     
     def set_cancellation_token(self, token: threading.Event):
@@ -438,7 +438,7 @@ def create_chunk_processor(chunk_size: int = 5000):
             
             # แสดงความคืบหน้า
             chunk_num = (i // chunk_size) + 1
-            logging.info(f"📊 ประมวลผล chunk {chunk_num}/{total_chunks}")
+            logging.info(f"📊 Processing chunk {chunk_num}/{total_chunks}")
         
         return pd.concat(results, ignore_index=True)
     
