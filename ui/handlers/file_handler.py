@@ -711,5 +711,9 @@ class FileHandler:
             # แสดงรายงานสรุป
             self._display_auto_process_summary(process_stats, total_files)
             
+            # ล้าง list ไฟล์หลังจากประมวลผลเสร็จ เหมือนการอัปโหลดปกติ
+            ui_callbacks['clear_file_list']()
+            ui_callbacks['reset_select_all']()
+            
         except Exception as e:
             self.log(f"❌ An error occurred while processing files: {e}")
