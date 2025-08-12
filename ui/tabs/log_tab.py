@@ -1,6 +1,7 @@
 """Log Tab UI Component"""
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
+import datetime
 
 
 class LogTab:
@@ -25,8 +26,8 @@ class LogTab:
         copy_btn = ctk.CTkButton(toolbar, text="Copy log", command=self._copy_log_to_clipboard, width=120)
         copy_btn.pack(side="left")
 
-        clear_btn = ctk.CTkButton(toolbar, text="Clear log", command=self._clear_log, width=120)
-        clear_btn.pack(side="left", padx=5)
+        export_btn = ctk.CTkButton(toolbar, text="Export log", command=self._export_log, width=120)
+        export_btn.pack(side="left", padx=5)
 
         # กล่องข้อความสำหรับแสดง Log
         self.log_textbox = ctk.CTkTextbox(self.parent)
@@ -42,9 +43,36 @@ class LogTab:
         root.update()  # เพื่อให้ clipboard ทำงาน
         messagebox.showinfo("Copied", "Log copied to clipboard")
 
-    def _clear_log(self):
-        """ล้างข้อความทั้งหมดใน log textbox"""
-        self.log_textbox.delete("1.0", "end")
+    def _export_log(self):
+        """Export log content to a file"""
+        log_text = self.log_textbox.get("1.0", "end").strip()
+        
+        if not log_text:
+            messagebox.showwarning("Warning", "No log content to export")
+            return
+        
+        # Generate default filename with current datetime
+        current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"log_export_{current_time}.txt"
+        
+        # Open file dialog to save the log
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            initialfile=default_filename,
+            filetypes=[
+                ("Text files", "*.txt"),
+                ("Log files", "*.log"),
+                ("All files", "*.*")
+            ]
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(log_text)
+                messagebox.showinfo("Success", f"Log exported successfully to:\n{file_path}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export log:\n{str(e)}")
     
     def add_log(self, message):
         """เพิ่มข้อความลงใน log textbox"""

@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from services.file_reader_service import FileReaderService
+from services.file import FileReaderService
 import json
 
 def test_column_mapping():

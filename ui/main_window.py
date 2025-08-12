@@ -21,7 +21,7 @@ from ui.handlers.settings_handler import SettingsHandler
 # Import services
 from services.file_service import FileService
 from services.database_service import DatabaseService
-from services.file_management_service import FileManagementService
+from services.file import FileManagementService
 from config.database import DatabaseConfig
 from constants import AppConstants, DatabaseConstants
 from utils.logger import create_gui_log_handler
