@@ -136,16 +136,22 @@ class FileHandler:
         # แสดงสถานะเริ่มต้น
         ui_callbacks['set_progress_status']("Starting upload", f"Found {total_files} files from {total_types} types")
         
+        # Phase 1: Read and validate all files first
+        self.log("📖 Phase 1: Reading and validating all files...")
+        all_validated_data = {}  # {logic_type: (combined_df, files_info, required_cols)}
+        
         for logic_type, files in files_by_type.items():
             try:
-                self.log(f"📤 Uploading files of type {logic_type}")
+                self.log(f"📖 Validating files of type {logic_type}")
                 
                 # อัปเดต Progress Bar ตามความคืบหน้า
                 progress = completed_types / total_types
-                ui_callbacks['update_progress'](progress, f"Processing type {logic_type}", f"Type {completed_types + 1} of {total_types}")
+                ui_callbacks['update_progress'](progress, f"Validating type {logic_type}", f"Type {completed_types + 1} of {total_types}")
                 
                 # รวมข้อมูลจากทุกไฟล์ในประเภทเดียวกัน
                 all_dfs = []
+                valid_files_info = []
+                
                 for file_path, chk in files:
                     try:
                         processed_files += 1
@@ -172,13 +178,15 @@ class FileHandler:
                         # หมายเหตุ: การตรวจสอบข้อมูลรายละเอียดจะทำใน staging table ด้วย SQL
                         
                         all_dfs.append(df)
-                        self.log(f"✅ Read data from file: {os.path.basename(file_path)}")
+                        valid_files_info.append((file_path, chk))
+                        self.log(f"✅ Validated file: {os.path.basename(file_path)}")
                         
                     except Exception as e:
                         self.log(f"❌ An error occurred while reading file {os.path.basename(file_path)}: {e}")
                 
                 if not all_dfs:
                     self.log(f"❌ No valid data from files of type {logic_type}")
+                    completed_types += 1
                     continue
                 
                 # รวม DataFrame ทั้งหมด
@@ -193,41 +201,70 @@ class FileHandler:
                 # ตรวจสอบว่า required_cols ไม่ว่างเปล่า
                 if not required_cols:
                     self.log(f"❌ No data type configuration found for {logic_type}")
+                    completed_types += 1
                     continue
                 
                 # ตรวจสอบว่าข้อมูลไม่ว่างเปล่า
                 if combined_df.empty:
                     self.log(f"❌ No valid data from files of type {logic_type}")
+                    completed_types += 1
                     continue
                 
-                # อัปโหลดข้อมูล
-                ui_callbacks['update_progress'](file_progress, f"Uploading data for type {logic_type}", f"Sending {len(combined_df)} rows to SQL Server")
-                self.log(f"📊 Uploading {len(combined_df)} rows for type {logic_type}")
-                success, message = self.db_service.upload_data(combined_df, logic_type, required_cols, log_func=self.log)
-                
-                if success:
-                    self.log(f"✅ {message}")
-                    for file_path, chk in files:
-                        ui_callbacks['disable_checkbox'](chk)
-                        ui_callbacks['set_file_uploaded'](file_path)
-                        # ย้ายไฟล์ทันทีหลังอัปโหลดสำเร็จ
-                        try:
-                            move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
-                            if move_success:
-                                for original_path, new_path in move_result:
-                                    self.log(f"📦 Moved file to: {os.path.basename(new_path)}")
-                            else:
-                                self.log(f"❌ Could not move file: {move_result}")
-                        except Exception as move_error:
-                            self.log(f"❌ An error occurred while moving file: {move_error}")
-                else:
-                    # แสดงเฉพาะข้อความสรุปจากบริการฐานข้อมูล ไม่พิมพ์รายการคอลัมน์ทั้งหมด
-                    self.log(f"❌ {message}")
-                
+                # เก็บข้อมูลที่ผ่านการตรวจสอบแล้ว
+                all_validated_data[logic_type] = (combined_df, valid_files_info, required_cols)
+                self.log(f"✅ Prepared {len(combined_df)} rows for type {logic_type}")
+                    
                 completed_types += 1
                 
             except Exception as e:
-                self.log(f"❌ An error occurred while uploading files of type {logic_type}: {e}")
+                self.log(f"❌ An error occurred while validating files of type {logic_type}: {e}")
+                completed_types += 1
+        
+        # Phase 2: Upload all validated data (with proper table clearing sequence)
+        if all_validated_data:
+            self.log("📤 Phase 2: Uploading all validated data...")
+            upload_count = 0
+            total_uploads = len(all_validated_data)
+            
+            for logic_type, (combined_df, valid_files_info, required_cols) in all_validated_data.items():
+                try:
+                    upload_progress = upload_count / total_uploads
+                    ui_callbacks['update_progress'](upload_progress, f"Uploading data for type {logic_type}", f"Upload {upload_count + 1} of {total_uploads}")
+                    
+                    self.log(f"📊 Uploading {len(combined_df)} rows for type {logic_type}")
+                    
+                    # Clear existing data only for the first upload of each table
+                    success, message = self.db_service.upload_data(
+                        combined_df, logic_type, required_cols, 
+                        log_func=self.log, clear_existing=True
+                    )
+                    
+                    if success:
+                        self.log(f"✅ {message}")
+                        for file_path, chk in valid_files_info:
+                            ui_callbacks['disable_checkbox'](chk)
+                            ui_callbacks['set_file_uploaded'](file_path)
+                            # ย้ายไฟล์ทันทีหลังอัปโหลดสำเร็จ
+                            try:
+                                move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
+                                if move_success:
+                                    for original_path, new_path in move_result:
+                                        self.log(f"📦 Moved file to: {os.path.basename(new_path)}")
+                                else:
+                                    self.log(f"❌ Could not move file: {move_result}")
+                            except Exception as move_error:
+                                self.log(f"❌ An error occurred while moving file: {move_error}")
+                    else:
+                        # แสดงเฉพาะข้อความสรุปจากบริการฐานข้อมูล ไม่พิมพ์รายการคอลัมน์ทั้งหมด
+                        self.log(f"❌ {message}")
+                        
+                    upload_count += 1
+                    
+                except Exception as e:
+                    self.log(f"❌ An error occurred while uploading data for type {logic_type}: {e}")
+                    upload_count += 1
+        else:
+            self.log("❌ No validated data to upload")
         
         # อัปเดต progress เป็น 100% เมื่อเสร็จสิ้น
         successfully_uploaded = sum(1 for files in files_by_type.values() for _ in files)  # Count all processed files
@@ -385,7 +422,8 @@ class FileHandler:
                         continue
                     
                     self.log(f"📊 Uploading {len(df)} rows for type {logic_type}")
-                    success, message = self.db_service.upload_data(df, logic_type, required_cols, log_func=self.log)
+                    # Clear existing data on first upload for each type
+                    success, message = self.db_service.upload_data(df, logic_type, required_cols, log_func=self.log, clear_existing=True)
                     
                     if success:
                         self.log(f"✅ Upload successful: {message}")

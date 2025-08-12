@@ -139,6 +139,9 @@ class MainWindow(ctk.CTkToplevel):
         
         self.main_tab_ui = MainTab(parent, callbacks)
         
+        # ส่ง reference ของ tabview เพื่อให้ควบคุม tabs ได้
+        self.main_tab_ui.parent_tabview = self.tabview
+        
         # เก็บ reference ไปยัง components สำคัญ
         self.status_bar = self.main_tab_ui.status_bar
         self.file_list = self.main_tab_ui.file_list

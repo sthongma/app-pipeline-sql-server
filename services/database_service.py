@@ -129,7 +129,7 @@ class DatabaseService:
         """ตรวจสอบและสร้าง schema ตามที่ระบุ ถ้ายังไม่มี"""
         return self.schema_service.ensure_schemas_exist(schema_names)
 
-    def upload_data(self, df, logic_type, required_cols, schema_name='bronze', log_func=None, force_recreate=False):
+    def upload_data(self, df, logic_type, required_cols, schema_name='bronze', log_func=None, force_recreate=False, clear_existing=True):
         """
         อัปโหลดข้อมูลไปยังฐานข้อมูล: สร้างตารางใหม่ตาม config, insert เฉพาะคอลัมน์ที่ตั้งค่าไว้, ถ้า schema DB ไม่ตรงให้ drop และสร้างตารางใหม่
         
@@ -140,9 +140,10 @@ class DatabaseService:
             schema_name: ชื่อ schema ในฐานข้อมูล
             log_func: ฟังก์ชันสำหรับ log
             force_recreate: บังคับสร้างตารางใหม่ (ใช้เมื่อมีการปรับปรุงชนิดข้อมูลอัตโนมัติ)
+            clear_existing: ล้างข้อมูลเดิมหรือไม่ (default True เพื่อความเข้ากันได้แบบเดิม)
         """
         return self.upload_service.upload_data(
-            df, logic_type, required_cols, schema_name, log_func, force_recreate
+            df, logic_type, required_cols, schema_name, log_func, force_recreate, clear_existing
         )
 
     def validate_data_in_staging(self, staging_table, logic_type, required_cols, schema_name='bronze', log_func=None):

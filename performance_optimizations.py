@@ -98,7 +98,13 @@ class PerformanceOptimizer:
                 self.log_callback(f"📊 Total Rows: {total_rows:,} (encoding={encoding_used})")
                 
                 # อ่านแบบ chunk
-                chunk_reader = pd.read_csv(file_path, header=0, encoding=encoding_used, chunksize=self.chunk_size)
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=pd.errors.DtypeWarning)
+                    chunk_reader = pd.read_csv(file_path, header=0, encoding=encoding_used, chunksize=self.chunk_size, low_memory=False)
+                
+                # แจ้งเตือนเรื่อง mixed data types ในรูปแบบที่เข้าใจง่าย
+                self.log_callback("💡 Note: File contains mixed data types in some columns - this is normal and will be handled automatically")
                 
                 for i, chunk in enumerate(chunk_reader):
                     if self.cancellation_token.is_set():

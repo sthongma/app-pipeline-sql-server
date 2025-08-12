@@ -50,7 +50,7 @@ class DataUploadService:
         self.logger = logging.getLogger(__name__)
 
     def upload_data(self, df, logic_type: str, required_cols: Dict, schema_name: str = 'bronze', 
-                   log_func=None, force_recreate: bool = False):
+                   log_func=None, force_recreate: bool = False, clear_existing: bool = True):
         """
         Upload data to database: create table from config, insert only configured columns,
         if database schema doesn't match, drop and recreate table
@@ -62,6 +62,7 @@ class DataUploadService:
             schema_name: Database schema name
             log_func: Function for logging
             force_recreate: Force table recreation (used when auto-updating data types)
+            clear_existing: Whether to clear existing data (default True for backwards compatibility)
         """
         
         if log_func:
@@ -124,7 +125,7 @@ class DataUploadService:
                 return False, validation_results['summary']
             
             self._create_or_recreate_final_table(
-                table_name, required_cols, schema_name, needs_recreate, log_func, df
+                table_name, required_cols, schema_name, needs_recreate, log_func, df, clear_existing
             )
             
             self._transfer_data_from_staging(
@@ -279,7 +280,7 @@ class DataUploadService:
             )
 
     def _create_or_recreate_final_table(self, table_name: str, required_cols: Dict, schema_name: str, 
-                                      needs_recreate: bool, log_func, df):
+                                      needs_recreate: bool, log_func, df, clear_existing: bool = True):
         """Create or recreate final table based on dtype config"""
         insp = inspect(self.engine)
         
@@ -299,10 +300,14 @@ class DataUploadService:
             )
             self._fix_text_columns_to_nvarchar_max(table_name, required_cols, schema_name, log_func)
         else:
-            if log_func:
-                log_func(f"🧹 Truncating existing data in table {schema_name}.{table_name}")
-            with self.engine.begin() as conn:
-                conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
+            if clear_existing:
+                if log_func:
+                    log_func(f"🧹 Truncating existing data in table {schema_name}.{table_name}")
+                with self.engine.begin() as conn:
+                    conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
+            else:
+                if log_func:
+                    log_func(f"📋 Appending to existing table {schema_name}.{table_name}")
 
     def _transfer_data_from_staging(self, staging_table: str, table_name: str, required_cols: Dict, 
                                   schema_name: str, log_func=None):
