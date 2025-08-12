@@ -55,6 +55,7 @@ class MainTab:
             text="Select all",
             command=self.callbacks.get('toggle_select_all'),
             state="disabled",
+            width=160,
         )
         self.select_all_button.pack(side="left", padx=4)
 
@@ -63,6 +64,7 @@ class MainTab:
             button_frame,
             text="📁 Choose folder",
             command=self.callbacks.get('browse_excel_path'),
+            width=160,
         )
         self.folder_btn.pack(side="left", padx=4)
 
@@ -80,6 +82,7 @@ class MainTab:
             button_frame,
             text="📤 Upload selected files",
             command=self.callbacks.get('confirm_upload'),
+            width=160,
         )
         self.upload_button.pack(side="left", padx=4)
 
