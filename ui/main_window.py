@@ -212,6 +212,8 @@ class MainWindow(ctk.CTkToplevel):
     def _save_dtype_settings(self):
         """บันทึกการตั้งค่าประเภทข้อมูล"""
         self.settings_handler.save_dtype_settings(self.dtype_settings)
+        # รีโหลดการตั้งค่าใน services ทั้งหมด
+        self._reload_settings_in_services()
     
     def _toggle_select_all(self):
         """สลับการเลือกไฟล์ทั้งหมด"""
@@ -246,6 +248,29 @@ class MainWindow(ctk.CTkToplevel):
                 daemon=True
             )
             thread.start()
+    
+    def _reload_settings_in_services(self):
+        """รีโหลดการตั้งค่าใน services ทั้งหมด"""
+        try:
+            # รีโหลดการตั้งค่าใน file_service
+            if hasattr(self.file_service, '_settings_loaded'):
+                self.file_service._settings_loaded = False
+                self.file_service._load_settings()
+                
+            # รีโหลดการตั้งค่าใน file_handler (ซึ่งใช้ services ต่างๆ)
+            if hasattr(self.file_handler, 'data_processor'):
+                if hasattr(self.file_handler.data_processor, '_settings_loaded'):
+                    self.file_handler.data_processor._settings_loaded = False
+                    self.file_handler.data_processor._load_settings()
+                    
+            if hasattr(self.file_handler, 'file_reader'):
+                if hasattr(self.file_handler.file_reader, '_settings_loaded'):
+                    self.file_handler.file_reader._settings_loaded = False
+                    self.file_handler.file_reader._load_settings()
+                    
+            self.log("Settings reloaded in all services")
+        except Exception as e:
+            self.log(f"Error reloading settings: {e}")
     
     def _get_ui_callbacks(self):
         """สร้าง dictionary ของ UI callbacks"""
