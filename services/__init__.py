@@ -11,9 +11,7 @@ Services module สำหรับ PIPELINE_SQLSERVER (จัดระเบี�
 
 from .database_service import DatabaseService
 from .file_service import FileService
-from .file_reader_service import FileReaderService
-from .data_processor_service import DataProcessorService
-from .file_management_service import FileManagementService
+from .file import FileReaderService, DataProcessorService, FileManagementService
 from .permission_checker_service import PermissionCheckerService
 from .preload_service import PreloadService
 

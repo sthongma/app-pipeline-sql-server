@@ -13,6 +13,7 @@
 🔧 **Centralized Configuration**: จัดการการตั้งค่าทั้งหมดจากที่เดียว  
 📊 **Type Safety**: ใช้ Type hints และ dataclass เพื่อความปลอดภัยของข้อมูล  
 🛠️ **Extensible**: ง่ายต่อการขยายและปรับปรุงโดย AI  
+🏗️ **Service-Oriented Architecture**: แยก business logic เป็น modular services ที่สามารถใช้งานแยกหรือรวมกันได้  
 
 ## คุณสมบัติหลัก
 
@@ -47,14 +48,24 @@ PIPELINE_SQLSERVER/
 │
 ├── services/                        # Business logic และ services
 │   ├── __init__.py
-│   ├── database_service.py          # บริการฐานข้อมูล
-│   ├── file_service.py              # Orchestrator หลัก (ยังรองรับโค้ดเดิม)
-│   ├── file_reader_service.py       # บริการอ่านและตรวจจับไฟล์
-│   ├── data_processor_service.py    # บริการประมวลผลข้อมูล
-│   ├── file_management_service.py   # บริการจัดการไฟล์
+│   ├── database_service.py          # Orchestrator บริการฐานข้อมูล (รวม modular services)
+│   ├── file_service.py              # Orchestrator บริการไฟล์ (รวม modular services)
 │   ├── permission_checker_service.py# ตรวจสอบสิทธิ์ฐานข้อมูล
-│   └── preload_service.py           # โหลดการตั้งค่า/ประเภทไฟล์ล่วงหน้า
-│
+│   ├── preload_service.py           # โหลดการตั้งค่า/ประเภทไฟล์ล่วงหน้า
+│   │
+│   ├── database/                    # Modular Database Services
+│   │   ├── __init__.py
+│   │   ├── connection_service.py    # จัดการการเชื่อมต่อฐานข้อมูล
+│   │   ├── schema_service.py        # จัดการ schema และ table
+│   │   ├── data_validation_service.py # ตรวจสอบข้อมูลใน staging
+│   │   └── data_upload_service.py   # อัปโหลดข้อมูลไปฐานข้อมูล
+│   │
+│   ├── file/                        # Modular File Services
+│   │   ├── __init__.py
+│   │   ├── file_reader_service.py   # อ่านและตรวจจับไฟล์
+│   │   ├── data_processor_service.py# ประมวลผลและตรวจสอบข้อมูล
+│   │   └── file_management_service.py # จัดการไฟล์
+│   │
 │   └── README.md                    # เอกสาร services โดยละเอียด
 │
 ├── ui/                              # User interface

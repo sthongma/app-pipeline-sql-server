@@ -24,9 +24,11 @@ File Service สำหรับ PIPELINE_SQLSERVER (รุ่นใหม่ท�
 from typing import Optional, Tuple
 import logging
 
-from .file_reader_service import FileReaderService
-from .data_processor_service import DataProcessorService  
-from .file_management_service import FileManagementService
+from .file import (
+    FileReaderService,
+    DataProcessorService,
+    FileManagementService
+)
 from performance_optimizations import PerformanceOptimizer
 from config.settings import settings_manager
 
