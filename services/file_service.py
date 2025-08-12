@@ -77,6 +77,66 @@ class FileService:
     # ========================
     # Main Interface Methods
     # ========================
+    
+    def preview_file_columns(self, file_path, logic_type, max_rows=5):
+        """
+        ตรวจสอบคอลัมน์ของไฟล์โดยอ่านเฉพาะแถวแรกๆ เพื่อประหยัดเวลา
+        
+        Args:
+            file_path: ที่อยู่ไฟล์
+            logic_type: ประเภทไฟล์
+            max_rows: จำนวนแถวที่อ่านสำหรับ preview (default: 5)
+            
+        Returns:
+            tuple: (success, result/error_message, columns_info)
+        """
+        try:
+            import pandas as pd
+            
+            # อ่านเฉพาะแถวแรกๆ เพื่อดูโครงสร้างคอลัมน์
+            if file_path.lower().endswith('.csv'):
+                try:
+                    preview_df = pd.read_csv(file_path, nrows=max_rows, encoding='utf-8')
+                except UnicodeDecodeError:
+                    preview_df = pd.read_csv(file_path, nrows=max_rows, encoding='tis-620')
+            else:
+                # สำหรับ Excel
+                preview_df = pd.read_excel(file_path, nrows=max_rows)
+            
+            if preview_df.empty:
+                return False, "File is empty", None
+            
+            # ดึงชื่อคอลัมน์จาก preview
+            file_columns = list(preview_df.columns)
+            
+            # Apply column mapping เพื่อดูว่าคอลัมน์จะถูก rename อย่างไร
+            col_map = self.file_reader.build_rename_mapping_for_dataframe(file_columns, logic_type)
+            
+            mapped_columns = file_columns.copy()
+            if col_map:
+                for old_name, new_name in col_map.items():
+                    if old_name in mapped_columns:
+                        idx = mapped_columns.index(old_name)
+                        mapped_columns[idx] = new_name
+            
+            # ตรวจสอบคอลัมน์ที่จำเป็น
+            success, validation_message = self.data_processor.validate_columns_by_list(mapped_columns, logic_type)
+            
+            columns_info = {
+                'original_columns': file_columns,
+                'mapped_columns': mapped_columns,
+                'column_mapping': col_map,
+                'total_columns': len(file_columns),
+                'preview_rows': len(preview_df)
+            }
+            
+            if success:
+                return True, f"Columns validation passed for {logic_type}", columns_info
+            else:
+                return False, validation_message, columns_info
+                
+        except Exception as e:
+            return False, f"Error previewing file: {str(e)}", None
 
     def read_excel_file(self, file_path, logic_type):
         """

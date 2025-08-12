@@ -182,31 +182,38 @@ class FileHandler:
                         file_progress = (processed_files - 1) / total_files  # เริ่มจาก 0
                         
                         # อัปเดตความคืบหน้าระดับไฟล์
-                        ui_callbacks['update_progress'](file_progress, f"Reading file: {os.path.basename(file_path)}", f"File {processed_files} of {total_files}")
+                        ui_callbacks['update_progress'](file_progress, f"Checking columns: {os.path.basename(file_path)}", f"File {processed_files} of {total_files}")
                         
-                        # อ่านไฟล์ Excel
-                        success, result = self.file_service.read_excel_file(file_path, logic_type)
+                        # ตรวจสอบคอลัมน์ก่อนโดยการ preview ไฟล์ (ประหยัดเวลา)
+                        success, result, columns_info = self.file_service.preview_file_columns(file_path, logic_type)
                         if not success:
-                            self.log(f"❌ {result}")
-                            continue
-                        
-                        df = result
-                        
-                        # ตรวจสอบคอลัมน์เบื้องต้น (เฉพาะ column existence)
-                        success, result = self.file_service.validate_columns(df, logic_type)
-                        if not success:
-                            self.log(f"❌ {result}")
+                            self.log(f"❌ Column check failed for {os.path.basename(file_path)}: {result}")
                             upload_stats['by_type'][logic_type]['failed_files'] += 1
                             upload_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {result}")
                             upload_stats['failed_files'] += 1
                             continue
                         
+                        # อัปเดตความคืบหน้า - ตรวจสอบคอลัมน์ผ่านแล้ว
+                        ui_callbacks['update_progress'](file_progress, f"Columns OK, reading file: {os.path.basename(file_path)}", f"File {processed_files} of {total_files}")
+                        
+                        # อ่านไฟล์เต็มรูปแบบ (หลังจากตรวจสอบคอลัมน์ผ่านแล้ว)
+                        success, result = self.file_service.read_excel_file(file_path, logic_type)
+                        if not success:
+                            self.log(f"❌ Failed to read file {os.path.basename(file_path)}: {result}")
+                            upload_stats['by_type'][logic_type]['failed_files'] += 1
+                            upload_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {result}")
+                            upload_stats['failed_files'] += 1
+                            continue
+                        
+                        df = result
+                        
                         # หมายเหตุ: การตรวจสอบข้อมูลรายละเอียดจะทำใน staging table ด้วย SQL
+                        # คอลัมน์ได้ถูกตรวจสอบแล้วด้วย preview_file_columns()
                         
                         all_dfs.append(df)
                         valid_files_info.append((file_path, chk))
                         upload_stats['by_type'][logic_type]['successful_files'] += 1
-                        self.log(f"✅ Validated file: {os.path.basename(file_path)}")
+                        self.log(f"✅ File validated and ready: {os.path.basename(file_path)}")
                         
                     except Exception as e:
                         error_msg = f"An error occurred while reading file {os.path.basename(file_path)}: {e}"
@@ -609,7 +616,17 @@ class FileHandler:
                     
                     self.log(f"📋 Identified file type: {logic_type}")
                     
-                    # อ่านไฟล์
+                    # ตรวจสอบคอลัมน์ก่อนโดยการ preview ไฟล์ (ประหยัดเวลา)
+                    success, result, columns_info = self.file_service.preview_file_columns(file_path, logic_type)
+                    if not success:
+                        error_msg = f"Column check failed: {result}"
+                        self.log(f"❌ {error_msg}")
+                        process_stats['by_type'][logic_type]['failed_files'] += 1
+                        process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
+                        process_stats['failed_files'] += 1
+                        continue
+                    
+                    # อ่านไฟล์เต็มรูปแบบ (หลังจากตรวจสอบคอลัมน์ผ่านแล้ว)
                     success, result = self.file_service.read_excel_file(file_path, logic_type)
                     if not success:
                         error_msg = f"Could not read file: {result}"
@@ -620,16 +637,6 @@ class FileHandler:
                         continue
                     
                     df = result
-                    
-                    # ตรวจสอบคอลัมน์เบื้องต้น (เฉพาะ column existence)
-                    success, result = self.file_service.validate_columns(df, logic_type)
-                    if not success:
-                        error_msg = f"Invalid columns: {result}"
-                        self.log(f"❌ {error_msg}")
-                        process_stats['by_type'][logic_type]['failed_files'] += 1
-                        process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
-                        process_stats['failed_files'] += 1
-                        continue
                     
                     # หมายเหตุ: การตรวจสอบข้อมูลรายละเอียดจะทำใน staging table ด้วย SQL
                     

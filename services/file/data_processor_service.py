@@ -436,6 +436,29 @@ class DataProcessorService:
                         
         return validation_report
 
+    def validate_columns_by_list(self, column_list, logic_type):
+        """
+        ตรวจสอบคอลัมน์จาก list แทน DataFrame (สำหรับ preview)
+        
+        Args:
+            column_list: รายการชื่อคอลัมน์
+            logic_type: ประเภทไฟล์
+            
+        Returns:
+            tuple: (success, message)
+        """
+        if not self.column_settings or logic_type not in self.column_settings:
+            return False, "ยังไม่ได้ตั้งค่าคอลัมน์สำหรับประเภทไฟล์นี้"
+            
+        required_cols = set(self.column_settings[logic_type].values())
+        file_cols = set(column_list)
+        missing_cols = required_cols - file_cols
+        
+        if missing_cols:
+            return False, f"คอลัมน์ไม่ครบ: {', '.join(sorted(missing_cols))}"
+        
+        return True, f"พบคอลัมน์ครบถ้วนสำหรับ {logic_type}"
+
     def validate_columns(self, df, logic_type):
         """ตรวจสอบคอลัมน์ที่จำเป็น (dynamic)"""
         if not self.column_settings or logic_type not in self.column_settings:
