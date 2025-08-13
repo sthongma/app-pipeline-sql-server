@@ -17,7 +17,7 @@ class DatabaseConstants:
     
     # Authentication types
     AUTH_WINDOWS = "Windows"
-    AUTH_SQL = "SQL"
+    AUTH_SQL = "SQL Server"
     
     # Default schema names
     DEFAULT_BRONZE_SCHEMA = "bronze"
@@ -78,7 +78,7 @@ class AppConstants:
     
     # Window settings
     MAIN_WINDOW_SIZE = (900, 780)
-    LOGIN_WINDOW_SIZE = (500, 400)
+    LOGIN_WINDOW_SIZE = (440, 420)
     
     # Threading settings
     MAX_WORKER_THREADS = 3

@@ -42,11 +42,18 @@ class LoginWindow(ctk.CTk):
         for i in range(10):
             main_frame.grid_rowconfigure(i, weight=1)
 
-        label_width = 140
+        label_width = 100
 
-        # หัวข้อ
-        title_label = ctk.CTkLabel(main_frame, text="Sign in to SQL Server", font=ctk.CTkFont(size=20))
-        title_label.grid(row=1, column=0, columnspan=2, pady=(0, 6), sticky="n")
+        # กรอบหัวข้อ (Frame) แยกส่วนหัวกับฟอร์มหลัก พื้นหลังสีต่างแต่โทนเดียวกัน
+        title_frame = ctk.CTkFrame(main_frame, fg_color="#363636")  # สีเข้มขึ้นในโทนเดียวกับธีม
+        title_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10), padx=0)
+        title_label = ctk.CTkLabel(
+            title_frame,
+            text="SIGN IN TO SQL SERVER",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color="#f0f4fa"  # สีอ่อนตัดกับพื้นหลัง
+        )
+        title_label.pack(padx=18, pady=12)
 
         # Server
         server_label = ctk.CTkLabel(main_frame, text="Server", width=label_width, anchor="w")
@@ -73,13 +80,23 @@ class LoginWindow(ctk.CTk):
         self.password_label = ctk.CTkLabel(main_frame, text="Password", width=label_width, anchor="w")
         self.password_entry = ctk.CTkEntry(main_frame, width=240, show="*", placeholder_text="Password")
 
-        # Remember me
+        # Remember me (ย้ายมาอยู่ใต้ช่อง password และให้ขนาดเล็กลง และเพิ่มระยะห่างจากด้านบน)
         self.remember_var = ctk.BooleanVar(value=True)
-        remember_check = ctk.CTkCheckBox(main_frame, text="Remember settings", variable=self.remember_var)
-        remember_check.grid(row=7, column=0, columnspan=2, pady=6, sticky="")
+        remember_check = ctk.CTkCheckBox(
+            main_frame, 
+            text="Remember settings", 
+            variable=self.remember_var,
+            width=100,  # ขนาดปุ่มติ๊กถูก
+            font=ctk.CTkFont(size=12),
+            checkbox_width=18,  # ขนาดปุ่มติ๊กถูก
+            checkbox_height=18   # ขนาดปุ่มติ๊กถูก
+        )
+        # เพิ่มระยะห่างด้านบนโดยจะไปกำหนดใน grid ด้วย pady
+        # จะวางไว้ที่ row 6, column 1 (ใต้ password entry, ชิดซ้าย)
+        remember_check.grid(row=7, column=1, sticky="w", padx=(0, 0), pady=(0, 2))
 
         # Connect button
-        connect_button = ctk.CTkButton(main_frame, text="Connect", command=self._connect, width=260)
+        connect_button = ctk.CTkButton(main_frame, text="Connect", command=self._connect, width=300)
         connect_button.grid(row=8, column=0, columnspan=2, pady=12, sticky="", ipadx=30)
 
         self._on_auth_change("Windows")
