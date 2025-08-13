@@ -96,17 +96,8 @@ echo =============================================
 echo.
 echo Opening GUI... (Application window will appear)
 
-REM Run GUI application (no console window after GUI opens)
-start "" %PYTHON_EXE% pipeline_gui_app.py
+REM Run GUI application (hidden console window)
+start "" /MIN %PYTHON_EXE% pipeline_gui_app.py
 
-REM Display message and close console
-echo.
-echo GUI Application started
-echo Console window will close in 3 seconds...
-echo.
-
-REM Wait 3 seconds then close
-timeout /t 3 /nobreak >nul
-
-REM Close console window automatically
+REM Close console window immediately
 exit
