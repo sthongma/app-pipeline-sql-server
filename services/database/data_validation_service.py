@@ -39,9 +39,9 @@ class DataValidationService:
         self.logger = logging.getLogger(__name__)
 
     def validate_data_in_staging(self, staging_table: str, logic_type: str, required_cols: Dict, 
-                                schema_name: str = 'bronze', log_func=None) -> Dict:
+                                schema_name: str = 'bronze', log_func=None, progress_callback=None) -> Dict:
         """
-        Validate data correctness in staging table using SQL
+        Validate data correctness in staging table using SQL with chunked processing
         
         Args:
             staging_table: Staging table name
@@ -49,6 +49,7 @@ class DataValidationService:
             required_cols: Required columns and data types
             schema_name: Schema name
             log_func: Function for logging
+            progress_callback: Function to call with progress updates (progress, phase, details)
             
         Returns:
             Dict: Validation results {'is_valid': bool, 'issues': [...], 'summary': str}
@@ -60,6 +61,10 @@ class DataValidationService:
                 'warnings': [],
                 'summary': ''
             }
+            
+            # Phase 1: Basic checks
+            if progress_callback:
+                progress_callback(0.1, "Initialization", "Checking table structure...")
             
             total_rows = 0
             with self.engine.connect() as conn:
@@ -74,9 +79,9 @@ class DataValidationService:
             if log_func:
                 log_func(f"📊 Validating {total_rows:,} rows in staging table")
             
-            if log_func:
-                log_func(f"   🔨 Building validation queries...")
-            validation_queries = self._build_validation_queries(staging_table, required_cols, schema_name)
+            # Phase 2: Schema compatibility check
+            if progress_callback:
+                progress_callback(0.2, "Schema Check", "Verifying column compatibility...")
             
             if log_func:
                 log_func(f"   🔍 Checking schema compatibility...")
@@ -84,58 +89,41 @@ class DataValidationService:
             if schema_issues:
                 validation_results['warnings'].extend(schema_issues)
             
-            # แสดงรายการ validation types ที่จะตรวจสอบ
-            if log_func and validation_queries:
-                validation_names = {
-                    'numeric_validation': 'Numeric data types',
-                    'date_validation': 'Date/DateTime formats', 
-                    'string_length_validation': 'String length limits',
-                    'boolean_validation': 'Boolean values'
-                }
-                log_func(f"   📋 Running {len(validation_queries)} validation checks...")
+            # Phase 3: Build validation phases
+            validation_phases = self._build_validation_phases(staging_table, required_cols, schema_name)
             
-            with self.engine.connect() as conn:
-                for i, (validation_type, query) in enumerate(validation_queries.items(), 1):
-                    if log_func:
-                        validation_name = validation_names.get(validation_type, validation_type)
-                        log_func(f"   ⏳ [{i}/{len(validation_queries)}] Checking {validation_name}...")
-                    
-                    try:
-                        result = conn.execute(text(query))
-                        rows = result.fetchall()
-                        
-                        if rows:
-                            issues_found = len(rows)
-                            if log_func:
-                                log_func(f"      ❌ Found {issues_found} issue(s) in {validation_name}")
-                            
-                            for row in rows:
-                                issue = {
-                                    'validation_type': validation_type,
-                                    'column': row.column_name if hasattr(row, 'column_name') else 'unknown',
-                                    'error_count': row.error_count if hasattr(row, 'error_count') else 0,
-                                    'percentage': round((row.error_count / total_rows) * 100, 2) if hasattr(row, 'error_count') else 0,
-                                    'examples': row.examples if hasattr(row, 'examples') else ''
-                                }
-                                
-                                if issue['percentage'] > 10:
-                                    validation_results['is_valid'] = False
-                                    validation_results['issues'].append(issue)
-                                elif issue['percentage'] > 1:
-                                    validation_results['warnings'].append(issue)
-                                
-                                if log_func and issue['error_count'] > 0:
-                                    status = "❌" if issue['percentage'] > 10 else "⚠️"
-                                    column_name = issue['column'] if isinstance(issue['column'], str) else str(issue['column'])
-                                    examples = issue['examples'][:100] if isinstance(issue['examples'], str) else str(issue['examples'])[:100]
-                                    log_func(f"      {status} {column_name}: {issue['error_count']:,} invalid rows ({issue['percentage']}%) Examples: {examples}")
-                        else:
-                            if log_func:
-                                log_func(f"      ✅ {validation_name} - No issues found")
-                    
-                    except Exception as query_error:
-                        if log_func:
-                            log_func(f"      ⚠️ Could not run {validation_name}: {query_error}")
+            if log_func and validation_phases:
+                log_func(f"   📋 Running {len(validation_phases)} validation phases...")
+            
+            # Phase 4-7: Run validation phases
+            phase_progress_step = 0.6 / len(validation_phases) if validation_phases else 0
+            base_progress = 0.3
+            
+            for i, (phase_name, phase_data) in enumerate(validation_phases.items(), 1):
+                current_progress = base_progress + (i * phase_progress_step)
+                
+                if progress_callback:
+                    progress_callback(current_progress, f"Validation Phase {i}", f"Running {phase_name}...")
+                
+                if log_func:
+                    log_func(f"   ⏳ Phase {i}/{len(validation_phases)}: {phase_name}...")
+                
+                phase_issues = self._run_validation_phase(
+                    phase_name, phase_data, schema_name, staging_table, 
+                    total_rows, log_func, progress_callback, current_progress
+                )
+                
+                # Process phase results
+                for issue in phase_issues:
+                    if issue['percentage'] > 10:
+                        validation_results['is_valid'] = False
+                        validation_results['issues'].append(issue)
+                    elif issue['percentage'] > 1:
+                        validation_results['warnings'].append(issue)
+            
+            # Phase 8: Final summary
+            if progress_callback:
+                progress_callback(0.9, "Summary", "Preparing validation results...")
             
             if not validation_results['is_valid']:
                 serious_issues = len(validation_results['issues'])
@@ -150,6 +138,9 @@ class DataValidationService:
                 validation_results['summary'] = "All data valid"
                 if log_func:
                     log_func(f"✅ All data passed validation")
+            
+            if progress_callback:
+                progress_callback(1.0, "Completed", validation_results['summary'])
                     
             return validation_results
             
@@ -163,6 +154,119 @@ class DataValidationService:
             if log_func:
                 log_func(f"❌ {validation_results['summary']}")
             return validation_results
+    
+    def _build_validation_phases(self, staging_table: str, required_cols: Dict, schema_name: str) -> Dict:
+        """
+        Build validation phases for chunked processing
+        """
+        phases = {}
+        
+        # Phase 1: Numeric validation
+        numeric_columns = []
+        for col, dtype in required_cols.items():
+            if isinstance(dtype, (SA_Integer, SA_SmallInteger, SA_Float, SA_DECIMAL)):
+                numeric_columns.append(col)
+        
+        if numeric_columns:
+            phases['Numeric Data Types'] = {
+                'type': 'numeric_validation',
+                'columns': numeric_columns,
+                'chunk_size': 10000
+            }
+        
+        # Phase 2: Date validation
+        date_columns = []
+        for col, dtype in required_cols.items():
+            if isinstance(dtype, (SA_DATE, SA_DateTime)):
+                date_columns.append(col)
+        
+        if date_columns:
+            phases['Date/DateTime Formats'] = {
+                'type': 'date_validation',
+                'columns': date_columns,
+                'chunk_size': 10000
+            }
+        
+        # Phase 3: String length validation
+        string_columns = []
+        for col, dtype in required_cols.items():
+            if isinstance(dtype, SA_NVARCHAR) and hasattr(dtype, 'length') and dtype.length:
+                string_columns.append((col, dtype.length))
+        
+        if string_columns:
+            phases['String Length Limits'] = {
+                'type': 'string_length_validation',
+                'columns': string_columns,
+                'chunk_size': 15000
+            }
+        
+        # Phase 4: Boolean validation
+        boolean_columns = []
+        for col, dtype in required_cols.items():
+            if isinstance(dtype, SA_Boolean):
+                boolean_columns.append(col)
+        
+        if boolean_columns:
+            phases['Boolean Values'] = {
+                'type': 'boolean_validation',
+                'columns': boolean_columns,
+                'chunk_size': 20000
+            }
+        
+        return phases
+    
+    def _run_validation_phase(self, phase_name, phase_data, schema_name, staging_table, 
+                             total_rows, log_func, progress_callback, base_progress):
+        """
+        Run a single validation phase with chunked processing
+        """
+        issues = []
+        validation_type = phase_data['type']
+        columns = phase_data['columns']
+        chunk_size = phase_data.get('chunk_size', 10000)
+        
+        try:
+            with self.engine.connect() as conn:
+                if validation_type == 'numeric_validation':
+                    issues = self._validate_numeric_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func
+                    )
+                elif validation_type == 'date_validation':
+                    issues = self._validate_date_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func
+                    )
+                elif validation_type == 'string_length_validation':
+                    issues = self._validate_string_length_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func
+                    )
+                elif validation_type == 'boolean_validation':
+                    issues = self._validate_boolean_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func
+                    )
+                
+                if issues:
+                    if log_func:
+                        log_func(f"      ❌ Found {len(issues)} issue type(s) in {phase_name}")
+                    
+                    for issue in issues:
+                        if log_func and issue['error_count'] > 0:
+                            status = "❌" if issue['percentage'] > 10 else "⚠️"
+                            column_name = issue['column'] if isinstance(issue['column'], str) else str(issue['column'])
+                            examples = issue['examples'][:100] if isinstance(issue['examples'], str) else str(issue['examples'])[:100]
+                            log_func(f"      {status} {column_name}: {issue['error_count']:,} invalid rows ({issue['percentage']}%) Examples: {examples}")
+                else:
+                    if log_func:
+                        log_func(f"      ✅ {phase_name} - No issues found")
+                        
+        except Exception as phase_error:
+            if log_func:
+                log_func(f"      ⚠️ Could not run {phase_name}: {phase_error}")
+        
+        return issues
     
     def _build_validation_queries(self, staging_table: str, required_cols: Dict, schema_name: str) -> Dict:
         """
@@ -426,3 +530,218 @@ class DataValidationService:
                 log_func(f"⚠️ Unable to check schema mismatch: {e}")
         
         return schema_issues
+    
+    def _validate_numeric_chunked(self, conn, staging_table, schema_name, columns, 
+                                  total_rows, chunk_size, log_func):
+        """
+        Validate numeric columns in chunks
+        """
+        issues = []
+        
+        for col in columns:
+            col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
+            
+            # Simplified cleaning for better performance
+            cleaned_col_expression = f"""
+                LTRIM(RTRIM(REPLACE(REPLACE([{col}], ',', ''), ' ', '')))
+            """
+            
+            # Count errors with simpler query
+            error_query = f"""
+                SELECT COUNT(*) as error_count
+                FROM {schema_name}.{staging_table}
+                WHERE TRY_CAST({cleaned_col_expression} AS FLOAT) IS NULL 
+                  AND NULLIF({cleaned_col_expression}, '') IS NOT NULL
+            """
+            
+            try:
+                result = conn.execute(text(error_query))
+                error_count = result.scalar()
+                
+                if error_count > 0:
+                    # Get sample examples (limited)
+                    examples_query = f"""
+                        SELECT TOP 3 [{col}] as example_value
+                        FROM {schema_name}.{staging_table}
+                        WHERE TRY_CAST({cleaned_col_expression} AS FLOAT) IS NULL 
+                          AND NULLIF({cleaned_col_expression}, '') IS NOT NULL
+                    """
+                    
+                    examples_result = conn.execute(text(examples_query))
+                    examples = [str(row.example_value) for row in examples_result.fetchall()]
+                    
+                    issue = {
+                        'validation_type': 'numeric_validation',
+                        'column': col,
+                        'error_count': error_count,
+                        'percentage': round((error_count / total_rows) * 100, 2),
+                        'examples': ', '.join(examples)
+                    }
+                    issues.append(issue)
+            
+            except Exception as e:
+                if log_func:
+                    log_func(f"        ⚠️ Error checking column {col}: {e}")
+        
+        return issues
+    
+    def _validate_date_chunked(self, conn, staging_table, schema_name, columns, 
+                               total_rows, chunk_size, log_func):
+        """
+        Validate date columns in chunks
+        """
+        issues = []
+        
+        for col in columns:
+            col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
+            
+            # Simplified cleaning
+            cleaned_col_expression = f"""
+                LTRIM(RTRIM(REPLACE([{col}], ',', '')))
+            """
+            
+            # Count errors with multiple date format attempts
+            error_query = f"""
+                SELECT COUNT(*) as error_count
+                FROM {schema_name}.{staging_table}
+                WHERE COALESCE(
+                    TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
+                    TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
+                    TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)
+                ) IS NULL
+                AND NULLIF({cleaned_col_expression}, '') IS NOT NULL
+            """
+            
+            try:
+                result = conn.execute(text(error_query))
+                error_count = result.scalar()
+                
+                if error_count > 0:
+                    # Get sample examples
+                    examples_query = f"""
+                        SELECT TOP 3 [{col}] as example_value
+                        FROM {schema_name}.{staging_table}
+                        WHERE COALESCE(
+                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
+                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
+                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)
+                        ) IS NULL
+                        AND NULLIF({cleaned_col_expression}, '') IS NOT NULL
+                    """
+                    
+                    examples_result = conn.execute(text(examples_query))
+                    examples = [str(row.example_value) for row in examples_result.fetchall()]
+                    
+                    issue = {
+                        'validation_type': 'date_validation',
+                        'column': col,
+                        'error_count': error_count,
+                        'percentage': round((error_count / total_rows) * 100, 2),
+                        'examples': ', '.join(examples)
+                    }
+                    issues.append(issue)
+            
+            except Exception as e:
+                if log_func:
+                    log_func(f"        ⚠️ Error checking column {col}: {e}")
+        
+        return issues
+    
+    def _validate_string_length_chunked(self, conn, staging_table, schema_name, columns, 
+                                        total_rows, chunk_size, log_func):
+        """
+        Validate string length in chunks
+        """
+        issues = []
+        
+        for col, max_length in columns:
+            col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
+            
+            # Count errors
+            error_query = f"""
+                SELECT COUNT(*) as error_count
+                FROM {schema_name}.{staging_table}
+                WHERE LEN(ISNULL([{col}], '')) > {max_length}
+            """
+            
+            try:
+                result = conn.execute(text(error_query))
+                error_count = result.scalar()
+                
+                if error_count > 0:
+                    # Get sample examples
+                    examples_query = f"""
+                        SELECT TOP 3 LEFT([{col}], 30) + '...' as example_value
+                        FROM {schema_name}.{staging_table}
+                        WHERE LEN(ISNULL([{col}], '')) > {max_length}
+                    """
+                    
+                    examples_result = conn.execute(text(examples_query))
+                    examples = [str(row.example_value) for row in examples_result.fetchall()]
+                    
+                    issue = {
+                        'validation_type': 'string_length_validation',
+                        'column': col,
+                        'error_count': error_count,
+                        'percentage': round((error_count / total_rows) * 100, 2),
+                        'examples': ', '.join(examples)
+                    }
+                    issues.append(issue)
+            
+            except Exception as e:
+                if log_func:
+                    log_func(f"        ⚠️ Error checking column {col}: {e}")
+        
+        return issues
+    
+    def _validate_boolean_chunked(self, conn, staging_table, schema_name, columns, 
+                                  total_rows, chunk_size, log_func):
+        """
+        Validate boolean columns in chunks
+        """
+        issues = []
+        
+        for col in columns:
+            col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
+            
+            # Simplified cleaning
+            cleaned_col_expression = f"""
+                UPPER(LTRIM(RTRIM(ISNULL([{col}], ''))))
+            """
+            
+            # Count errors
+            error_query = f"""
+                SELECT COUNT(*) as error_count
+                FROM {schema_name}.{staging_table}
+                WHERE {cleaned_col_expression} NOT IN ('1','TRUE','Y','YES','0','FALSE','N','NO','')
+            """
+            
+            try:
+                result = conn.execute(text(error_query))
+                error_count = result.scalar()
+                
+                if error_count > 0:
+                    # Get sample examples
+                    examples_query = f"""
+                        SELECT TOP 3 [{col}] as example_value
+                        FROM {schema_name}.{staging_table}
+                        WHERE {cleaned_col_expression} NOT IN ('1','TRUE','Y','YES','0','FALSE','N','NO','')
+                    """
+                    
+                    examples_result = conn.execute(text(examples_query))
+                    examples = [str(row.example_value) for row in examples_result.fetchall()]
+                    
+                    issue = {
+                        'validation_type': 'boolean_validation',
+                        'column': col,
+                        'error_count': error_count,
+                        'percentage': round((error_count / total_rows) * 100, 2),
+                        'examples': ', '.join(examples)
+                    }
+                    issues.append(issue)
+            
+            except Exception as e:
+                if log_func:
+                    log_func(f"        ⚠️ Error checking column {col}: {e}")
+        
+        return issues

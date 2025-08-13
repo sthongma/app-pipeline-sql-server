@@ -146,7 +146,7 @@ class DatabaseService:
             df, logic_type, required_cols, schema_name, log_func, force_recreate, clear_existing
         )
 
-    def validate_data_in_staging(self, staging_table, logic_type, required_cols, schema_name='bronze', log_func=None):
+    def validate_data_in_staging(self, staging_table, logic_type, required_cols, schema_name='bronze', log_func=None, progress_callback=None):
         """
         ตรวจสอบความถูกต้องของข้อมูลใน staging table ด้วย SQL
         
@@ -156,10 +156,11 @@ class DatabaseService:
             required_cols: คอลัมน์และชนิดข้อมูลที่ต้องการ
             schema_name: ชื่อ schema
             log_func: ฟังก์ชันสำหรับ log
+            progress_callback: ฟังก์ชันสำหรับรับ progress updates
             
         Returns:
             Dict: ผลการตรวจสอบ {'is_valid': bool, 'issues': [...], 'summary': str}
         """
         return self.validation_service.validate_data_in_staging(
-            staging_table, logic_type, required_cols, schema_name, log_func
+            staging_table, logic_type, required_cols, schema_name, log_func, progress_callback
         )

@@ -116,7 +116,7 @@ class DataUploadService:
             self._upload_to_staging(df, staging_table, staging_cols, schema_name, log_func)
             
             validation_results = self.validation_service.validate_data_in_staging(
-                staging_table, logic_type, required_cols, schema_name, log_func
+                staging_table, logic_type, required_cols, schema_name, log_func, progress_callback=None
             )
             
             if not validation_results['is_valid']:
