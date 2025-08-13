@@ -159,23 +159,118 @@ class DataUploadService:
                 log_func(f"❌ {error_msg}")
             return False, error_msg
 
-    def _fix_text_columns_to_nvarchar_max(self, table_name: str, required_cols: Dict, 
-                                        schema_name: str = 'bronze', log_func=None):
-        """Fix Text() columns to NVARCHAR(MAX) in SQL Server"""
+    def _fix_column_types(self, table_name: str, required_cols: Dict, 
+                         schema_name: str = 'bronze', log_func=None):
+        """Fix column types to match required types for all data types"""
         try:
             with self.engine.begin() as conn:
+                # ตรวจสอบชนิดข้อมูลปัจจุบันในฐานข้อมูล
+                check_query = f"""
+                    SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE
+                    FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_SCHEMA = '{schema_name}' 
+                    AND TABLE_NAME = '{table_name}'
+                """
+                result = conn.execute(text(check_query))
+                current_columns = {row.COLUMN_NAME: {
+                    'data_type': row.DATA_TYPE,
+                    'max_length': row.CHARACTER_MAXIMUM_LENGTH,
+                    'precision': row.NUMERIC_PRECISION,
+                    'scale': row.NUMERIC_SCALE
+                } for row in result.fetchall()}
+                
                 for col_name, dtype in required_cols.items():
-                    if isinstance(dtype, SA_Text):
-                        alter_sql = f"ALTER TABLE {schema_name}.{table_name} ALTER COLUMN [{col_name}] NVARCHAR(MAX)"
-                        if log_func:
-                            log_func(f"🔧 Alter column '{col_name}' to NVARCHAR(MAX)")
-                        conn.execute(text(alter_sql))
+                    if col_name not in current_columns:
+                        continue
+                        
+                    current_col = current_columns[col_name]
+                    target_sql_type = self._get_sql_server_type(dtype)
+                    current_type_str = self._format_current_type(current_col)
+                    
+                    # เปรียบเทียบชนิดข้อมูล ถ้าเหมือนกันก็ข้าม
+                    if self._types_are_equivalent(current_type_str, target_sql_type, dtype):
+                        continue
+                    
+                    # มีการเปลี่ยนแปลง ต้อง ALTER
+                    alter_sql = f"ALTER TABLE {schema_name}.{table_name} ALTER COLUMN [{col_name}] {target_sql_type}"
+                    if log_func:
+                        log_func(f"🔧 ALTER column '{col_name}': {current_type_str} → {target_sql_type}")
+                    conn.execute(text(alter_sql))
+                    
         except Exception as e:
             if log_func:
-                log_func(f"⚠️ Unable to alter Text() column: {e}")
+                log_func(f"⚠️ Unable to alter column types: {e}")
+    
+    def _get_sql_server_type(self, sa_type) -> str:
+        """Convert SQLAlchemy type to SQL Server type string"""
+        if isinstance(sa_type, SA_Text):
+            return "NVARCHAR(MAX)"
+        elif isinstance(sa_type, SA_NVARCHAR):
+            if hasattr(sa_type, 'length') and sa_type.length:
+                return f"NVARCHAR({sa_type.length})"
+            else:
+                return "NVARCHAR(MAX)"
+        elif isinstance(sa_type, SA_Integer):
+            return "INT"
+        elif isinstance(sa_type, SA_SmallInteger):
+            return "SMALLINT"
+        elif isinstance(sa_type, SA_Float):
+            return "FLOAT"
+        elif isinstance(sa_type, SA_DECIMAL):
+            if hasattr(sa_type, 'precision') and hasattr(sa_type, 'scale'):
+                precision = sa_type.precision or 18
+                scale = sa_type.scale or 0
+                return f"DECIMAL({precision},{scale})"
+            else:
+                return "DECIMAL(18,0)"
+        elif isinstance(sa_type, SA_DATE):
+            return "DATE"
+        elif isinstance(sa_type, SA_DateTime):
+            return "DATETIME2"
+        elif isinstance(sa_type, SA_Boolean):
+            return "BIT"
+        else:
+            return "NVARCHAR(MAX)"  # Default fallback
+    
+    def _format_current_type(self, col_info: Dict) -> str:
+        """Format current column info to readable type string"""
+        data_type = col_info['data_type'].upper()
+        
+        if data_type in ['NVARCHAR', 'VARCHAR']:
+            if col_info['max_length'] == -1:
+                return f"{data_type}(MAX)"
+            elif col_info['max_length']:
+                return f"{data_type}({col_info['max_length']})"
+            else:
+                return data_type
+        elif data_type in ['DECIMAL', 'NUMERIC']:
+            precision = col_info['precision'] or 18
+            scale = col_info['scale'] or 0
+            return f"{data_type}({precision},{scale})"
+        else:
+            return data_type
+    
+    def _types_are_equivalent(self, current_type: str, target_type: str, sa_type) -> bool:
+        """Check if current and target types are equivalent"""
+        current_upper = current_type.upper()
+        target_upper = target_type.upper()
+        
+        # ตรวจสอบความเท่าเทียมแบบเข้มงวด
+        if current_upper == target_upper:
+            return True
+            
+        # ตรวจสอบความเท่าเทียมสำหรับ NVARCHAR(MAX)
+        if isinstance(sa_type, SA_Text):
+            return current_upper in ['NVARCHAR(MAX)', 'TEXT', 'NTEXT']
+            
+        # ตรวจสอบความเท่าเทียมสำหรับ DATETIME
+        if isinstance(sa_type, SA_DateTime):
+            return current_upper in ['DATETIME', 'DATETIME2', 'SMALLDATETIME']
+            
+        return False
 
     def _check_type_compatibility(self, db_col_types: Dict, required_cols: Dict, log_func=None) -> bool:
-        """Check if database column types are compatible with required types"""
+        """Check if database column types are compatible with required types - Now more permissive for ALTER operations"""
         needs_recreate = False
         
         def _type_category(type_str: str) -> str:
@@ -196,15 +291,16 @@ class DataUploadService:
                 return 'NVARCHAR(MAX)'
             return s
 
-        def _parse_varchar_len(type_str: str) -> int:
-            try:
-                if 'MAX' in type_str.upper():
-                    return 2_147_483_647
-                if '(' in type_str and ')' in type_str:
-                    return int(type_str.split('(')[1].split(')')[0])
-            except Exception:
-                pass
-            return -1
+        def _can_alter_type(from_cat: str, to_cat: str) -> bool:
+            """Check if type can be ALTERed instead of requiring table recreation"""
+            # อนุญาต ALTER สำหรับการเปลี่ยนแปลงเหล่านี้
+            alterable_changes = [
+                ('STRING', 'STRING'),    # VARCHAR → NVARCHAR, size changes, etc.
+                ('NUMERIC', 'NUMERIC'),  # INT → BIGINT, DECIMAL changes, etc.
+                ('DATETIME', 'DATETIME'), # DATETIME → DATETIME2, etc.
+                ('BOOLEAN', 'BOOLEAN'),  # BIT changes
+            ]
+            return (from_cat, to_cat) in alterable_changes
 
         for col_name, expected_dtype in required_cols.items():
             db_type = db_col_types.get(col_name, '')
@@ -212,28 +308,14 @@ class DataUploadService:
             cat_db = _type_category(db_type)
             cat_expected = _type_category(expected_str)
 
-            if isinstance(expected_dtype, SA_Text):
-                if 'NVARCHAR(MAX)' not in db_type and 'TEXT' not in db_type and 'NVARCHAR' not in db_type:
-                    if log_func:
-                        log_func(f"❌ Schema Mismatch: Column '{col_name}' should be NVARCHAR(MAX) but database has {db_type}")
-                        log_func(f"   💡 Suggestion: Allow system to create new table to fix this issue")
-                    needs_recreate = True
-                    break
-
-            if cat_db != cat_expected:
+            # ตรวจสอบว่าสามารถ ALTER ได้หรือต้อง recreate table
+            if cat_db != cat_expected and not _can_alter_type(cat_db, cat_expected):
                 if log_func:
                     log_func(f"❌ Data type mismatch for column '{col_name}' (DB: {db_type} | Expected: {expected_str})")
                 needs_recreate = True
                 break
 
-            if cat_expected == 'STRING' and 'NVARCHAR' in expected_str:
-                exp_len = _parse_varchar_len(expected_str)
-                act_len = _parse_varchar_len(db_type)
-                if act_len != -1 and exp_len != -1 and act_len < exp_len:
-                    if log_func:
-                        log_func(f"❌ NVARCHAR length for '{col_name}' is insufficient (DB: {db_type} | Expected: {expected_str})")
-                    needs_recreate = True
-                    break
+            # เอาเงื่อนไข NVARCHAR length ออก เพราะ _fix_column_types() จะจัดการให้
                     
         return needs_recreate
 
@@ -298,8 +380,9 @@ class DataUploadService:
                 index=False,
                 dtype=required_cols
             )
-            self._fix_text_columns_to_nvarchar_max(table_name, required_cols, schema_name, log_func)
         else:
+            # แก้ไขชนิดข้อมูลสำหรับตารางที่มีอยู่แล้ว
+            self._fix_column_types(table_name, required_cols, schema_name, log_func)
             if clear_existing:
                 if log_func:
                     log_func(f"🧹 Truncating existing data in table {schema_name}.{table_name}")

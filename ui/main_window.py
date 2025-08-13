@@ -211,6 +211,8 @@ class MainWindow(ctk.CTkToplevel):
     def _save_column_settings(self):
         """บันทึกการตั้งค่าคอลัมน์"""
         self.settings_handler.save_column_settings(self.column_settings)
+        # รีโหลดการตั้งค่าใน services ทั้งหมด
+        self._reload_settings_in_services()
     
     def _save_dtype_settings(self):
         """บันทึกการตั้งค่าประเภทข้อมูล"""

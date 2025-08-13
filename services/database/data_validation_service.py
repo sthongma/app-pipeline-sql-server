@@ -74,19 +74,41 @@ class DataValidationService:
             if log_func:
                 log_func(f"📊 Validating {total_rows:,} rows in staging table")
             
+            if log_func:
+                log_func(f"   🔨 Building validation queries...")
             validation_queries = self._build_validation_queries(staging_table, required_cols, schema_name)
             
+            if log_func:
+                log_func(f"   🔍 Checking schema compatibility...")
             schema_issues = self._check_schema_mismatch_in_staging(staging_table, required_cols, schema_name, log_func)
             if schema_issues:
                 validation_results['warnings'].extend(schema_issues)
             
+            # แสดงรายการ validation types ที่จะตรวจสอบ
+            if log_func and validation_queries:
+                validation_names = {
+                    'numeric_validation': 'Numeric data types',
+                    'date_validation': 'Date/DateTime formats', 
+                    'string_length_validation': 'String length limits',
+                    'boolean_validation': 'Boolean values'
+                }
+                log_func(f"   📋 Running {len(validation_queries)} validation checks...")
+            
             with self.engine.connect() as conn:
-                for validation_type, query in validation_queries.items():
+                for i, (validation_type, query) in enumerate(validation_queries.items(), 1):
+                    if log_func:
+                        validation_name = validation_names.get(validation_type, validation_type)
+                        log_func(f"   ⏳ [{i}/{len(validation_queries)}] Checking {validation_name}...")
+                    
                     try:
                         result = conn.execute(text(query))
                         rows = result.fetchall()
                         
                         if rows:
+                            issues_found = len(rows)
+                            if log_func:
+                                log_func(f"      ❌ Found {issues_found} issue(s) in {validation_name}")
+                            
                             for row in rows:
                                 issue = {
                                     'validation_type': validation_type,
@@ -106,11 +128,14 @@ class DataValidationService:
                                     status = "❌" if issue['percentage'] > 10 else "⚠️"
                                     column_name = issue['column'] if isinstance(issue['column'], str) else str(issue['column'])
                                     examples = issue['examples'][:100] if isinstance(issue['examples'], str) else str(issue['examples'])[:100]
-                                    log_func(f"   {status} {column_name}: {issue['error_count']:,} invalid rows ({issue['percentage']}%) Examples: {examples}")
+                                    log_func(f"      {status} {column_name}: {issue['error_count']:,} invalid rows ({issue['percentage']}%) Examples: {examples}")
+                        else:
+                            if log_func:
+                                log_func(f"      ✅ {validation_name} - No issues found")
                     
                     except Exception as query_error:
                         if log_func:
-                            log_func(f"⚠️ Could not run validation query for {validation_type}: {query_error}")
+                            log_func(f"      ⚠️ Could not run {validation_name}: {query_error}")
             
             if not validation_results['is_valid']:
                 serious_issues = len(validation_results['issues'])
@@ -154,11 +179,26 @@ class DataValidationService:
             numeric_cases = []
             for col in numeric_columns:
                 col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
+                # Enhanced cleaning for numeric data: remove commas, spaces, tabs, newlines, invisible chars
+                cleaned_col_expression = f"""
+                    NULLIF(LTRIM(RTRIM(
+                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([{col}], 
+                            ',', ''), 
+                            ' ', ''), 
+                            CHAR(9), ''), 
+                            CHAR(10), ''), 
+                            CHAR(13), ''), 
+                            CHAR(160), ''), 
+                            NCHAR(65279), ''), 
+                            NCHAR(8203), ''), 
+                            NCHAR(8288), '')
+                    )), '')
+                """
                 numeric_cases.append(f"""
                     SELECT {col_literal} as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
                     FROM {schema_name}.{staging_table}
-                    WHERE TRY_CAST(REPLACE(REPLACE(NULLIF(LTRIM(RTRIM([{col}])), ''), ',', ''), ' ', '') AS FLOAT) IS NULL 
-                      AND NULLIF(LTRIM(RTRIM([{col}])), '') IS NOT NULL
+                    WHERE TRY_CAST({cleaned_col_expression} AS FLOAT) IS NULL 
+                      AND {cleaned_col_expression} IS NOT NULL
                 """)
             
             queries['numeric_validation'] = f"""
@@ -193,15 +233,31 @@ class DataValidationService:
             date_cases = []
             for col in date_columns:
                 col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
+                # Enhanced cleaning: remove commas, tabs, newlines, carriage returns, BOM, zero-width spaces
+                cleaned_col_expression = f"""
+                    NULLIF(LTRIM(RTRIM(
+                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([{col}], 
+                            ',', ''), 
+                            CHAR(9), ''), 
+                            CHAR(10), ''), 
+                            CHAR(13), ''), 
+                            CHAR(160), ' '), 
+                            NCHAR(65279), ''), 
+                            NCHAR(8203), ''), 
+                            NCHAR(8288), '')
+                    )), '')
+                """
                 date_cases.append(f"""
                     SELECT {col_literal} as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
                     FROM {schema_name}.{staging_table}
                     WHERE COALESCE(
-                        TRY_CONVERT(DATETIME, NULLIF(LTRIM(RTRIM([{col}])), ''), 121),
-                        TRY_CONVERT(DATETIME, NULLIF(LTRIM(RTRIM([{col}])), ''), 103),
-                        TRY_CONVERT(DATETIME, NULLIF(LTRIM(RTRIM([{col}])), ''), 101)
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101),
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105)
                     ) IS NULL
-                    AND NULLIF(LTRIM(RTRIM([{col}])), '') IS NOT NULL
+                    AND {cleaned_col_expression} IS NOT NULL
                 """)
             
             queries['date_validation'] = f"""
@@ -274,10 +330,24 @@ class DataValidationService:
             boolean_cases = []
             for col in boolean_columns:
                 col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
+                # Enhanced cleaning for boolean data
+                cleaned_col_expression = f"""
+                    UPPER(LTRIM(RTRIM(
+                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL([{col}], ''), 
+                            ',', ''), 
+                            CHAR(9), ''), 
+                            CHAR(10), ''), 
+                            CHAR(13), ''), 
+                            CHAR(160), ' '), 
+                            NCHAR(65279), ''), 
+                            NCHAR(8203), ''), 
+                            NCHAR(8288), '')
+                    )))
+                """
                 boolean_cases.append(f"""
                     SELECT {col_literal} as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
                     FROM {schema_name}.{staging_table}
-                    WHERE UPPER(LTRIM(RTRIM(ISNULL([{col}], '')))) NOT IN ('1','TRUE','Y','YES','0','FALSE','N','NO','')
+                    WHERE {cleaned_col_expression} NOT IN ('1','TRUE','Y','YES','0','FALSE','N','NO','')
                 """)
             
             queries['boolean_validation'] = f"""
