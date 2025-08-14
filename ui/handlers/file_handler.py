@@ -617,8 +617,12 @@ class FileHandler:
                             'files_count': 0,
                             'successful_files': 0,
                             'failed_files': 0,
-                            'errors': []
+                            'errors': [],
+                            'individual_processing_time': 0  # เก็บเวลารวมของประเภทนี้
                         }
+                    
+                    # จับเวลาสำหรับไฟล์นี้เฉพาะ
+                    file_start_time = time.time()
                     
                     process_stats['by_type'][logic_type]['files_count'] += 1
                     
@@ -632,6 +636,10 @@ class FileHandler:
                         process_stats['by_type'][logic_type]['failed_files'] += 1
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
+                        
+                        # คำนวณเวลาที่ใช้แม้เมื่อตรวจสอบคอลัมน์ล้มเหลว
+                        file_processing_time = time.time() - file_start_time
+                        process_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
                         continue
                     
                     # อ่านไฟล์เต็มรูปแบบ (หลังจากตรวจสอบคอลัมน์ผ่านแล้ว)
@@ -642,6 +650,10 @@ class FileHandler:
                         process_stats['by_type'][logic_type]['failed_files'] += 1
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
+                        
+                        # คำนวณเวลาที่ใช้แม้เมื่ออ่านไฟล์ล้มเหลว
+                        file_processing_time = time.time() - file_start_time
+                        process_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
                         continue
                     
                     df = result
@@ -658,6 +670,10 @@ class FileHandler:
                         process_stats['by_type'][logic_type]['failed_files'] += 1
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
+                        
+                        # คำนวณเวลาที่ใช้แม้เมื่อไม่พบ configuration
+                        file_processing_time = time.time() - file_start_time
+                        process_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
                         continue
                     
                     # ตรวจสอบว่าข้อมูลไม่ว่างเปล่า
@@ -667,6 +683,10 @@ class FileHandler:
                         process_stats['by_type'][logic_type]['failed_files'] += 1
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
+                        
+                        # คำนวณเวลาที่ใช้แม้เมื่อไฟล์ว่างเปล่า
+                        file_processing_time = time.time() - file_start_time
+                        process_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
                         continue
                     
                     self.log(f"📊 Uploading {len(df)} rows for type {logic_type}")
@@ -678,6 +698,10 @@ class FileHandler:
                         successful_uploads += 1
                         process_stats['by_type'][logic_type]['successful_files'] += 1
                         process_stats['successful_files'] += 1
+                        
+                        # คำนวณเวลาที่ใช้สำหรับไฟล์นี้และเพิ่มเข้าไปในเวลารวม
+                        file_processing_time = time.time() - file_start_time
+                        process_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
                         
                         # ย้ายไฟล์หลังอัปโหลดสำเร็จ
                         try:
@@ -697,18 +721,26 @@ class FileHandler:
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
                         
+                        # คำนวณเวลาที่ใช้สำหรับไฟล์นี้แม้เมื่อล้มเหลว
+                        file_processing_time = time.time() - file_start_time
+                        process_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
+                        
                 except Exception as e:
                     error_msg = f"An error occurred while processing {os.path.basename(file_path)}: {e}"
                     self.log(f"❌ {error_msg}")
                     if logic_type and logic_type in process_stats['by_type']:
                         process_stats['by_type'][logic_type]['failed_files'] += 1
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {str(e)}")
+                        
+                        # คำนวณเวลาที่ใช้สำหรับไฟล์นี้แม้เมื่อเกิดข้อผิดพลาด
+                        file_processing_time = time.time() - file_start_time
+                        process_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
                     process_stats['failed_files'] += 1
             
-            # คำนวณเวลารวมสำหรับแต่ละประเภท
+            # ใช้เวลารวมที่คำนวณแยกสำหรับแต่ละประเภท
             for logic_type in process_stats['by_type']:
-                if 'start_time' in process_stats['by_type'][logic_type]:
-                    process_stats['by_type'][logic_type]['processing_time'] = time.time() - process_stats['by_type'][logic_type]['start_time']
+                if 'individual_processing_time' in process_stats['by_type'][logic_type]:
+                    process_stats['by_type'][logic_type]['processing_time'] = process_stats['by_type'][logic_type]['individual_processing_time']
             
             # คำนวณเวลารวม
             process_stats['total_time'] = time.time() - process_start_time
