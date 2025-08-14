@@ -39,7 +39,8 @@ class DataValidationService:
         self.logger = logging.getLogger(__name__)
 
     def validate_data_in_staging(self, staging_table: str, logic_type: str, required_cols: Dict, 
-                                schema_name: str = 'bronze', log_func=None, progress_callback=None) -> Dict:
+                                schema_name: str = 'bronze', log_func=None, progress_callback=None, 
+                                date_format: str = 'UK') -> Dict:
         """
         Validate data correctness in staging table using SQL with chunked processing
         
@@ -50,6 +51,7 @@ class DataValidationService:
             schema_name: Schema name
             log_func: Function for logging
             progress_callback: Function to call with progress updates (progress, phase, details)
+            date_format: Date format preference ('UK' for DD-MM or 'US' for MM-DD)
             
         Returns:
             Dict: Validation results {'is_valid': bool, 'issues': [...], 'summary': str}
@@ -90,7 +92,7 @@ class DataValidationService:
                 validation_results['warnings'].extend(schema_issues)
             
             # Phase 3: Build validation phases
-            validation_phases = self._build_validation_phases(staging_table, required_cols, schema_name)
+            validation_phases = self._build_validation_phases(staging_table, required_cols, schema_name, date_format)
             
             if log_func and validation_phases:
                 log_func(f"   📋 Running {len(validation_phases)} validation phases...")
@@ -110,7 +112,7 @@ class DataValidationService:
                 
                 phase_issues = self._run_validation_phase(
                     phase_name, phase_data, schema_name, staging_table, 
-                    total_rows, log_func, progress_callback, current_progress
+                    total_rows, log_func, progress_callback, current_progress, date_format
                 )
                 
                 # Process phase results
@@ -155,7 +157,7 @@ class DataValidationService:
                 log_func(f"❌ {validation_results['summary']}")
             return validation_results
     
-    def _build_validation_phases(self, staging_table: str, required_cols: Dict, schema_name: str) -> Dict:
+    def _build_validation_phases(self, staging_table: str, required_cols: Dict, schema_name: str, date_format: str) -> Dict:
         """
         Build validation phases for chunked processing
         """
@@ -216,7 +218,7 @@ class DataValidationService:
         return phases
     
     def _run_validation_phase(self, phase_name, phase_data, schema_name, staging_table, 
-                             total_rows, log_func, progress_callback, base_progress):
+                             total_rows, log_func, progress_callback, base_progress, date_format):
         """
         Run a single validation phase with chunked processing
         """
@@ -235,7 +237,7 @@ class DataValidationService:
                 elif validation_type == 'date_validation':
                     issues = self._validate_date_chunked(
                         conn, staging_table, schema_name, columns, 
-                        total_rows, chunk_size, log_func
+                        total_rows, chunk_size, log_func, date_format
                     )
                 elif validation_type == 'string_length_validation':
                     issues = self._validate_string_length_chunked(
@@ -267,217 +269,6 @@ class DataValidationService:
                 log_func(f"      ⚠️ Could not run {phase_name}: {phase_error}")
         
         return issues
-    
-    def _build_validation_queries(self, staging_table: str, required_cols: Dict, schema_name: str) -> Dict:
-        """
-        Build SQL queries for validation based on specified data types
-        """
-        queries = {}
-        
-        numeric_columns = []
-        for col, dtype in required_cols.items():
-            if isinstance(dtype, (SA_Integer, SA_SmallInteger, SA_Float, SA_DECIMAL)):
-                numeric_columns.append(col)
-        
-        if numeric_columns:
-            numeric_cases = []
-            for col in numeric_columns:
-                col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
-                # Enhanced cleaning for numeric data: remove commas, spaces, tabs, newlines, invisible chars
-                cleaned_col_expression = f"""
-                    NULLIF(LTRIM(RTRIM(
-                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([{col}], 
-                            ',', ''), 
-                            ' ', ''), 
-                            CHAR(9), ''), 
-                            CHAR(10), ''), 
-                            CHAR(13), ''), 
-                            CHAR(160), ''), 
-                            NCHAR(65279), ''), 
-                            NCHAR(8203), ''), 
-                            NCHAR(8288), '')
-                    )), '')
-                """
-                numeric_cases.append(f"""
-                    SELECT {col_literal} as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
-                    FROM {schema_name}.{staging_table}
-                    WHERE TRY_CAST({cleaned_col_expression} AS FLOAT) IS NULL 
-                      AND {cleaned_col_expression} IS NOT NULL
-                """)
-            
-            queries['numeric_validation'] = f"""
-                WITH numeric_errors AS (
-                    {' UNION ALL '.join(numeric_cases)}
-                ),
-                error_counts AS (
-                    SELECT column_name, COUNT(*) as error_count
-                    FROM numeric_errors
-                    GROUP BY column_name
-                ),
-                limited_examples AS (
-                    SELECT column_name, invalid_value, row_num,
-                           ROW_NUMBER() OVER (PARTITION BY column_name ORDER BY row_num) as rn
-                    FROM numeric_errors
-                )
-                SELECT 
-                    ec.column_name,
-                    ec.error_count,
-                    CAST(STRING_AGG(CAST(le.invalid_value AS NVARCHAR(50)), ', ') WITHIN GROUP (ORDER BY le.row_num) AS NVARCHAR(MAX)) as examples
-                FROM error_counts ec
-                LEFT JOIN limited_examples le ON ec.column_name = le.column_name AND le.rn <= 5
-                GROUP BY ec.column_name, ec.error_count
-            """
-        
-        date_columns = []
-        for col, dtype in required_cols.items():
-            if isinstance(dtype, (SA_DATE, SA_DateTime)):
-                date_columns.append(col)
-        
-        if date_columns:
-            date_cases = []
-            for col in date_columns:
-                col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
-                # Enhanced cleaning: remove commas, tabs, newlines, carriage returns, BOM, zero-width spaces
-                cleaned_col_expression = f"""
-                    NULLIF(LTRIM(RTRIM(
-                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([{col}], 
-                            ',', ''), 
-                            CHAR(9), ''), 
-                            CHAR(10), ''), 
-                            CHAR(13), ''), 
-                            CHAR(160), ' '), 
-                            NCHAR(65279), ''), 
-                            NCHAR(8203), ''), 
-                            NCHAR(8288), '')
-                    )), '')
-                """
-                date_cases.append(f"""
-                    SELECT {col_literal} as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
-                    FROM {schema_name}.{staging_table}
-                    WHERE COALESCE(
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101),
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105)
-                    ) IS NULL
-                    AND {cleaned_col_expression} IS NOT NULL
-                """)
-            
-            queries['date_validation'] = f"""
-                WITH date_errors AS (
-                    {' UNION ALL '.join(date_cases)}
-                ),
-                error_counts AS (
-                    SELECT column_name, COUNT(*) as error_count
-                    FROM date_errors
-                    GROUP BY column_name
-                ),
-                limited_examples AS (
-                    SELECT column_name, invalid_value, row_num,
-                           ROW_NUMBER() OVER (PARTITION BY column_name ORDER BY row_num) as rn
-                    FROM date_errors
-                )
-                SELECT 
-                    ec.column_name,
-                    ec.error_count,
-                    CAST(STRING_AGG(CAST(le.invalid_value AS NVARCHAR(50)), ', ') WITHIN GROUP (ORDER BY le.row_num) AS NVARCHAR(MAX)) as examples
-                FROM error_counts ec
-                LEFT JOIN limited_examples le ON ec.column_name = le.column_name AND le.rn <= 5
-                GROUP BY ec.column_name, ec.error_count
-            """
-        
-        string_columns = []
-        for col, dtype in required_cols.items():
-            if isinstance(dtype, SA_NVARCHAR) and hasattr(dtype, 'length') and dtype.length:
-                string_columns.append((col, dtype.length))
-        
-        if string_columns:
-            string_cases = []
-            for col, max_length in string_columns:
-                col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
-                string_cases.append(f"""
-                    SELECT {col_literal} as column_name, LEFT([{col}], 50) + '...' as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
-                    FROM {schema_name}.{staging_table}
-                    WHERE LEN(ISNULL([{col}], '')) > {max_length}
-                """)
-            
-            queries['string_length_validation'] = f"""
-                WITH string_errors AS (
-                    {' UNION ALL '.join(string_cases)}
-                ),
-                error_counts AS (
-                    SELECT column_name, COUNT(*) as error_count
-                    FROM string_errors
-                    GROUP BY column_name
-                ),
-                limited_examples AS (
-                    SELECT column_name, invalid_value, row_num,
-                           ROW_NUMBER() OVER (PARTITION BY column_name ORDER BY row_num) as rn
-                    FROM string_errors
-                )
-                SELECT 
-                    ec.column_name,
-                    ec.error_count,
-                    CAST(STRING_AGG(CAST(le.invalid_value AS NVARCHAR(100)), ', ') WITHIN GROUP (ORDER BY le.row_num) AS NVARCHAR(MAX)) as examples
-                FROM error_counts ec
-                LEFT JOIN limited_examples le ON ec.column_name = le.column_name AND le.rn <= 3
-                GROUP BY ec.column_name, ec.error_count
-            """
-        
-        boolean_columns = []
-        for col, dtype in required_cols.items():
-            if isinstance(dtype, SA_Boolean):
-                boolean_columns.append(col)
-        
-        if boolean_columns:
-            boolean_cases = []
-            for col in boolean_columns:
-                col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
-                # Enhanced cleaning for boolean data
-                cleaned_col_expression = f"""
-                    UPPER(LTRIM(RTRIM(
-                        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ISNULL([{col}], ''), 
-                            ',', ''), 
-                            CHAR(9), ''), 
-                            CHAR(10), ''), 
-                            CHAR(13), ''), 
-                            CHAR(160), ' '), 
-                            NCHAR(65279), ''), 
-                            NCHAR(8203), ''), 
-                            NCHAR(8288), '')
-                    )))
-                """
-                boolean_cases.append(f"""
-                    SELECT {col_literal} as column_name, [{col}] as invalid_value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) as row_num
-                    FROM {schema_name}.{staging_table}
-                    WHERE {cleaned_col_expression} NOT IN ('1','TRUE','Y','YES','0','FALSE','N','NO','')
-                """)
-            
-            queries['boolean_validation'] = f"""
-                WITH boolean_errors AS (
-                    {' UNION ALL '.join(boolean_cases)}
-                ),
-                error_counts AS (
-                    SELECT column_name, COUNT(*) as error_count
-                    FROM boolean_errors
-                    GROUP BY column_name
-                ),
-                limited_examples AS (
-                    SELECT column_name, invalid_value, row_num,
-                           ROW_NUMBER() OVER (PARTITION BY column_name ORDER BY row_num) as rn
-                    FROM boolean_errors
-                )
-                SELECT 
-                    ec.column_name,
-                    ec.error_count,
-                    CAST(STRING_AGG(CAST(le.invalid_value AS NVARCHAR(50)), ', ') WITHIN GROUP (ORDER BY le.row_num) AS NVARCHAR(MAX)) as examples
-                FROM error_counts ec
-                LEFT JOIN limited_examples le ON ec.column_name = le.column_name AND le.rn <= 5
-                GROUP BY ec.column_name, ec.error_count
-            """
-        
-        return queries
     
     def _check_schema_mismatch_in_staging(self, staging_table: str, required_cols: Dict, 
                                         schema_name: str, log_func=None) -> list:
@@ -586,7 +377,7 @@ class DataValidationService:
         return issues
     
     def _validate_date_chunked(self, conn, staging_table, schema_name, columns, 
-                               total_rows, chunk_size, log_func):
+                               total_rows, chunk_size, log_func, date_format):
         """
         Validate date columns in chunks
         """
@@ -595,39 +386,111 @@ class DataValidationService:
         for col in columns:
             col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
             
-            # Simplified cleaning
+            # ปรับปรุงการทำความสะอาดข้อมูล - ลบ whitespace และอักขระพิเศษ แต่รักษาช่องว่างที่จำเป็น
             cleaned_col_expression = f"""
-                LTRIM(RTRIM(REPLACE([{col}], ',', '')))
+                NULLIF(LTRIM(RTRIM(
+                    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([{col}], 
+                        CHAR(9), ' '),   -- Tab -> space
+                        CHAR(10), ' '),  -- Line Feed -> space
+                        CHAR(13), ' '),  -- Carriage Return -> space
+                        CHAR(160), ' '), -- Non-breaking space -> space
+                        NCHAR(65279), ''), -- BOM -> remove
+                        NCHAR(8203), ''),  -- Zero-width space -> remove
+                        NCHAR(8288), ''),  -- Zero-width no-break space -> remove
+                        ',', ''),       -- Comma -> remove
+                        '  ', ' ')      -- Double space -> single space
+                )), '')
             """
             
-            # Count errors with multiple date format attempts
-            error_query = f"""
-                SELECT COUNT(*) as error_count
-                FROM {schema_name}.{staging_table}
-                WHERE COALESCE(
-                    TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
-                    TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
-                    TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)
-                ) IS NULL
-                AND NULLIF({cleaned_col_expression}, '') IS NOT NULL
-            """
+            # ปรับปรุงการแปลงรูปแบบวันที่ - เพิ่มรูปแบบที่ครอบคลุมมากขึ้น
+            if date_format == 'UK':  # DD-MM format
+                error_query = f"""
+                    SELECT COUNT(*) as error_count
+                    FROM {schema_name}.{staging_table}
+                    WHERE COALESCE(
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),  -- DD/MM/YYYY
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),  -- DD.MM.YYYY
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105),  -- DD-MM-YYYY
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),  -- YYYY-MM-DD HH:MI:SS
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)   -- MM/DD/YYYY (fallback)
+                    ) IS NULL
+                    AND {cleaned_col_expression} IS NOT NULL
+                """
+            else:  # US format - MM-DD
+                error_query = f"""
+                    SELECT COUNT(*) as error_count
+                    FROM {schema_name}.{staging_table}
+                    WHERE COALESCE(
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101),  -- MM/DD/YYYY
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 102),  -- MM.DD.YYYY
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 110),  -- MM-DD-YYYY
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),  -- YYYY-MM-DD HH:MI:SS
+                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103)   -- DD/MM/YYYY (fallback)
+                    ) IS NULL
+                    AND {cleaned_col_expression} IS NOT NULL
+                """
             
             try:
                 result = conn.execute(text(error_query))
                 error_count = result.scalar()
                 
                 if error_count > 0:
-                    # Get sample examples
-                    examples_query = f"""
-                        SELECT TOP 3 [{col}] as example_value
+                    # ตรวจสอบข้อมูลที่ไม่สามารถแปลงได้เพื่อหาสาเหตุ
+                    debug_query = f"""
+                        SELECT TOP 5 [{col}] as raw_value, 
+                               {cleaned_col_expression} as cleaned_value,
+                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) as uk_103,
+                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104) as uk_104,
+                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105) as uk_105,
+                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) as iso_121,
+                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) as us_101
                         FROM {schema_name}.{staging_table}
                         WHERE COALESCE(
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
                             TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
+                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),
+                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105),
+                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
                             TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)
                         ) IS NULL
-                        AND NULLIF({cleaned_col_expression}, '') IS NOT NULL
+                        AND {cleaned_col_expression} IS NOT NULL
+                        ORDER BY [{col}]
                     """
+                    
+                    debug_result = conn.execute(text(debug_query))
+                    debug_rows = debug_result.fetchall()
+                    
+                    # สร้างรายงาน debug
+                    debug_info = []
+                    for row in debug_rows:
+                        debug_info.append(f"Raw: '{row.raw_value}' -> Cleaned: '{row.cleaned_value}'")
+                    
+                    # Get sample examples
+                    if date_format == 'UK':
+                        examples_query = f"""
+                            SELECT TOP 3 [{col}] as example_value
+                            FROM {schema_name}.{staging_table}
+                            WHERE COALESCE(
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105),
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)
+                            ) IS NULL
+                            AND {cleaned_col_expression} IS NOT NULL
+                        """
+                    else:
+                        examples_query = f"""
+                            SELECT TOP 3 [{col}] as example_value
+                            FROM {schema_name}.{staging_table}
+                            WHERE COALESCE(
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101),
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 102),
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 110),
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
+                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103)
+                            ) IS NULL
+                            AND {cleaned_col_expression} IS NOT NULL
+                        """
                     
                     examples_result = conn.execute(text(examples_query))
                     examples = [str(row.example_value) for row in examples_result.fetchall()]
@@ -637,9 +500,17 @@ class DataValidationService:
                         'column': col,
                         'error_count': error_count,
                         'percentage': round((error_count / total_rows) * 100, 2),
-                        'examples': ', '.join(examples)
+                        'examples': ', '.join(examples),
+                        'date_format_used': date_format,
+                        'debug_info': debug_info[:3]  # เพิ่มข้อมูล debug
                     }
                     issues.append(issue)
+                    
+                    # แสดงข้อมูล debug ใน log
+                    if log_func:
+                        log_func(f"        🔍 Debug info for {col}:")
+                        for debug_line in debug_info[:2]:  # แสดงแค่ 2 แรก
+                            log_func(f"          {debug_line}")
             
             except Exception as e:
                 if log_func:

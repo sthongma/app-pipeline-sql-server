@@ -48,6 +48,19 @@ class DataUploadService:
         self.schema_service = schema_service
         self.validation_service = validation_service or DataValidationService(engine)
         self.logger = logging.getLogger(__name__)
+        
+        # โหลดการตั้งค่าประเภทข้อมูล
+        self.dtype_settings = {}
+        self._load_dtype_settings()
+    
+    def _load_dtype_settings(self):
+        """โหลดการตั้งค่าประเภทข้อมูลจากไฟล์"""
+        try:
+            with open('config/dtype_settings.json', 'r', encoding='utf-8') as f:
+                self.dtype_settings = json.load(f)
+        except Exception as e:
+            self.logger.warning(f"ไม่สามารถโหลด dtype_settings ได้: {e}")
+            self.dtype_settings = {}
 
     def upload_data(self, df, logic_type: str, required_cols: Dict, schema_name: str = 'bronze', 
                    log_func=None, force_recreate: bool = False, clear_existing: bool = True):
@@ -115,8 +128,20 @@ class DataUploadService:
             
             self._upload_to_staging(df, staging_table, staging_cols, schema_name, log_func)
             
+            # โหลดการตั้งค่า date format
+            date_format = 'UK'  # default
+            try:
+                if logic_type in self.dtype_settings:
+                    date_format = self.dtype_settings[logic_type].get('_date_format', 'UK')
+                    if log_func:
+                        log_func(f"📅 ใช้ Date Format: {date_format}")
+            except Exception as e:
+                if log_func:
+                    log_func(f"⚠️ ไม่สามารถโหลด date format ได้: {e}")
+            
             validation_results = self.validation_service.validate_data_in_staging(
-                staging_table, logic_type, required_cols, schema_name, log_func, progress_callback=None
+                staging_table, logic_type, required_cols, schema_name, log_func, 
+                progress_callback=None, date_format=date_format
             )
             
             if not validation_results['is_valid']:
@@ -129,7 +154,7 @@ class DataUploadService:
             )
             
             self._transfer_data_from_staging(
-                staging_table, table_name, required_cols, schema_name, log_func
+                staging_table, table_name, required_cols, schema_name, log_func, date_format
             )
             
             with self.engine.begin() as conn:
@@ -393,27 +418,51 @@ class DataUploadService:
                     log_func(f"📋 Appending to existing table {schema_name}.{table_name}")
 
     def _transfer_data_from_staging(self, staging_table: str, table_name: str, required_cols: Dict, 
-                                  schema_name: str, log_func=None):
+                                  schema_name: str, log_func=None, date_format: str = 'UK'):
         """Transfer data from staging to final table with type conversion"""
         def _sql_type_and_expr(col_name: str, sa_type_obj) -> str:
             col_ref = f"[{col_name}]"
-            base = "NULLIF(LTRIM(RTRIM(" + col_ref + ")), '')"
+            # ปรับปรุงการทำความสะอาดข้อมูล - รักษาช่องว่างที่จำเป็น
+            base = "NULLIF(LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(" + col_ref + ", CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' '), CHAR(160), ' '), NCHAR(65279), ''), NCHAR(8203), ''), NCHAR(8288), ''), ',', ''), '  ', ' '))), '')"
+            
             if isinstance(sa_type_obj, (SA_Integer, SA_SmallInteger)):
-                return f"TRY_CONVERT(INT, REPLACE(REPLACE({base}, ',', ''), ' ', ''))"
+                return f"TRY_CONVERT(INT, REPLACE({base}, ' ', ''))"
             if isinstance(sa_type_obj, SA_Float):
-                return f"TRY_CONVERT(FLOAT, REPLACE(REPLACE({base}, ',', ''), ' ', ''))"
+                return f"TRY_CONVERT(FLOAT, REPLACE({base}, ' ', ''))"
             if isinstance(sa_type_obj, SA_DECIMAL):
                 precision = getattr(sa_type_obj, 'precision', 18) or 18
                 scale = getattr(sa_type_obj, 'scale', 2) or 2
-                return f"TRY_CONVERT(DECIMAL({precision},{scale}), REPLACE(REPLACE({base}, ',', ''), ' ', ''))"
+                return f"TRY_CONVERT(DECIMAL({precision},{scale}), REPLACE({base}, ' ', ''))"
             if isinstance(sa_type_obj, (SA_DATE, SA_DateTime)):
-                return (
-                    f"COALESCE("
-                    f"TRY_CONVERT(DATETIME, {base}, 121),"
-                    f"TRY_CONVERT(DATETIME, {base}, 103),"
-                    f"TRY_CONVERT(DATETIME, {base}, 101)"
-                    f")"
-                )
+                # ปรับปรุงการแปลงรูปแบบวันที่ตามการตั้งค่า - เพิ่มรูปแบบที่ครอบคลุมมากขึ้น
+                if date_format == 'UK':  # DD-MM format
+                    return (
+                        f"COALESCE("
+                        f"TRY_CONVERT(DATETIME, {base}, 103),"  # DD/MM/YYYY
+                        f"TRY_CONVERT(DATETIME, {base}, 104),"  # DD.MM.YYYY
+                        f"TRY_CONVERT(DATETIME, {base}, 105),"  # DD-MM-YYYY
+                        f"TRY_CONVERT(DATETIME, {base}, 121),"  # YYYY-MM-DD HH:MI:SS
+                        f"TRY_CONVERT(DATETIME, {base}, 120),"  # YYYY-MM-DD HH:MI:SS
+                        f"TRY_CONVERT(DATETIME, {base}, 23),"   # YYYY-MM-DD
+                        f"TRY_CONVERT(DATETIME, {base}, 126),"  # YYYY-MM-DDTHH:MI:SS
+                        f"TRY_CONVERT(DATETIME, {base}, 127),"  # YYYY-MM-DDTHH:MI:SS.MMM
+                        f"TRY_CONVERT(DATETIME, {base}, 101)"   # MM/DD/YYYY (fallback)
+                        f")"
+                    )
+                else:  # US format - MM-DD
+                    return (
+                        f"COALESCE("
+                        f"TRY_CONVERT(DATETIME, {base}, 101),"  # MM/DD/YYYY
+                        f"TRY_CONVERT(DATETIME, {base}, 102),"  # MM.DD.YYYY
+                        f"TRY_CONVERT(DATETIME, {base}, 110),"  # MM-DD-YYYY
+                        f"TRY_CONVERT(DATETIME, {base}, 121),"  # YYYY-MM-DD HH:MI:SS
+                        f"TRY_CONVERT(DATETIME, {base}, 120),"  # YYYY-MM-DD HH:MI:SS
+                        f"TRY_CONVERT(DATETIME, {base}, 23),"   # YYYY-MM-DD
+                        f"TRY_CONVERT(DATETIME, {base}, 126),"  # YYYY-MM-DDTHH:MI:SS
+                        f"TRY_CONVERT(DATETIME, {base}, 127),"  # YYYY-MM-DDTHH:MI:SS.MMM
+                        f"TRY_CONVERT(DATETIME, {base}, 103)"   # DD/MM/YYYY (fallback)
+                        f")"
+                    )
             if isinstance(sa_type_obj, SA_Boolean):
                 return (
                     "CASE "

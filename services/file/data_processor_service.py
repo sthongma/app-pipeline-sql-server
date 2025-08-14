@@ -301,11 +301,21 @@ class DataProcessorService:
                     
             elif isinstance(expected_dtype, (DATE, DateTime)):
                 # ตรวจสอบข้อมูลวันที่
+                # โหลดการตั้งค่า date format
+                date_format = 'UK'  # default
+                try:
+                    if logic_type in self.dtype_settings:
+                        date_format = self.dtype_settings[logic_type].get('_date_format', 'UK')
+                except:
+                    pass
+                
                 def parse_date_safe(val):
                     try:
                         if pd.isna(val) or val == '':
                             return pd.NaT
-                        return parser.parse(str(val))
+                        # ใช้การตั้งค่า date format
+                        dayfirst = (date_format == 'UK')
+                        return parser.parse(str(val), dayfirst=dayfirst)
                     except:
                         return pd.NaT
                 
@@ -321,12 +331,13 @@ class DataProcessorService:
                         'type': 'date_validation_error',
                         'expected_type': str(expected_dtype),
                         'current_type': str(series.dtype),
+                        'date_format_used': date_format,
                         'invalid_count': invalid_count,
                         'total_rows': total_rows,
                         'percentage': round((invalid_count / total_rows) * 100, 2),
                         'examples': [str(x) for x in invalid_examples],
-                        'problem_rows': [r + 2 for r in problem_rows],
-                        'summary': f"Found invalid dates {invalid_count:,} rows ({round((invalid_count / total_rows) * 100, 2)}%)"
+                        'problem_rows': [r + 2 for r in problem_rows],  # +2 สำหรับ header
+                        'summary': f"Found invalid dates {invalid_count:,} rows ({round((invalid_count / total_rows) * 100, 2)}%) using {date_format} format"
                     }
                     
             elif isinstance(expected_dtype, NVARCHAR):

@@ -63,13 +63,14 @@ def normalize_column_name(column_name: Union[str, Any]) -> str:
     return name.strip(FileConstants.REPLACEMENT_CHAR)
 
 
-def parse_date_safe(value: Any, dayfirst: bool = True) -> Optional[pd.Timestamp]:
+def parse_date_safe(value: Any, dayfirst: bool = True, date_format: str = 'UK') -> Optional[pd.Timestamp]:
     """
     แปลงค่าเป็นวันที่อย่างปลอดภัย
     
     Args:
         value: ค่าที่ต้องการแปลง
         dayfirst: ให้วันมาก่อนเดือนหรือไม่ (True สำหรับรูปแบบ UK)
+        date_format: รูปแบบวันที่ ('UK' หรือ 'US')
         
     Returns:
         Optional[pd.Timestamp]: วันที่ที่แปลงแล้ว หรือ None ถ้าแปลงไม่ได้
@@ -82,8 +83,62 @@ def parse_date_safe(value: Any, dayfirst: bool = True) -> Optional[pd.Timestamp]
             value = value.strip()
             if not value:
                 return None
+        
+        # ใช้ date_format ถ้าไม่ระบุ dayfirst
+        if date_format and date_format != 'UK':
+            dayfirst = False
                 
         return parser.parse(str(value), dayfirst=dayfirst)
+        
+    except Exception:
+        return None
+
+
+def parse_date_with_format(value: Any, date_format: str = 'UK') -> Optional[pd.Timestamp]:
+    """
+    แปลงค่าเป็นวันที่ตามรูปแบบที่กำหนด
+    
+    Args:
+        value: ค่าที่ต้องการแปลง
+        date_format: รูปแบบวันที่ ('UK' สำหรับ DD-MM หรือ 'US' สำหรับ MM-DD)
+        
+    Returns:
+        Optional[pd.Timestamp]: วันที่ที่แปลงแล้ว หรือ None ถ้าแปลงไม่ได้
+    """
+    try:
+        if pd.isna(value) or value == "":
+            return None
+            
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return None
+        
+        # กำหนด dayfirst ตาม date_format
+        dayfirst = (date_format == 'UK')
+        
+        # ลองแปลงด้วย dateutil.parser ก่อน
+        try:
+            return parser.parse(str(value), dayfirst=dayfirst)
+        except:
+            pass
+        
+        # ถ้าแปลงไม่ได้ ลองแปลงด้วย pandas
+        try:
+            if dayfirst:
+                return pd.to_datetime(value, format='%d/%m/%Y', errors='coerce')
+            else:
+                return pd.to_datetime(value, format='%m/%d/%Y', errors='coerce')
+        except:
+            pass
+        
+        # ลองแปลงด้วยรูปแบบอื่นๆ
+        try:
+            return pd.to_datetime(value, errors='coerce')
+        except:
+            pass
+            
+        return None
         
     except Exception:
         return None
