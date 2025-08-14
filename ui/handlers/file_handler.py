@@ -162,7 +162,8 @@ class FileHandler:
                     'files_count': len(files),
                     'successful_files': 0,
                     'failed_files': 0,
-                    'errors': []
+                    'errors': [],
+                    'individual_processing_time': 0  # เก็บเวลารวมของประเภทนี้
                 }
                 
                 self.log(f"📖 Validating files of type {logic_type}")
@@ -178,6 +179,9 @@ class FileHandler:
                 for file_path, chk in files:
                     try:
                         processed_files += 1
+                        # จับเวลาสำหรับไฟล์นี้เฉพาะ
+                        file_start_time = time.time()
+                        
                         # คำนวณ progress ที่ถูกต้อง (0.0 - 1.0)
                         file_progress = (processed_files - 1) / total_files  # เริ่มจาก 0
                         
@@ -191,6 +195,10 @@ class FileHandler:
                             upload_stats['by_type'][logic_type]['failed_files'] += 1
                             upload_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {result}")
                             upload_stats['failed_files'] += 1
+                            
+                            # คำนวณเวลาที่ใช้แม้เมื่อตรวจสอบคอลัมน์ล้มเหลว
+                            file_processing_time = time.time() - file_start_time
+                            upload_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
                             continue
                         
                         # อัปเดตความคืบหน้า - ตรวจสอบคอลัมน์ผ่านแล้ว
@@ -203,6 +211,10 @@ class FileHandler:
                             upload_stats['by_type'][logic_type]['failed_files'] += 1
                             upload_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {result}")
                             upload_stats['failed_files'] += 1
+                            
+                            # คำนวณเวลาที่ใช้แม้เมื่ออ่านไฟล์ล้มเหลว
+                            file_processing_time = time.time() - file_start_time
+                            upload_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
                             continue
                         
                         df = result
@@ -215,12 +227,20 @@ class FileHandler:
                         upload_stats['by_type'][logic_type]['successful_files'] += 1
                         self.log(f"✅ File validated and ready: {os.path.basename(file_path)}")
                         
+                        # คำนวณเวลาที่ใช้สำหรับไฟล์นี้
+                        file_processing_time = time.time() - file_start_time
+                        upload_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
+                        
                     except Exception as e:
                         error_msg = f"An error occurred while reading file {os.path.basename(file_path)}: {e}"
                         self.log(f"❌ {error_msg}")
                         upload_stats['by_type'][logic_type]['failed_files'] += 1
                         upload_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {str(e)}")
                         upload_stats['failed_files'] += 1
+                        
+                        # คำนวณเวลาที่ใช้แม้เมื่อเกิดข้อผิดพลาด
+                        file_processing_time = time.time() - file_start_time
+                        upload_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
                 
                 if not all_dfs:
                     self.log(f"❌ No valid data from files of type {logic_type}")
@@ -253,14 +273,11 @@ class FileHandler:
                 self.log(f"✅ Prepared {len(combined_df)} rows for type {logic_type}")
                     
                 completed_types += 1
-                # จับเวลาส่วนการอ่านไฟล์เสร็จแล้ว แต่ยังไม่รวมการอัปโหลด
-                upload_stats['by_type'][logic_type]['reading_time'] = time.time() - type_start_time
                 
             except Exception as e:
                 error_msg = f"An error occurred while validating files of type {logic_type}: {e}"
                 self.log(f"❌ {error_msg}")
                 upload_stats['by_type'][logic_type]['errors'].append(error_msg)
-                upload_stats['by_type'][logic_type]['reading_time'] = time.time() - type_start_time
                 completed_types += 1
         
         # Phase 2: Upload all validated data (with proper table clearing sequence)
@@ -271,6 +288,9 @@ class FileHandler:
             
             for logic_type, (combined_df, valid_files_info, required_cols) in all_validated_data.items():
                 try:
+                    # จับเวลาเริ่มต้น Phase 2 สำหรับประเภทไฟล์นี้
+                    phase2_start_time = time.time()
+                    
                     upload_progress = upload_count / total_uploads
                     ui_callbacks['update_progress'](upload_progress, f"Uploading data for type {logic_type}", f"Upload {upload_count + 1} of {total_uploads}")
                     
@@ -306,9 +326,11 @@ class FileHandler:
                         
                     upload_count += 1
                     
-                    # คำนวณเวลารวมสำหรับประเภทไฟล์นี้ (อ่านไฟล์ + อัปโหลด)
-                    if 'start_time' in upload_stats['by_type'][logic_type]:
-                        upload_stats['by_type'][logic_type]['processing_time'] = time.time() - upload_stats['by_type'][logic_type]['start_time']
+                    # คำนวณเวลา Phase 2 และรวมเข้าไปใน individual_processing_time
+                    phase2_time = time.time() - phase2_start_time
+                    if 'individual_processing_time' in upload_stats['by_type'][logic_type]:
+                        upload_stats['by_type'][logic_type]['individual_processing_time'] += phase2_time
+                        upload_stats['by_type'][logic_type]['processing_time'] = upload_stats['by_type'][logic_type]['individual_processing_time']
                     
                 except Exception as e:
                     error_msg = f"An error occurred while uploading data for type {logic_type}: {e}"
@@ -316,9 +338,11 @@ class FileHandler:
                     upload_stats['by_type'][logic_type]['errors'].append(error_msg)
                     upload_count += 1
                     
-                    # คำนวณเวลารวมแม้เมื่อมีข้อผิดพลาด
-                    if 'start_time' in upload_stats['by_type'][logic_type]:
-                        upload_stats['by_type'][logic_type]['processing_time'] = time.time() - upload_stats['by_type'][logic_type]['start_time']
+                    # คำนวณเวลา Phase 2 แม้เมื่อมีข้อผิดพลาดและรวมเข้าไปใน individual_processing_time
+                    phase2_time = time.time() - phase2_start_time
+                    if 'individual_processing_time' in upload_stats['by_type'][logic_type]:
+                        upload_stats['by_type'][logic_type]['individual_processing_time'] += phase2_time
+                        upload_stats['by_type'][logic_type]['processing_time'] = upload_stats['by_type'][logic_type]['individual_processing_time']
         else:
             self.log("❌ No validated data to upload")
         
