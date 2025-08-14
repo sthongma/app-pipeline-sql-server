@@ -124,8 +124,12 @@ class DataUploadService:
             staging_table = f"{table_name}__stg"
             staging_cols = list(required_cols.keys())
             
+            if log_func:
+                log_func(f"📋 Creating staging table {schema_name}.{staging_table}")
             self._create_staging_table(staging_table, staging_cols, schema_name, log_func)
             
+            if log_func:
+                log_func(f"📤 Uploading {len(df):,} rows to staging table")
             self._upload_to_staging(df, staging_table, staging_cols, schema_name, log_func)
             
             # โหลดการตั้งค่า date format
@@ -134,11 +138,13 @@ class DataUploadService:
                 if logic_type in self.dtype_settings:
                     date_format = self.dtype_settings[logic_type].get('_date_format', 'UK')
                     if log_func:
-                        log_func(f"📅 ใช้ Date Format: {date_format}")
+                        log_func(f"📅 Using Date Format: {date_format}")
             except Exception as e:
                 if log_func:
-                    log_func(f"⚠️ ไม่สามารถโหลด date format ได้: {e}")
+                    log_func(f"⚠️ Could not load date format: {e}")
             
+            if log_func:
+                log_func(f"🔍 Validating data in staging table")
             validation_results = self.validation_service.validate_data_in_staging(
                 staging_table, logic_type, required_cols, schema_name, log_func, 
                 progress_callback=None, date_format=date_format
@@ -153,6 +159,8 @@ class DataUploadService:
                 table_name, required_cols, schema_name, needs_recreate, log_func, df, clear_existing
             )
             
+            if log_func:
+                log_func(f"🔄 Transferring data from staging to main table {schema_name}.{table_name}")
             self._transfer_data_from_staging(
                 staging_table, table_name, required_cols, schema_name, log_func, date_format
             )
@@ -420,10 +428,22 @@ class DataUploadService:
     def _transfer_data_from_staging(self, staging_table: str, table_name: str, required_cols: Dict, 
                                   schema_name: str, log_func=None, date_format: str = 'UK'):
         """Transfer data from staging to final table with type conversion"""
+        
+        # Get row count for progress monitoring
+        try:
+            with self.engine.connect() as conn:
+                result = conn.execute(text(f"SELECT COUNT(*) FROM {schema_name}.{staging_table}"))
+                total_rows = result.scalar()
+                if log_func:
+                    log_func(f"📊 Preparing to transfer {total_rows:,} rows with type conversion")
+        except Exception as e:
+            if log_func:
+                log_func(f"⚠️ Could not get row count: {e}")
+            total_rows = "unknown"
         def _sql_type_and_expr(col_name: str, sa_type_obj) -> str:
             col_ref = f"[{col_name}]"
-            # ปรับปรุงการทำความสะอาดข้อมูล - รักษาช่องว่างที่จำเป็น
-            base = "NULLIF(LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(" + col_ref + ", CHAR(9), ' '), CHAR(10), ' '), CHAR(13), ' '), CHAR(160), ' '), NCHAR(65279), ''), NCHAR(8203), ''), NCHAR(8288), ''), ',', ''), '  ', ' '))), '')"
+            # Simplified cleaning for better performance
+            base = f"NULLIF(LTRIM(RTRIM({col_ref})), '')"
             
             if isinstance(sa_type_obj, (SA_Integer, SA_SmallInteger)):
                 return f"TRY_CONVERT(INT, REPLACE({base}, ' ', ''))"
@@ -434,35 +454,11 @@ class DataUploadService:
                 scale = getattr(sa_type_obj, 'scale', 2) or 2
                 return f"TRY_CONVERT(DECIMAL({precision},{scale}), REPLACE({base}, ' ', ''))"
             if isinstance(sa_type_obj, (SA_DATE, SA_DateTime)):
-                # ปรับปรุงการแปลงรูปแบบวันที่ตามการตั้งค่า - เพิ่มรูปแบบที่ครอบคลุมมากขึ้น
-                if date_format == 'UK':  # DD-MM format
-                    return (
-                        f"COALESCE("
-                        f"TRY_CONVERT(DATETIME, {base}, 103),"  # DD/MM/YYYY
-                        f"TRY_CONVERT(DATETIME, {base}, 104),"  # DD.MM.YYYY
-                        f"TRY_CONVERT(DATETIME, {base}, 105),"  # DD-MM-YYYY
-                        f"TRY_CONVERT(DATETIME, {base}, 121),"  # YYYY-MM-DD HH:MI:SS
-                        f"TRY_CONVERT(DATETIME, {base}, 120),"  # YYYY-MM-DD HH:MI:SS
-                        f"TRY_CONVERT(DATETIME, {base}, 23),"   # YYYY-MM-DD
-                        f"TRY_CONVERT(DATETIME, {base}, 126),"  # YYYY-MM-DDTHH:MI:SS
-                        f"TRY_CONVERT(DATETIME, {base}, 127),"  # YYYY-MM-DDTHH:MI:SS.MMM
-                        f"TRY_CONVERT(DATETIME, {base}, 101)"   # MM/DD/YYYY (fallback)
-                        f")"
-                    )
-                else:  # US format - MM-DD
-                    return (
-                        f"COALESCE("
-                        f"TRY_CONVERT(DATETIME, {base}, 101),"  # MM/DD/YYYY
-                        f"TRY_CONVERT(DATETIME, {base}, 102),"  # MM.DD.YYYY
-                        f"TRY_CONVERT(DATETIME, {base}, 110),"  # MM-DD-YYYY
-                        f"TRY_CONVERT(DATETIME, {base}, 121),"  # YYYY-MM-DD HH:MI:SS
-                        f"TRY_CONVERT(DATETIME, {base}, 120),"  # YYYY-MM-DD HH:MI:SS
-                        f"TRY_CONVERT(DATETIME, {base}, 23),"   # YYYY-MM-DD
-                        f"TRY_CONVERT(DATETIME, {base}, 126),"  # YYYY-MM-DDTHH:MI:SS
-                        f"TRY_CONVERT(DATETIME, {base}, 127),"  # YYYY-MM-DDTHH:MI:SS.MMM
-                        f"TRY_CONVERT(DATETIME, {base}, 103)"   # DD/MM/YYYY (fallback)
-                        f")"
-                    )
+                # Simplified date conversion for better performance
+                if date_format == 'UK':  # DD-MM format priority
+                    return f"COALESCE(TRY_CONVERT(DATETIME, {base}, 103), TRY_CONVERT(DATETIME, {base}, 121), TRY_CONVERT(DATETIME, {base}, 101))"
+                else:  # US format - MM-DD priority
+                    return f"COALESCE(TRY_CONVERT(DATETIME, {base}, 101), TRY_CONVERT(DATETIME, {base}, 121), TRY_CONVERT(DATETIME, {base}, 103))"
             if isinstance(sa_type_obj, SA_Boolean):
                 return (
                     "CASE "
@@ -483,7 +479,23 @@ class DataUploadService:
                 f"INSERT INTO {schema_name}.{table_name} (" + ", ".join([f"[{c}]" for c in required_cols.keys()]) + ") "
                 f"SELECT {select_sql} FROM {schema_name}.{staging_table}"
             )
-            conn.execute(text(insert_sql))
+            if log_func:
+                log_func(f"📝 Executing data transfer with type conversion...")
+                log_func(f"⏳ This may take a while for large datasets, please wait...")
+            
+            # Execute with timeout monitoring
+            import time
+            start_time = time.time()
+            try:
+                result = conn.execute(text(insert_sql))
+                execution_time = time.time() - start_time
+                if log_func:
+                    log_func(f"✅ Data transfer completed successfully in {execution_time:.1f} seconds")
+            except Exception as e:
+                execution_time = time.time() - start_time
+                if log_func:
+                    log_func(f"❌ Data transfer failed after {execution_time:.1f} seconds: {str(e)[:100]}...")
+                raise
 
     def _short_exception_message(self, exc: Exception) -> str:
         """Extract short exception message"""

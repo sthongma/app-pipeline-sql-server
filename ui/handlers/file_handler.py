@@ -253,14 +253,14 @@ class FileHandler:
                 self.log(f"✅ Prepared {len(combined_df)} rows for type {logic_type}")
                     
                 completed_types += 1
-                # บันทึกเวลาที่ใช้สำหรับประเภทไฟล์นี้
-                upload_stats['by_type'][logic_type]['processing_time'] = time.time() - type_start_time
+                # จับเวลาส่วนการอ่านไฟล์เสร็จแล้ว แต่ยังไม่รวมการอัปโหลด
+                upload_stats['by_type'][logic_type]['reading_time'] = time.time() - type_start_time
                 
             except Exception as e:
                 error_msg = f"An error occurred while validating files of type {logic_type}: {e}"
                 self.log(f"❌ {error_msg}")
                 upload_stats['by_type'][logic_type]['errors'].append(error_msg)
-                upload_stats['by_type'][logic_type]['processing_time'] = time.time() - type_start_time
+                upload_stats['by_type'][logic_type]['reading_time'] = time.time() - type_start_time
                 completed_types += 1
         
         # Phase 2: Upload all validated data (with proper table clearing sequence)
@@ -306,11 +306,19 @@ class FileHandler:
                         
                     upload_count += 1
                     
+                    # คำนวณเวลารวมสำหรับประเภทไฟล์นี้ (อ่านไฟล์ + อัปโหลด)
+                    if 'start_time' in upload_stats['by_type'][logic_type]:
+                        upload_stats['by_type'][logic_type]['processing_time'] = time.time() - upload_stats['by_type'][logic_type]['start_time']
+                    
                 except Exception as e:
                     error_msg = f"An error occurred while uploading data for type {logic_type}: {e}"
                     self.log(f"❌ {error_msg}")
                     upload_stats['by_type'][logic_type]['errors'].append(error_msg)
                     upload_count += 1
+                    
+                    # คำนวณเวลารวมแม้เมื่อมีข้อผิดพลาด
+                    if 'start_time' in upload_stats['by_type'][logic_type]:
+                        upload_stats['by_type'][logic_type]['processing_time'] = time.time() - upload_stats['by_type'][logic_type]['start_time']
         else:
             self.log("❌ No validated data to upload")
         

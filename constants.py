@@ -52,9 +52,9 @@ class FileConstants:
     
     # File size thresholds (in bytes)
     LARGE_FILE_THRESHOLD = 50 * 1024 * 1024  # 50MB
-    CHUNK_SIZE_LARGE = 10000  # rows
-    CHUNK_SIZE_MEDIUM = 2000  # rows
-    CHUNK_SIZE_SMALL = 1000   # rows
+    CHUNK_SIZE_LARGE = 50000  # rows - เพิ่มขึ้นจาก 10000 เพื่อลดจำนวนการเข้าถึง DB
+    CHUNK_SIZE_MEDIUM = 20000  # rows - เพิ่มขึ้นจาก 2000 
+    CHUNK_SIZE_SMALL = 10000   # rows - เพิ่มขึ้นจาก 1000
     
     # Default upload folder structure
     UPLOADED_FOLDER_NAME = "Uploaded_Files"

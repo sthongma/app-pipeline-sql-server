@@ -6,6 +6,7 @@ Handles data validation in staging tables
 
 import logging
 from typing import Dict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from sqlalchemy import text
 from sqlalchemy.types import (
@@ -81,7 +82,15 @@ class DataValidationService:
             if log_func:
                 log_func(f"📊 Validating {total_rows:,} rows in staging table")
             
-            # Phase 2: Schema compatibility check
+            # Phase 2: Create temporary indexes for performance
+            if progress_callback:
+                progress_callback(0.15, "Index Creation", "Creating temporary indexes for faster validation...")
+            
+            if log_func:
+                log_func(f"   🚀 Creating temporary indexes for better performance...")
+            self._create_temp_indexes(staging_table, required_cols, schema_name, log_func)
+            
+            # Phase 3: Schema compatibility check
             if progress_callback:
                 progress_callback(0.2, "Schema Check", "Verifying column compatibility...")
             
@@ -140,6 +149,11 @@ class DataValidationService:
                 validation_results['summary'] = "All data valid"
                 if log_func:
                     log_func(f"✅ All data passed validation")
+            
+            # Cleanup: ลบ temporary indexes
+            if log_func:
+                log_func(f"   🧹 Cleaning up temporary indexes...")
+            self._drop_temp_indexes(staging_table, required_cols, schema_name, log_func)
             
             if progress_callback:
                 progress_callback(1.0, "Completed", validation_results['summary'])
@@ -228,27 +242,35 @@ class DataValidationService:
         chunk_size = phase_data.get('chunk_size', 10000)
         
         try:
-            with self.engine.connect() as conn:
-                if validation_type == 'numeric_validation':
-                    issues = self._validate_numeric_chunked(
-                        conn, staging_table, schema_name, columns, 
-                        total_rows, chunk_size, log_func
-                    )
-                elif validation_type == 'date_validation':
-                    issues = self._validate_date_chunked(
-                        conn, staging_table, schema_name, columns, 
-                        total_rows, chunk_size, log_func, date_format
-                    )
-                elif validation_type == 'string_length_validation':
-                    issues = self._validate_string_length_chunked(
-                        conn, staging_table, schema_name, columns, 
-                        total_rows, chunk_size, log_func
-                    )
-                elif validation_type == 'boolean_validation':
-                    issues = self._validate_boolean_chunked(
-                        conn, staging_table, schema_name, columns, 
-                        total_rows, chunk_size, log_func
-                    )
+            # สำหรับคอลัมน์หลายตัว ใช้ parallel processing
+            if len(columns) > 1 and validation_type in ['numeric_validation', 'date_validation']:
+                issues = self._validate_columns_parallel(
+                    validation_type, staging_table, schema_name, columns, 
+                    total_rows, chunk_size, log_func, date_format
+                )
+            else:
+                # สำหรับคอลัมน์เดียวหรือ validation ประเภทอื่น ใช้แบบปกติ
+                with self.engine.connect() as conn:
+                    if validation_type == 'numeric_validation':
+                        issues = self._validate_numeric_chunked(
+                            conn, staging_table, schema_name, columns, 
+                            total_rows, chunk_size, log_func
+                        )
+                    elif validation_type == 'date_validation':
+                        issues = self._validate_date_chunked(
+                            conn, staging_table, schema_name, columns, 
+                            total_rows, chunk_size, log_func, date_format
+                        )
+                    elif validation_type == 'string_length_validation':
+                        issues = self._validate_string_length_chunked(
+                            conn, staging_table, schema_name, columns, 
+                            total_rows, chunk_size, log_func
+                        )
+                    elif validation_type == 'boolean_validation':
+                        issues = self._validate_boolean_chunked(
+                            conn, staging_table, schema_name, columns, 
+                            total_rows, chunk_size, log_func
+                        )
                 
                 if issues:
                     if log_func:
@@ -269,6 +291,142 @@ class DataValidationService:
                 log_func(f"      ⚠️ Could not run {phase_name}: {phase_error}")
         
         return issues
+    
+    def _create_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """สร้าง temporary indexes เพื่อเร่งการ validation"""
+        try:
+            with self.engine.connect() as conn:
+                index_count = 0
+                for col_name in required_cols.keys():
+                    # สร้าง index ชั่วคราวสำหรับ column ที่มีข้อมูลเยอะ
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบว่า index มีอยู่แล้วหรือไม่
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() == 0:
+                            # สร้าง index ใหม่
+                            create_index_sql = f"""
+                                CREATE NONCLUSTERED INDEX [{index_name}] 
+                                ON {schema_name}.{staging_table} ([{col_name}])
+                                WHERE [{col_name}] IS NOT NULL
+                            """
+                            conn.execute(text(create_index_sql))
+                            index_count += 1
+                    except Exception as e:
+                        # ถ้าสร้าง index ไม่ได้ก็ข้าม (อาจเป็น column ที่มีข้อมูลยาวเกินไป)
+                        pass
+                        
+                conn.commit()
+                if log_func and index_count > 0:
+                    log_func(f"   ✅ Created {index_count} temporary indexes for validation")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to create temporary indexes: {e}")
+    
+    def _drop_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """ลบ temporary indexes หลังจาก validation เสร็จ"""
+        try:
+            with self.engine.connect() as conn:
+                dropped_count = 0
+                for col_name in required_cols.keys():
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบและลบ index
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() > 0:
+                            drop_sql = f"DROP INDEX [{index_name}] ON {schema_name}.{staging_table}"
+                            conn.execute(text(drop_sql))
+                            dropped_count += 1
+                    except Exception as e:
+                        # ถ้าลบไม่ได้ก็ข้าม
+                        pass
+                        
+                conn.commit()
+                if log_func and dropped_count > 0:
+                    log_func(f"   🗑️ Cleaned up {dropped_count} temporary indexes")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to drop temporary indexes: {e}")
+                
+    def _validate_columns_parallel(self, validation_type: str, staging_table: str, schema_name: str, 
+                                 columns: list, total_rows: int, chunk_size: int, log_func, date_format: str):
+        """ตรวจสอบหลายคอลัมน์แบบ parallel เพื่อเพิ่มประสิทธิภาพ"""
+        all_issues = []
+        
+        def validate_single_column(col):
+            """ตรวจสอบคอลัมน์เดียวในแต่ละ thread"""
+            try:
+                with self.engine.connect() as conn:
+                    if validation_type == 'numeric_validation':
+                        return self._validate_numeric_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None  # ไม่ส่ง log_func เพื่อป้องกัน race condition
+                        )
+                    elif validation_type == 'date_validation':
+                        return self._validate_date_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None, date_format
+                        )
+                    else:
+                        return []
+            except Exception as e:
+                return []
+        
+        try:
+            # ใช้ ThreadPoolExecutor สำหรับ parallel processing
+            max_workers = min(len(columns), 3)  # จำกัดจำนวน threads ไม่เกิน 3
+            
+            if log_func:
+                log_func(f"      🔄 Processing {len(columns)} columns in parallel ({max_workers} threads)...")
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # ส่งงานแต่ละคอลัมน์ไปยัง thread แยกกัน
+                future_to_column = {executor.submit(validate_single_column, col): col for col in columns}
+                
+                # รวบรวมผลลัพธ์
+                for future in as_completed(future_to_column):
+                    col = future_to_column[future]
+                    try:
+                        issues = future.result()
+                        all_issues.extend(issues)
+                        if log_func and issues:
+                            log_func(f"        ✓ Column '{col}': {len(issues)} issue(s)")
+                    except Exception as e:
+                        if log_func:
+                            log_func(f"        ❌ Error validating column '{col}': {e}")
+            
+            if log_func:
+                log_func(f"      ✅ Parallel validation completed: {len(all_issues)} total issue(s)")
+                
+        except Exception as e:
+            if log_func:
+                log_func(f"      ⚠️ Parallel validation failed, falling back to sequential: {e}")
+            # Fallback เป็นแบบปกติ
+            with self.engine.connect() as conn:
+                if validation_type == 'numeric_validation':
+                    all_issues = self._validate_numeric_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func
+                    )
+                elif validation_type == 'date_validation':
+                    all_issues = self._validate_date_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func, date_format
+                    )
+        
+        return all_issues
     
     def _check_schema_mismatch_in_staging(self, staging_table: str, required_cols: Dict, 
                                         schema_name: str, log_func=None) -> list:
@@ -376,6 +534,142 @@ class DataValidationService:
         
         return issues
     
+    def _create_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """สร้าง temporary indexes เพื่อเร่งการ validation"""
+        try:
+            with self.engine.connect() as conn:
+                index_count = 0
+                for col_name in required_cols.keys():
+                    # สร้าง index ชั่วคราวสำหรับ column ที่มีข้อมูลเยอะ
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบว่า index มีอยู่แล้วหรือไม่
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() == 0:
+                            # สร้าง index ใหม่
+                            create_index_sql = f"""
+                                CREATE NONCLUSTERED INDEX [{index_name}] 
+                                ON {schema_name}.{staging_table} ([{col_name}])
+                                WHERE [{col_name}] IS NOT NULL
+                            """
+                            conn.execute(text(create_index_sql))
+                            index_count += 1
+                    except Exception as e:
+                        # ถ้าสร้าง index ไม่ได้ก็ข้าม (อาจเป็น column ที่มีข้อมูลยาวเกินไป)
+                        pass
+                        
+                conn.commit()
+                if log_func and index_count > 0:
+                    log_func(f"   ✅ Created {index_count} temporary indexes for validation")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to create temporary indexes: {e}")
+    
+    def _drop_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """ลบ temporary indexes หลังจาก validation เสร็จ"""
+        try:
+            with self.engine.connect() as conn:
+                dropped_count = 0
+                for col_name in required_cols.keys():
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบและลบ index
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() > 0:
+                            drop_sql = f"DROP INDEX [{index_name}] ON {schema_name}.{staging_table}"
+                            conn.execute(text(drop_sql))
+                            dropped_count += 1
+                    except Exception as e:
+                        # ถ้าลบไม่ได้ก็ข้าม
+                        pass
+                        
+                conn.commit()
+                if log_func and dropped_count > 0:
+                    log_func(f"   🗑️ Cleaned up {dropped_count} temporary indexes")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to drop temporary indexes: {e}")
+                
+    def _validate_columns_parallel(self, validation_type: str, staging_table: str, schema_name: str, 
+                                 columns: list, total_rows: int, chunk_size: int, log_func, date_format: str):
+        """ตรวจสอบหลายคอลัมน์แบบ parallel เพื่อเพิ่มประสิทธิภาพ"""
+        all_issues = []
+        
+        def validate_single_column(col):
+            """ตรวจสอบคอลัมน์เดียวในแต่ละ thread"""
+            try:
+                with self.engine.connect() as conn:
+                    if validation_type == 'numeric_validation':
+                        return self._validate_numeric_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None  # ไม่ส่ง log_func เพื่อป้องกัน race condition
+                        )
+                    elif validation_type == 'date_validation':
+                        return self._validate_date_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None, date_format
+                        )
+                    else:
+                        return []
+            except Exception as e:
+                return []
+        
+        try:
+            # ใช้ ThreadPoolExecutor สำหรับ parallel processing
+            max_workers = min(len(columns), 3)  # จำกัดจำนวน threads ไม่เกิน 3
+            
+            if log_func:
+                log_func(f"      🔄 Processing {len(columns)} columns in parallel ({max_workers} threads)...")
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # ส่งงานแต่ละคอลัมน์ไปยัง thread แยกกัน
+                future_to_column = {executor.submit(validate_single_column, col): col for col in columns}
+                
+                # รวบรวมผลลัพธ์
+                for future in as_completed(future_to_column):
+                    col = future_to_column[future]
+                    try:
+                        issues = future.result()
+                        all_issues.extend(issues)
+                        if log_func and issues:
+                            log_func(f"        ✓ Column '{col}': {len(issues)} issue(s)")
+                    except Exception as e:
+                        if log_func:
+                            log_func(f"        ❌ Error validating column '{col}': {e}")
+            
+            if log_func:
+                log_func(f"      ✅ Parallel validation completed: {len(all_issues)} total issue(s)")
+                
+        except Exception as e:
+            if log_func:
+                log_func(f"      ⚠️ Parallel validation failed, falling back to sequential: {e}")
+            # Fallback เป็นแบบปกติ
+            with self.engine.connect() as conn:
+                if validation_type == 'numeric_validation':
+                    all_issues = self._validate_numeric_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func
+                    )
+                elif validation_type == 'date_validation':
+                    all_issues = self._validate_date_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func, date_format
+                    )
+        
+        return all_issues
+    
     def _validate_date_chunked(self, conn, staging_table, schema_name, columns, 
                                total_rows, chunk_size, log_func, date_format):
         """
@@ -386,48 +680,47 @@ class DataValidationService:
         for col in columns:
             col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
             
-            # ปรับปรุงการทำความสะอาดข้อมูล - ลบ whitespace และอักขระพิเศษ แต่รักษาช่องว่างที่จำเป็น
+            # ปรับปรุงการทำความสะอาดข้อมูล - ใช้ TRANSLATE และ REPLACE น้อยลงเพื่อประสิทธิภาพที่ดีขึ้น
             cleaned_col_expression = f"""
                 NULLIF(LTRIM(RTRIM(
-                    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([{col}], 
-                        CHAR(9), ' '),   -- Tab -> space
-                        CHAR(10), ' '),  -- Line Feed -> space
-                        CHAR(13), ' '),  -- Carriage Return -> space
-                        CHAR(160), ' '), -- Non-breaking space -> space
-                        NCHAR(65279), ''), -- BOM -> remove
-                        NCHAR(8203), ''),  -- Zero-width space -> remove
-                        NCHAR(8288), ''),  -- Zero-width no-break space -> remove
-                        ',', ''),       -- Comma -> remove
-                        '  ', ' ')      -- Double space -> single space
+                    REPLACE(REPLACE(
+                        TRANSLATE([{col}], 
+                            CHAR(9) + CHAR(10) + CHAR(13) + CHAR(160) + ',', 
+                            '     '
+                        ),
+                        NCHAR(65279) + NCHAR(8203) + NCHAR(8288), ''
+                    ), '  ', ' ')
                 )), '')
             """
             
-            # ปรับปรุงการแปลงรูปแบบวันที่ - เพิ่มรูปแบบที่ครอบคลุมมากขึ้น
+            # ปรับปรุงการแปลงรูปแบบวันที่ - ใช้ CASE WHEN แทน COALESCE เพื่อประสิทธิภาพที่ดีขึ้น
             if date_format == 'UK':  # DD-MM format
                 error_query = f"""
                     SELECT COUNT(*) as error_count
                     FROM {schema_name}.{staging_table}
-                    WHERE COALESCE(
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),  -- DD/MM/YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),  -- DD.MM.YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105),  -- DD-MM-YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),  -- YYYY-MM-DD HH:MI:SS
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)   -- MM/DD/YYYY (fallback)
-                    ) IS NULL
-                    AND {cleaned_col_expression} IS NOT NULL
+                    WHERE {cleaned_col_expression} IS NOT NULL
+                    AND CASE 
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NOT NULL THEN 1  -- DD/MM/YYYY
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104) IS NOT NULL THEN 1  -- DD.MM.YYYY
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105) IS NOT NULL THEN 1  -- DD-MM-YYYY
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1  -- YYYY-MM-DD HH:MI:SS
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NOT NULL THEN 1  -- MM/DD/YYYY (fallback)
+                        ELSE 0
+                    END = 0
                 """
             else:  # US format - MM-DD
                 error_query = f"""
                     SELECT COUNT(*) as error_count
                     FROM {schema_name}.{staging_table}
-                    WHERE COALESCE(
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101),  -- MM/DD/YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 102),  -- MM.DD.YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 110),  -- MM-DD-YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),  -- YYYY-MM-DD HH:MI:SS
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103)   -- DD/MM/YYYY (fallback)
-                    ) IS NULL
-                    AND {cleaned_col_expression} IS NOT NULL
+                    WHERE {cleaned_col_expression} IS NOT NULL
+                    AND CASE 
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NOT NULL THEN 1  -- MM/DD/YYYY
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 102) IS NOT NULL THEN 1  -- MM.DD.YYYY
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 110) IS NOT NULL THEN 1  -- MM-DD-YYYY
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1  -- YYYY-MM-DD HH:MI:SS
+                        WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NOT NULL THEN 1  -- DD/MM/YYYY (fallback)
+                        ELSE 0
+                    END = 0
                 """
             
             try:
@@ -445,14 +738,15 @@ class DataValidationService:
                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) as iso_121,
                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) as us_101
                         FROM {schema_name}.{staging_table}
-                        WHERE COALESCE(
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105),
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)
-                        ) IS NULL
-                        AND {cleaned_col_expression} IS NOT NULL
+                        WHERE {cleaned_col_expression} IS NOT NULL
+                        AND CASE 
+                            WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NOT NULL THEN 1
+                            WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104) IS NOT NULL THEN 1
+                            WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105) IS NOT NULL THEN 1
+                            WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1
+                            WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NOT NULL THEN 1
+                            ELSE 0
+                        END = 0
                         ORDER BY [{col}]
                     """
                     
@@ -469,27 +763,29 @@ class DataValidationService:
                         examples_query = f"""
                             SELECT TOP 3 [{col}] as example_value
                             FROM {schema_name}.{staging_table}
-                            WHERE COALESCE(
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)
-                            ) IS NULL
-                            AND {cleaned_col_expression} IS NOT NULL
+                            WHERE {cleaned_col_expression} IS NOT NULL
+                            AND CASE 
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NOT NULL THEN 1
+                                ELSE 0
+                            END = 0
                         """
                     else:
                         examples_query = f"""
                             SELECT TOP 3 [{col}] as example_value
                             FROM {schema_name}.{staging_table}
-                            WHERE COALESCE(
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 102),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 110),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103)
-                            ) IS NULL
-                            AND {cleaned_col_expression} IS NOT NULL
+                            WHERE {cleaned_col_expression} IS NOT NULL
+                            AND CASE 
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 102) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 110) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NOT NULL THEN 1
+                                ELSE 0
+                            END = 0
                         """
                     
                     examples_result = conn.execute(text(examples_query))
@@ -517,6 +813,142 @@ class DataValidationService:
                     log_func(f"        ⚠️ Error checking column {col}: {e}")
         
         return issues
+    
+    def _create_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """สร้าง temporary indexes เพื่อเร่งการ validation"""
+        try:
+            with self.engine.connect() as conn:
+                index_count = 0
+                for col_name in required_cols.keys():
+                    # สร้าง index ชั่วคราวสำหรับ column ที่มีข้อมูลเยอะ
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบว่า index มีอยู่แล้วหรือไม่
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() == 0:
+                            # สร้าง index ใหม่
+                            create_index_sql = f"""
+                                CREATE NONCLUSTERED INDEX [{index_name}] 
+                                ON {schema_name}.{staging_table} ([{col_name}])
+                                WHERE [{col_name}] IS NOT NULL
+                            """
+                            conn.execute(text(create_index_sql))
+                            index_count += 1
+                    except Exception as e:
+                        # ถ้าสร้าง index ไม่ได้ก็ข้าม (อาจเป็น column ที่มีข้อมูลยาวเกินไป)
+                        pass
+                        
+                conn.commit()
+                if log_func and index_count > 0:
+                    log_func(f"   ✅ Created {index_count} temporary indexes for validation")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to create temporary indexes: {e}")
+    
+    def _drop_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """ลบ temporary indexes หลังจาก validation เสร็จ"""
+        try:
+            with self.engine.connect() as conn:
+                dropped_count = 0
+                for col_name in required_cols.keys():
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบและลบ index
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() > 0:
+                            drop_sql = f"DROP INDEX [{index_name}] ON {schema_name}.{staging_table}"
+                            conn.execute(text(drop_sql))
+                            dropped_count += 1
+                    except Exception as e:
+                        # ถ้าลบไม่ได้ก็ข้าม
+                        pass
+                        
+                conn.commit()
+                if log_func and dropped_count > 0:
+                    log_func(f"   🗑️ Cleaned up {dropped_count} temporary indexes")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to drop temporary indexes: {e}")
+                
+    def _validate_columns_parallel(self, validation_type: str, staging_table: str, schema_name: str, 
+                                 columns: list, total_rows: int, chunk_size: int, log_func, date_format: str):
+        """ตรวจสอบหลายคอลัมน์แบบ parallel เพื่อเพิ่มประสิทธิภาพ"""
+        all_issues = []
+        
+        def validate_single_column(col):
+            """ตรวจสอบคอลัมน์เดียวในแต่ละ thread"""
+            try:
+                with self.engine.connect() as conn:
+                    if validation_type == 'numeric_validation':
+                        return self._validate_numeric_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None  # ไม่ส่ง log_func เพื่อป้องกัน race condition
+                        )
+                    elif validation_type == 'date_validation':
+                        return self._validate_date_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None, date_format
+                        )
+                    else:
+                        return []
+            except Exception as e:
+                return []
+        
+        try:
+            # ใช้ ThreadPoolExecutor สำหรับ parallel processing
+            max_workers = min(len(columns), 3)  # จำกัดจำนวน threads ไม่เกิน 3
+            
+            if log_func:
+                log_func(f"      🔄 Processing {len(columns)} columns in parallel ({max_workers} threads)...")
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # ส่งงานแต่ละคอลัมน์ไปยัง thread แยกกัน
+                future_to_column = {executor.submit(validate_single_column, col): col for col in columns}
+                
+                # รวบรวมผลลัพธ์
+                for future in as_completed(future_to_column):
+                    col = future_to_column[future]
+                    try:
+                        issues = future.result()
+                        all_issues.extend(issues)
+                        if log_func and issues:
+                            log_func(f"        ✓ Column '{col}': {len(issues)} issue(s)")
+                    except Exception as e:
+                        if log_func:
+                            log_func(f"        ❌ Error validating column '{col}': {e}")
+            
+            if log_func:
+                log_func(f"      ✅ Parallel validation completed: {len(all_issues)} total issue(s)")
+                
+        except Exception as e:
+            if log_func:
+                log_func(f"      ⚠️ Parallel validation failed, falling back to sequential: {e}")
+            # Fallback เป็นแบบปกติ
+            with self.engine.connect() as conn:
+                if validation_type == 'numeric_validation':
+                    all_issues = self._validate_numeric_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func
+                    )
+                elif validation_type == 'date_validation':
+                    all_issues = self._validate_date_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func, date_format
+                    )
+        
+        return all_issues
     
     def _validate_string_length_chunked(self, conn, staging_table, schema_name, columns, 
                                         total_rows, chunk_size, log_func):
@@ -564,6 +996,142 @@ class DataValidationService:
                     log_func(f"        ⚠️ Error checking column {col}: {e}")
         
         return issues
+    
+    def _create_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """สร้าง temporary indexes เพื่อเร่งการ validation"""
+        try:
+            with self.engine.connect() as conn:
+                index_count = 0
+                for col_name in required_cols.keys():
+                    # สร้าง index ชั่วคราวสำหรับ column ที่มีข้อมูลเยอะ
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบว่า index มีอยู่แล้วหรือไม่
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() == 0:
+                            # สร้าง index ใหม่
+                            create_index_sql = f"""
+                                CREATE NONCLUSTERED INDEX [{index_name}] 
+                                ON {schema_name}.{staging_table} ([{col_name}])
+                                WHERE [{col_name}] IS NOT NULL
+                            """
+                            conn.execute(text(create_index_sql))
+                            index_count += 1
+                    except Exception as e:
+                        # ถ้าสร้าง index ไม่ได้ก็ข้าม (อาจเป็น column ที่มีข้อมูลยาวเกินไป)
+                        pass
+                        
+                conn.commit()
+                if log_func and index_count > 0:
+                    log_func(f"   ✅ Created {index_count} temporary indexes for validation")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to create temporary indexes: {e}")
+    
+    def _drop_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """ลบ temporary indexes หลังจาก validation เสร็จ"""
+        try:
+            with self.engine.connect() as conn:
+                dropped_count = 0
+                for col_name in required_cols.keys():
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบและลบ index
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() > 0:
+                            drop_sql = f"DROP INDEX [{index_name}] ON {schema_name}.{staging_table}"
+                            conn.execute(text(drop_sql))
+                            dropped_count += 1
+                    except Exception as e:
+                        # ถ้าลบไม่ได้ก็ข้าม
+                        pass
+                        
+                conn.commit()
+                if log_func and dropped_count > 0:
+                    log_func(f"   🗑️ Cleaned up {dropped_count} temporary indexes")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to drop temporary indexes: {e}")
+                
+    def _validate_columns_parallel(self, validation_type: str, staging_table: str, schema_name: str, 
+                                 columns: list, total_rows: int, chunk_size: int, log_func, date_format: str):
+        """ตรวจสอบหลายคอลัมน์แบบ parallel เพื่อเพิ่มประสิทธิภาพ"""
+        all_issues = []
+        
+        def validate_single_column(col):
+            """ตรวจสอบคอลัมน์เดียวในแต่ละ thread"""
+            try:
+                with self.engine.connect() as conn:
+                    if validation_type == 'numeric_validation':
+                        return self._validate_numeric_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None  # ไม่ส่ง log_func เพื่อป้องกัน race condition
+                        )
+                    elif validation_type == 'date_validation':
+                        return self._validate_date_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None, date_format
+                        )
+                    else:
+                        return []
+            except Exception as e:
+                return []
+        
+        try:
+            # ใช้ ThreadPoolExecutor สำหรับ parallel processing
+            max_workers = min(len(columns), 3)  # จำกัดจำนวน threads ไม่เกิน 3
+            
+            if log_func:
+                log_func(f"      🔄 Processing {len(columns)} columns in parallel ({max_workers} threads)...")
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # ส่งงานแต่ละคอลัมน์ไปยัง thread แยกกัน
+                future_to_column = {executor.submit(validate_single_column, col): col for col in columns}
+                
+                # รวบรวมผลลัพธ์
+                for future in as_completed(future_to_column):
+                    col = future_to_column[future]
+                    try:
+                        issues = future.result()
+                        all_issues.extend(issues)
+                        if log_func and issues:
+                            log_func(f"        ✓ Column '{col}': {len(issues)} issue(s)")
+                    except Exception as e:
+                        if log_func:
+                            log_func(f"        ❌ Error validating column '{col}': {e}")
+            
+            if log_func:
+                log_func(f"      ✅ Parallel validation completed: {len(all_issues)} total issue(s)")
+                
+        except Exception as e:
+            if log_func:
+                log_func(f"      ⚠️ Parallel validation failed, falling back to sequential: {e}")
+            # Fallback เป็นแบบปกติ
+            with self.engine.connect() as conn:
+                if validation_type == 'numeric_validation':
+                    all_issues = self._validate_numeric_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func
+                    )
+                elif validation_type == 'date_validation':
+                    all_issues = self._validate_date_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func, date_format
+                    )
+        
+        return all_issues
     
     def _validate_boolean_chunked(self, conn, staging_table, schema_name, columns, 
                                   total_rows, chunk_size, log_func):
@@ -616,3 +1184,139 @@ class DataValidationService:
                     log_func(f"        ⚠️ Error checking column {col}: {e}")
         
         return issues
+    
+    def _create_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """สร้าง temporary indexes เพื่อเร่งการ validation"""
+        try:
+            with self.engine.connect() as conn:
+                index_count = 0
+                for col_name in required_cols.keys():
+                    # สร้าง index ชั่วคราวสำหรับ column ที่มีข้อมูลเยอะ
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบว่า index มีอยู่แล้วหรือไม่
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() == 0:
+                            # สร้าง index ใหม่
+                            create_index_sql = f"""
+                                CREATE NONCLUSTERED INDEX [{index_name}] 
+                                ON {schema_name}.{staging_table} ([{col_name}])
+                                WHERE [{col_name}] IS NOT NULL
+                            """
+                            conn.execute(text(create_index_sql))
+                            index_count += 1
+                    except Exception as e:
+                        # ถ้าสร้าง index ไม่ได้ก็ข้าม (อาจเป็น column ที่มีข้อมูลยาวเกินไป)
+                        pass
+                        
+                conn.commit()
+                if log_func and index_count > 0:
+                    log_func(f"   ✅ Created {index_count} temporary indexes for validation")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to create temporary indexes: {e}")
+    
+    def _drop_temp_indexes(self, staging_table: str, required_cols: Dict, schema_name: str, log_func=None):
+        """ลบ temporary indexes หลังจาก validation เสร็จ"""
+        try:
+            with self.engine.connect() as conn:
+                dropped_count = 0
+                for col_name in required_cols.keys():
+                    index_name = f"temp_idx_{staging_table}_{col_name}".replace(' ', '_').replace('-', '_')[:128]
+                    try:
+                        # ตรวจสอบและลบ index
+                        check_sql = f"""
+                            SELECT COUNT(*) FROM sys.indexes 
+                            WHERE object_id = OBJECT_ID('{schema_name}.{staging_table}') 
+                            AND name = '{index_name}'
+                        """
+                        result = conn.execute(text(check_sql))
+                        if result.scalar() > 0:
+                            drop_sql = f"DROP INDEX [{index_name}] ON {schema_name}.{staging_table}"
+                            conn.execute(text(drop_sql))
+                            dropped_count += 1
+                    except Exception as e:
+                        # ถ้าลบไม่ได้ก็ข้าม
+                        pass
+                        
+                conn.commit()
+                if log_func and dropped_count > 0:
+                    log_func(f"   🗑️ Cleaned up {dropped_count} temporary indexes")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ⚠️ Unable to drop temporary indexes: {e}")
+                
+    def _validate_columns_parallel(self, validation_type: str, staging_table: str, schema_name: str, 
+                                 columns: list, total_rows: int, chunk_size: int, log_func, date_format: str):
+        """ตรวจสอบหลายคอลัมน์แบบ parallel เพื่อเพิ่มประสิทธิภาพ"""
+        all_issues = []
+        
+        def validate_single_column(col):
+            """ตรวจสอบคอลัมน์เดียวในแต่ละ thread"""
+            try:
+                with self.engine.connect() as conn:
+                    if validation_type == 'numeric_validation':
+                        return self._validate_numeric_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None  # ไม่ส่ง log_func เพื่อป้องกัน race condition
+                        )
+                    elif validation_type == 'date_validation':
+                        return self._validate_date_chunked(
+                            conn, staging_table, schema_name, [col], 
+                            total_rows, chunk_size, None, date_format
+                        )
+                    else:
+                        return []
+            except Exception as e:
+                return []
+        
+        try:
+            # ใช้ ThreadPoolExecutor สำหรับ parallel processing
+            max_workers = min(len(columns), 3)  # จำกัดจำนวน threads ไม่เกิน 3
+            
+            if log_func:
+                log_func(f"      🔄 Processing {len(columns)} columns in parallel ({max_workers} threads)...")
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # ส่งงานแต่ละคอลัมน์ไปยัง thread แยกกัน
+                future_to_column = {executor.submit(validate_single_column, col): col for col in columns}
+                
+                # รวบรวมผลลัพธ์
+                for future in as_completed(future_to_column):
+                    col = future_to_column[future]
+                    try:
+                        issues = future.result()
+                        all_issues.extend(issues)
+                        if log_func and issues:
+                            log_func(f"        ✓ Column '{col}': {len(issues)} issue(s)")
+                    except Exception as e:
+                        if log_func:
+                            log_func(f"        ❌ Error validating column '{col}': {e}")
+            
+            if log_func:
+                log_func(f"      ✅ Parallel validation completed: {len(all_issues)} total issue(s)")
+                
+        except Exception as e:
+            if log_func:
+                log_func(f"      ⚠️ Parallel validation failed, falling back to sequential: {e}")
+            # Fallback เป็นแบบปกติ
+            with self.engine.connect() as conn:
+                if validation_type == 'numeric_validation':
+                    all_issues = self._validate_numeric_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func
+                    )
+                elif validation_type == 'date_validation':
+                    all_issues = self._validate_date_chunked(
+                        conn, staging_table, schema_name, columns, 
+                        total_rows, chunk_size, log_func, date_format
+                    )
+        
+        return all_issues
