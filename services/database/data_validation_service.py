@@ -186,7 +186,7 @@ class DataValidationService:
             phases['Date/DateTime Formats'] = {
                 'type': 'date_validation',
                 'columns': date_columns,
-                'chunk_size': 10000
+                'chunk_size': 25000  # เพิ่ม chunk_size สำหรับ date validation ที่ปรับปรุงแล้ว
             }
         
         # Phase 3: String length validation
@@ -379,55 +379,55 @@ class DataValidationService:
     def _validate_date_chunked(self, conn, staging_table, schema_name, columns, 
                                total_rows, chunk_size, log_func, date_format):
         """
-        Validate date columns in chunks
+        Validate date columns in chunks - Optimized version
+        
+        Performance improvements:
+        - ลดการทำความสะอาดข้อมูลที่ซับซ้อน
+        - ใช้ CTE เพื่อลดการเรียก TRY_CONVERT หลายครั้ง
+        - ลบ debug query ที่ซับซ้อน
+        - เพิ่ม chunk_size เป็น 25000
         """
         issues = []
         
         for col in columns:
-            col_literal = f"N'{col}'" if any(ord(c) > 127 for c in col) else f"'{col}'"
+            # ลดความซับซ้อนของการทำความสะอาดข้อมูล
+            cleaned_col_expression = f"LTRIM(RTRIM(ISNULL([{col}], '')))"
             
-            # ปรับปรุงการทำความสะอาดข้อมูล - ลบ whitespace และอักขระพิเศษ แต่รักษาช่องว่างที่จำเป็น
-            cleaned_col_expression = f"""
-                NULLIF(LTRIM(RTRIM(
-                    REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE([{col}], 
-                        CHAR(9), ' '),   -- Tab -> space
-                        CHAR(10), ' '),  -- Line Feed -> space
-                        CHAR(13), ' '),  -- Carriage Return -> space
-                        CHAR(160), ' '), -- Non-breaking space -> space
-                        NCHAR(65279), ''), -- BOM -> remove
-                        NCHAR(8203), ''),  -- Zero-width space -> remove
-                        NCHAR(8288), ''),  -- Zero-width no-break space -> remove
-                        ',', ''),       -- Comma -> remove
-                        '  ', ' ')      -- Double space -> single space
-                )), '')
-            """
-            
-            # ปรับปรุงการแปลงรูปแบบวันที่ - เพิ่มรูปแบบที่ครอบคลุมมากขึ้น
+            # ใช้วิธีการตรวจสอบที่เร็วกว่า - ลดจำนวน TRY_CONVERT
             if date_format == 'UK':  # DD-MM format
+                # ลองแค่ 2 รูปแบบหลัก
                 error_query = f"""
+                    WITH ValidatedDates AS (
+                        SELECT 
+                            [{col}],
+                            CASE 
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1
+                                ELSE 0
+                            END as is_valid
+                        FROM {schema_name}.{staging_table}
+                        WHERE {cleaned_col_expression} != ''
+                    )
                     SELECT COUNT(*) as error_count
-                    FROM {schema_name}.{staging_table}
-                    WHERE COALESCE(
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),  -- DD/MM/YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),  -- DD.MM.YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105),  -- DD-MM-YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),  -- YYYY-MM-DD HH:MI:SS
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)   -- MM/DD/YYYY (fallback)
-                    ) IS NULL
-                    AND {cleaned_col_expression} IS NOT NULL
+                    FROM ValidatedDates
+                    WHERE is_valid = 0
                 """
             else:  # US format - MM-DD
                 error_query = f"""
+                    WITH ValidatedDates AS (
+                        SELECT 
+                            [{col}],
+                            CASE 
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NOT NULL THEN 1
+                                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1
+                                ELSE 0
+                            END as is_valid
+                        FROM {schema_name}.{staging_table}
+                        WHERE {cleaned_col_expression} != ''
+                    )
                     SELECT COUNT(*) as error_count
-                    FROM {schema_name}.{staging_table}
-                    WHERE COALESCE(
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101),  -- MM/DD/YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 102),  -- MM.DD.YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 110),  -- MM-DD-YYYY
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),  -- YYYY-MM-DD HH:MI:SS
-                        TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103)   -- DD/MM/YYYY (fallback)
-                    ) IS NULL
-                    AND {cleaned_col_expression} IS NOT NULL
+                    FROM ValidatedDates
+                    WHERE is_valid = 0
                 """
             
             try:
@@ -435,61 +435,22 @@ class DataValidationService:
                 error_count = result.scalar()
                 
                 if error_count > 0:
-                    # ตรวจสอบข้อมูลที่ไม่สามารถแปลงได้เพื่อหาสาเหตุ
-                    debug_query = f"""
-                        SELECT TOP 5 [{col}] as raw_value, 
-                               {cleaned_col_expression} as cleaned_value,
-                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) as uk_103,
-                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104) as uk_104,
-                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105) as uk_105,
-                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) as iso_121,
-                               TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) as us_101
-                        FROM {schema_name}.{staging_table}
-                        WHERE COALESCE(
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105),
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
-                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)
-                        ) IS NULL
-                        AND {cleaned_col_expression} IS NOT NULL
-                        ORDER BY [{col}]
-                    """
-                    
-                    debug_result = conn.execute(text(debug_query))
-                    debug_rows = debug_result.fetchall()
-                    
-                    # สร้างรายงาน debug
-                    debug_info = []
-                    for row in debug_rows:
-                        debug_info.append(f"Raw: '{row.raw_value}' -> Cleaned: '{row.cleaned_value}'")
-                    
-                    # Get sample examples
+                    # รวม examples query เข้ากับ validation เพื่อลดการ query
                     if date_format == 'UK':
                         examples_query = f"""
                             SELECT TOP 3 [{col}] as example_value
                             FROM {schema_name}.{staging_table}
-                            WHERE COALESCE(
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101)
-                            ) IS NULL
-                            AND {cleaned_col_expression} IS NOT NULL
+                            WHERE {cleaned_col_expression} != ''
+                              AND TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NULL
+                              AND TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NULL
                         """
                     else:
                         examples_query = f"""
                             SELECT TOP 3 [{col}] as example_value
                             FROM {schema_name}.{staging_table}
-                            WHERE COALESCE(
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 102),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 110),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121),
-                                TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103)
-                            ) IS NULL
-                            AND {cleaned_col_expression} IS NOT NULL
+                            WHERE {cleaned_col_expression} != ''
+                              AND TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NULL
+                              AND TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NULL
                         """
                     
                     examples_result = conn.execute(text(examples_query))
@@ -501,16 +462,14 @@ class DataValidationService:
                         'error_count': error_count,
                         'percentage': round((error_count / total_rows) * 100, 2),
                         'examples': ', '.join(examples),
-                        'date_format_used': date_format,
-                        'debug_info': debug_info[:3]  # เพิ่มข้อมูล debug
+                        'date_format_used': date_format
                     }
                     issues.append(issue)
                     
-                    # แสดงข้อมูล debug ใน log
-                    if log_func:
-                        log_func(f"        🔍 Debug info for {col}:")
-                        for debug_line in debug_info[:2]:  # แสดงแค่ 2 แรก
-                            log_func(f"          {debug_line}")
+                    # แสดงข้อมูลสรุปใน log (ลบ debug ที่ซับซ้อน)
+                    if log_func and error_count > 0:
+                        status = "❌" if issue['percentage'] > 10 else "⚠️"
+                        log_func(f"        {status} {col}: {error_count:,} invalid dates ({issue['percentage']}%)")
             
             except Exception as e:
                 if log_func:

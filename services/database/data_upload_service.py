@@ -386,6 +386,146 @@ class DataUploadService:
                 index=False
             )
 
+    def _safe_clear_table(self, schema_name: str, table_name: str, log_func=None):
+        """
+        Safely clear table data with fallback mechanisms
+        
+        Handles common TRUNCATE issues:
+        - Foreign key constraints
+        - Table locks
+        - Connection timeouts
+        """
+        try:
+            # First attempt: Use TRUNCATE (fastest method)
+            with self.engine.begin() as conn:
+                # Set timeout for the operation
+                conn.execute(text("SET LOCK_TIMEOUT 30000"))  # 30 seconds timeout
+                
+                # Check for foreign key constraints first
+                fk_check_query = f"""
+                    SELECT COUNT(*) as fk_count
+                    FROM sys.foreign_keys fk
+                    INNER JOIN sys.tables t ON fk.referenced_object_id = t.object_id
+                    INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+                    WHERE s.name = '{schema_name}' AND t.name = '{table_name}'
+                """
+                result = conn.execute(text(fk_check_query))
+                fk_count = result.scalar()
+                
+                if fk_count > 0:
+                    if log_func:
+                        log_func(f"   ⚠️ Table has {fk_count} foreign key references - using DELETE instead of TRUNCATE")
+                    # Use DELETE when foreign keys exist
+                    self._safe_delete_all_rows(conn, schema_name, table_name, log_func)
+                else:
+                    # Safe to use TRUNCATE
+                    conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
+                    if log_func:
+                        log_func(f"   ✅ Truncated table {schema_name}.{table_name}")
+                        
+        except Exception as truncate_error:
+            # Fallback: Use DELETE if TRUNCATE fails
+            try:
+                if log_func:
+                    log_func(f"   ⚠️ TRUNCATE failed ({truncate_error}), trying DELETE...")
+                
+                with self.engine.begin() as conn:
+                    conn.execute(text("SET LOCK_TIMEOUT 30000"))
+                    self._safe_delete_all_rows(conn, schema_name, table_name, log_func)
+                        
+            except Exception as delete_error:
+                # Last resort: Check if table is locked
+                try:
+                    if log_func:
+                        log_func(f"   ❌ DELETE also failed ({delete_error}), checking table locks...")
+                    
+                    with self.engine.connect() as conn:
+                        lock_check_query = f"""
+                            SELECT 
+                                t.request_session_id,
+                                t.resource_type,
+                                t.resource_description,
+                                t.request_mode,
+                                t.request_status
+                            FROM sys.dm_tran_locks t
+                            INNER JOIN sys.partitions p ON t.resource_associated_entity_id = p.hobt_id
+                            INNER JOIN sys.objects o ON p.object_id = o.object_id
+                            INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                            WHERE s.name = '{schema_name}' AND o.name = '{table_name}'
+                        """
+                        lock_result = conn.execute(text(lock_check_query))
+                        locks = lock_result.fetchall()
+                        
+                        if locks:
+                            if log_func:
+                                log_func(f"   🔒 Found {len(locks)} active locks on table")
+                                for lock in locks[:3]:  # Show first 3 locks
+                                    log_func(f"      Session {lock.request_session_id}: {lock.request_mode} {lock.request_status}")
+                                log_func(f"   💡 Try closing other connections to this table and retry")
+                        else:
+                            if log_func:
+                                log_func(f"   ❌ No locks found - unknown error preventing table clearing")
+                
+                except Exception as lock_check_error:
+                    if log_func:
+                        log_func(f"   ❌ Could not check table locks: {lock_check_error}")
+                
+                # Re-raise the original error
+                raise delete_error
+
+    def _safe_delete_all_rows(self, conn, schema_name: str, table_name: str, log_func=None):
+        """
+        Safely delete all rows from table, handling large tables with chunked deletion
+        """
+        try:
+            # Check table size first
+            size_check_query = f"""
+                SELECT COUNT(*) as row_count
+                FROM {schema_name}.{table_name}
+            """
+            result = conn.execute(text(size_check_query))
+            row_count = result.scalar()
+            
+            if row_count == 0:
+                if log_func:
+                    log_func(f"   ℹ️ Table {schema_name}.{table_name} is already empty")
+                return
+            
+            if row_count > 100000:  # ถ้ามีมากกว่า 100K แถว ลบแบบ chunk
+                if log_func:
+                    log_func(f"   🔄 Large table ({row_count:,} rows) - using chunked deletion...")
+                
+                deleted_total = 0
+                chunk_size = 50000
+                
+                while True:
+                    delete_chunk_query = f"""
+                        DELETE TOP ({chunk_size}) FROM {schema_name}.{table_name}
+                    """
+                    result = conn.execute(text(delete_chunk_query))
+                    deleted_rows = result.rowcount
+                    deleted_total += deleted_rows
+                    
+                    if log_func and deleted_rows > 0:
+                        progress = min(100, (deleted_total / row_count) * 100)
+                        log_func(f"   📊 Deleted {deleted_total:,}/{row_count:,} rows ({progress:.1f}%)")
+                    
+                    if deleted_rows == 0 or deleted_rows < chunk_size:
+                        break
+                        
+                if log_func:
+                    log_func(f"   ✅ Successfully deleted all {deleted_total:,} rows")
+            else:
+                # ตารางเล็ก - ลบครั้งเดียว
+                conn.execute(text(f"DELETE FROM {schema_name}.{table_name}"))
+                if log_func:
+                    log_func(f"   ✅ Deleted all {row_count:,} rows from {schema_name}.{table_name}")
+                    
+        except Exception as e:
+            if log_func:
+                log_func(f"   ❌ Error during deletion: {e}")
+            raise
+
     def _create_or_recreate_final_table(self, table_name: str, required_cols: Dict, schema_name: str, 
                                       needs_recreate: bool, log_func, df, clear_existing: bool = True):
         """Create or recreate final table based on dtype config"""
@@ -410,9 +550,8 @@ class DataUploadService:
             self._fix_column_types(table_name, required_cols, schema_name, log_func)
             if clear_existing:
                 if log_func:
-                    log_func(f"🧹 Truncating existing data in table {schema_name}.{table_name}")
-                with self.engine.begin() as conn:
-                    conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
+                    log_func(f"🧹 Clearing existing data in table {schema_name}.{table_name}")
+                self._safe_clear_table(schema_name, table_name, log_func)
             else:
                 if log_func:
                     log_func(f"📋 Appending to existing table {schema_name}.{table_name}")
