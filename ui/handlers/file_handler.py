@@ -46,7 +46,6 @@ class FileHandler:
             # โหลดการตั้งค่าใหม่
             self.file_service.load_settings()
             ui_callbacks['clear_file_list']()
-            ui_callbacks['disable_auto_process']()
             ui_callbacks['reset_select_all']()
             
             # ค้นหาไฟล์ Excel/CSV
@@ -58,7 +57,6 @@ class FileHandler:
                 ui_callbacks['update_status']("No .xlsx or .csv files found in the specified folder", True)
                 self.log("🤷 No .xlsx or .csv files found in the specified folder")
                 self.log("--- 🏁 File scan completed ---")
-                ui_callbacks['enable_auto_process']()
                 return
             
             found_files_count = 0
@@ -85,11 +83,9 @@ class FileHandler:
                 ui_callbacks['reset_select_all']()
             
             self.log("--- 🏁 File scan completed ---")
-            ui_callbacks['enable_auto_process']()
             
         except Exception as e:
             self.log(f"❌ An error occurred while scanning files: {e}")
-            ui_callbacks['enable_auto_process']()
     
     def confirm_upload(self, get_selected_files_callback, ui_callbacks):
         """ยืนยันการอัปโหลดไฟล์ที่เลือก"""

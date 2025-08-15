@@ -25,7 +25,7 @@
 ✅ อัปโหลดข้อมูลไปยัง SQL Server พร้อม schema validation  
 ✅ ย้ายไฟล์ที่ประมวลผลแล้วไปยังโฟลเดอร์ที่จัดระเบียบ  
 ✅ GUI ที่ใช้งานง่ายด้วย CustomTkinter  
-✅ เตรียมรองรับ CLI (จะเพิ่มภายหลัง)  
+✅ CLI สำหรับการประมวลผลอัตโนมัติ  
 ✅ การตรวจสอบสิทธิ์และความปลอดภัย  
 ✅ Error handling และ logging ที่ครบถ้วน  
 ✅ Performance optimization สำหรับไฟล์ขนาดใหญ่
@@ -40,6 +40,8 @@ PIPELINE_SQLSERVER/
 ├── pyproject.toml                   # Project configuration
 ├── install_requirements.bat         # สคริปต์ติดตั้งสำหรับ Windows
 ├── run_pipeline_gui.bat             # สคริปรัน GUI สำหรับ Windows
+├── auto_process_cli.py              # โปรแกรม CLI สำหรับการประมวลผลอัตโนมัติ
+├── run_auto_process.bat             # สคริปรัน CLI สำหรับ Windows
 │
 ├── config/                          # การตั้งค่าและ configuration
 │   ├── __init__.py
@@ -143,7 +145,29 @@ run_pipeline_gui.bat
 python pipeline_gui_app.py
 ```
 
-หมายเหตุ: เวอร์ชันนี้รองรับเฉพาะ GUI. ส่วน CLI จะเพิ่มภายหลัง (ยังไม่มีไฟล์ `pipeline_cli_app.py`).
+### CLI Application (Auto Process)
+
+```bash
+# วิธีแนะนำ (Windows) - ใช้โฟลเดอร์ล่าสุดจากการตั้งค่า
+run_auto_process.bat
+
+# หรือระบุโฟลเดอร์ต้นทางเอง
+run_auto_process.bat "C:\path\to\data\folder"
+
+# รันด้วย Python โดยตรง
+python auto_process_cli.py
+
+# หรือระบุโฟลเดอร์ต้นทางเอง
+python auto_process_cli.py "C:\path\to\data\folder"
+
+# ดูความช่วยเหลือ
+python auto_process_cli.py --help
+```
+
+**หมายเหตุ CLI**: 
+- ต้องตั้งค่าประเภทไฟล์ใน GUI ก่อนใช้งาน CLI
+- CLI จะประมวลผลไฟล์ทั้งหมดในโฟลเดอร์อัตโนมัติ
+- ไม่ต้องเลือกไฟล์ทีละไฟล์เหมือน GUI
 
 ### การตั้งค่าการเชื่อมต่อฐานข้อมูล
 

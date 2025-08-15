@@ -86,14 +86,7 @@ class MainTab:
         )
         self.upload_button.pack(side="left", padx=4)
 
-        # ปุ่มประมวลผลอัตโนมัติ
-        self.auto_process_button = ctk.CTkButton(
-            button_frame,
-            text="🤖 Auto process",
-            command=self.callbacks.get('start_auto_process'),
-            width=160,
-        )
-        self.auto_process_button.pack(side="left", padx=4)
+
     
     def enable_controls(self):
         """เปิดการใช้งานปุ่มทั้งหมด"""
@@ -101,7 +94,6 @@ class MainTab:
         self.upload_button.configure(state="normal")
         self.folder_btn.configure(state="normal")
         self.check_btn.configure(state="normal")
-        self.auto_process_button.configure(state="normal")
         self.file_list.enable_all_checkboxes()
         
         # เปิด Settings tab ระหว่างไม่อัปโหลด
@@ -114,7 +106,6 @@ class MainTab:
         self.upload_button.configure(state="disabled")
         self.folder_btn.configure(state="disabled")
         self.check_btn.configure(state="disabled")
-        self.auto_process_button.configure(state="disabled")
         self.file_list.disable_all_checkboxes()
         
         # ปิด Settings tab ระหว่างอัปโหลด เพื่อป้องกันการเปลี่ยนแปลงการตั้งค่า

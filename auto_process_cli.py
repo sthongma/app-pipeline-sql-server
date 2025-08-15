@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+"""
+Auto Process CLI - Automated File Processing Command Line Program
+A standalone CLI program that processes files automatically without GUI
+Uses the same settings and configuration as the GUI application
+
+Usage: python auto_process_cli.py [source_folder]
+"""
+
+import os
+import sys
+import argparse
+import time
+import json
+from datetime import datetime
+
+# Import services and handlers
+from ui.handlers.file_handler import FileHandler
+from ui.handlers.settings_handler import SettingsHandler
+from services.file_service import FileService
+from services.database_service import DatabaseService
+from services.file import FileManagementService
+from services.preload_service import PreloadService
+from config.database import DatabaseConfig
+from constants import PathConstants
+import logging
+
+
+class CLIProgressCallback:
+    """CLI Progress callbacks for file processing operations"""
+    def __init__(self, cli_instance):
+        self.cli = cli_instance
+        
+    def reset_progress(self):
+        pass
+        
+    def set_progress_status(self, status, detail):
+        self.cli.log(f"Status: {status} - {detail}")
+        
+    def update_progress(self, progress, status, detail):
+        percentage = int(progress * 100)
+        self.cli.log(f"[{percentage}%] {status}: {detail}")
+        
+    def clear_file_list(self):
+        pass
+        
+    def add_file_to_list(self, file_path, logic_type):
+        self.cli.log(f"Found file: {os.path.basename(file_path)} [{logic_type}]")
+        
+    def reset_select_all(self):
+        pass
+        
+    def enable_select_all(self):
+        pass
+        
+    def update_status(self, status, is_error):
+        if is_error:
+            self.cli.log(f"ERROR: {status}")
+        else:
+            self.cli.log(f"SUCCESS: {status}")
+            
+    def disable_controls(self):
+        pass
+        
+    def enable_controls(self):
+        pass
+        
+    def disable_checkbox(self, checkbox):
+        pass
+        
+    def set_file_uploaded(self, file_path):
+        pass
+
+
+class AutoProcessCLI:
+    def __init__(self):
+        """
+        Initialize Auto Process CLI - Standalone program using GUI settings
+        """
+        # Setup console logging with English format
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        self.settings_file = "config/column_settings.json"
+        self.settings_handler = SettingsHandler(self.settings_file, self.log)
+        
+        # Create CLI callbacks
+        self.ui_callbacks = CLIProgressCallback(self)
+        
+        # Load settings (same as GUI)
+        self.column_settings = self.settings_handler.load_column_settings()
+        self.dtype_settings = self.settings_handler.load_dtype_settings()
+        
+        # Create services (same as GUI)
+        self.file_service = FileService(log_callback=self.log)
+        self.db_service = DatabaseService()
+        self.file_mgmt_service = FileManagementService()
+        self.preload_service = PreloadService()
+        
+        # Create file handler (same as GUI)
+        self.file_handler = FileHandler(
+            self.file_service,
+            self.db_service,
+            self.file_mgmt_service,
+            self.log
+        )
+    
+    def log(self, message):
+        """Log message to console in English"""
+        try:
+            logging.info(str(message))
+        except Exception:
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}")
+    
+    def validate_database_connection(self):
+        """Validate database connection and permissions"""
+        self.log("Checking database connection...")
+        
+        # Check if config file exists
+        if not os.path.exists(PathConstants.SQL_CONFIG_FILE):
+            self.log("ERROR: Database configuration file not found. Please login through GUI first.")
+            return False
+        
+        # Load database configuration
+        try:
+            with open(PathConstants.SQL_CONFIG_FILE, "r") as f:
+                config = json.load(f)
+            self.log(f"Loaded database configuration: {config.get('server', 'Unknown')}")
+        except Exception as e:
+            self.log(f"ERROR: Failed to load database configuration: {e}")
+            return False
+        
+        # Test database connection
+        self.log("Testing database connection...")
+        connection_ok = self.db_service.test_connection(config)
+        if not connection_ok:
+            self.log("ERROR: Failed to connect to database")
+            return False
+        
+        self.log("Database connection successful")
+        
+        # Check database permissions
+        self.log("Checking database permissions...")
+        permission_results = self.db_service.check_permissions('bronze', log_callback=self.log)
+        if not permission_results.get('success', False):
+            missing_permissions = permission_results.get('missing_critical', [])
+            self.log(f"ERROR: Insufficient permissions: {', '.join(missing_permissions)}")
+            return False
+        
+        self.log("Database permissions validated")
+        
+        # Load file type settings
+        self.log("Loading file type settings...")
+        preload_success, _msg, data = self.preload_service.preload_file_settings()
+        if preload_success and data:
+            self.column_settings = data.get('column_settings', {})
+            self.dtype_settings = data.get('dtype_settings', {})
+            self.log(f"Loaded {len(self.column_settings)} file type configurations")
+        else:
+            self.log("WARNING: No file type settings found. Please configure in GUI first.")
+            if not self.column_settings:
+                return False
+        
+        return True
+    
+    def scan_files(self, folder_path):
+        """Scan for data files in the specified folder"""
+        self.log("Scanning for data files...")
+        
+        # Set search path
+        self.file_service.set_search_path(folder_path)
+        self.settings_handler.save_last_path(folder_path)
+        
+        # Create UI callbacks
+        ui_callbacks = {
+            'reset_progress': self.ui_callbacks.reset_progress,
+            'set_progress_status': self.ui_callbacks.set_progress_status,
+            'update_progress': self.ui_callbacks.update_progress,
+            'clear_file_list': self.ui_callbacks.clear_file_list,
+            'add_file_to_list': self.ui_callbacks.add_file_to_list,
+            'reset_select_all': self.ui_callbacks.reset_select_all,
+            'enable_select_all': self.ui_callbacks.enable_select_all,
+            'update_status': self.ui_callbacks.update_status
+        }
+        
+        # Run file scan (no threading for CLI)
+        try:
+            self.file_handler._check_files(ui_callbacks)
+            return True
+        except Exception as e:
+            self.log(f"ERROR: Failed to scan files: {e}")
+            return False
+    
+    def process_files_automatically(self, folder_path):
+        """Process all files automatically using file handler"""
+        self.log("Starting automatic file processing...")
+        
+        # Create UI callbacks
+        ui_callbacks = {
+            'disable_controls': self.ui_callbacks.disable_controls,
+            'enable_controls': self.ui_callbacks.enable_controls,
+            'reset_progress': self.ui_callbacks.reset_progress,
+            'set_progress_status': self.ui_callbacks.set_progress_status,
+            'update_progress': self.ui_callbacks.update_progress,
+            'clear_file_list': self.ui_callbacks.clear_file_list,
+            'reset_select_all': self.ui_callbacks.reset_select_all,
+            'disable_checkbox': self.ui_callbacks.disable_checkbox,
+            'set_file_uploaded': self.ui_callbacks.set_file_uploaded
+        }
+        
+        # Run automatic processing (no threading for CLI)
+        try:
+            self.file_handler.run_auto_process(folder_path, ui_callbacks)
+            return True
+        except Exception as e:
+            self.log(f"ERROR: Failed to process files: {e}")
+            return False
+    
+    def run_auto_process(self, folder_path):
+        """Run automatic file processing - standalone CLI program"""
+        self.log(f"Starting auto processing for folder: {folder_path}")
+        
+        # Step 1: Validate database connection and settings
+        if not self.validate_database_connection():
+            self.log("ERROR: Database validation failed")
+            return False
+        
+        # Step 2: Scan for files
+        if not self.scan_files(folder_path):
+            self.log("ERROR: File scanning failed")
+            return False
+        
+        # Step 3: Process files automatically
+        if not self.process_files_automatically(folder_path):
+            self.log("ERROR: Automatic file processing failed")
+            return False
+        
+        self.log("SUCCESS: Auto processing completed successfully")
+        return True
+    
+
+def main():
+    """Main function"""
+    parser = argparse.ArgumentParser(
+        description='Automated File Processing CLI - Standalone program using GUI settings',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python auto_process_cli.py C:\\path\\to\\data\\folder
+  python auto_process_cli.py "C:\\Documents\\Excel Files"
+  
+Notes:
+  - Database connection and file type settings must be configured in GUI first
+  - CLI uses the same settings and services as the GUI application
+  - Processes all files automatically without user interaction
+        """
+    )
+    
+    parser.add_argument(
+        'folder_path',
+        nargs='?',
+        help='Source folder to process files from (if not specified, uses last folder from settings)'
+    )
+    
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='Auto Process CLI v3.0 (Standalone)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Create CLI instance
+    cli = AutoProcessCLI()
+    
+    # Determine source folder
+    folder_path = args.folder_path
+    
+    # If no folder specified, use last folder from settings
+    if not folder_path:
+        folder_path = cli.settings_handler.load_last_path()
+        if folder_path:
+            cli.log(f"Using last folder from settings: {folder_path}")
+        else:
+            cli.log("ERROR: No source folder specified and no last folder found in settings")
+            cli.log("Please specify a folder path or select a folder in GUI first")
+            parser.print_help()
+            sys.exit(1)
+    
+    # Validate folder exists
+    if not os.path.isdir(folder_path):
+        cli.log(f"ERROR: Invalid folder path: {folder_path}")
+        sys.exit(1)
+    
+    # Start processing
+    success = cli.run_auto_process(folder_path)
+    
+    # Exit with appropriate status
+    sys.exit(0 if success else 1)
+
+
+if __name__ == "__main__":
+    main()

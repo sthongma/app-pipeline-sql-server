@@ -133,8 +133,7 @@ class MainWindow(ctk.CTkToplevel):
             'toggle_select_all': self._toggle_select_all,
             'browse_excel_path': self._browse_excel_path,
             'run_check_thread': self._run_check_thread,
-            'confirm_upload': self._confirm_upload,
-            'start_auto_process': self._start_auto_process
+            'confirm_upload': self._confirm_upload
         }
         
         self.main_tab_ui = MainTab(parent, callbacks)
@@ -238,21 +237,7 @@ class MainWindow(ctk.CTkToplevel):
         ui_callbacks = self._get_ui_callbacks()
         self.file_handler.confirm_upload(self.file_list.get_selected_files, ui_callbacks)
     
-    def _start_auto_process(self):
-        """เริ่มการประมวลผลอัตโนมัติ"""
-        folder_path = self.file_handler.start_auto_process(
-            self.settings_handler.load_last_path, 
-            self.column_settings
-        )
-        
-        if folder_path:
-            ui_callbacks = self._get_ui_callbacks()
-            thread = threading.Thread(
-                target=self.file_handler.run_auto_process, 
-                args=(folder_path, ui_callbacks), 
-                daemon=True
-            )
-            thread.start()
+
     
     def _reload_settings_in_services(self):
         """รีโหลดการตั้งค่าใน services ทั้งหมด"""
@@ -285,8 +270,6 @@ class MainWindow(ctk.CTkToplevel):
             'update_progress': self.progress_bar.update,
             'clear_file_list': self.file_list.clear,
             'add_file_to_list': self.file_list.add_file,
-            'disable_auto_process': lambda: self.main_tab_ui.auto_process_button.configure(state="disabled"),
-            'enable_auto_process': lambda: self.main_tab_ui.auto_process_button.configure(state="normal"),
             'reset_select_all': self.main_tab_ui.reset_select_all,
             'enable_select_all': self.main_tab_ui.enable_select_all,
             'update_status': self.status_bar.update_status,
