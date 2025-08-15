@@ -88,9 +88,7 @@ class DataUploadService:
             if not required_cols:
                 return False, "Data type settings not found"
             
-            current_time = datetime.now()
-            df['updated_at'] = current_time
-            
+            # updated_at จะถูกเพิ่มโดย SQL ในขั้นตอนสุดท้าย
             required_cols['updated_at'] = DateTime()
             
             table_name = None
@@ -122,7 +120,8 @@ class DataUploadService:
                     needs_recreate = self._check_type_compatibility(db_col_types, required_cols, log_func)
             
             staging_table = f"{table_name}__stg"
-            staging_cols = list(required_cols.keys())
+            # staging table ไม่รวม updated_at เพราะจะเพิ่มใน SQL ตอน transfer
+            staging_cols = [col for col in required_cols.keys() if col != 'updated_at']
             
             if log_func:
                 log_func(f"📋 Creating staging table {schema_name}.{staging_table}")
@@ -471,7 +470,11 @@ class DataUploadService:
 
         select_exprs = []
         for col_name, sa_type in required_cols.items():
-            select_exprs.append(f"{_sql_type_and_expr(col_name, sa_type)} AS [{col_name}]")
+            if col_name == 'updated_at':
+                # ใช้ GETDATE() สำหรับ updated_at แทนการเพิ่มใน Python
+                select_exprs.append(f"GETDATE() AS [{col_name}]")
+            else:
+                select_exprs.append(f"{_sql_type_and_expr(col_name, sa_type)} AS [{col_name}]")
         select_sql = ", ".join(select_exprs)
 
         with self.engine.begin() as conn:
