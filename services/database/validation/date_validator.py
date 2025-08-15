@@ -4,7 +4,7 @@ Date and DateTime validation module
 
 from typing import List, Dict
 from sqlalchemy import text
-from sqlalchemy.types import DATE as SA_DATE, DateTime as SA_DateTime
+from sqlalchemy.types import DATE, DateTime
 
 from .base_validator import BaseValidator
 
@@ -251,7 +251,7 @@ class DateValidator(BaseValidator):
         """
         date_columns = []
         for col, dtype in required_cols.items():
-            if isinstance(dtype, (SA_DATE, SA_DateTime)):
+            if isinstance(dtype, (DATE, DateTime)):
                 date_columns.append(col)
         
         return date_columns

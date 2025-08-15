@@ -441,7 +441,7 @@ class DataUploadService:
             total_rows = "unknown"
         def _sql_type_and_expr(col_name: str, sa_type_obj) -> str:
             col_ref = f"[{col_name}]"
-            # Simplified cleaning for better performance
+            # Basic cleaning for most data types
             base = f"NULLIF(LTRIM(RTRIM({col_ref})), '')"
             
             if isinstance(sa_type_obj, (SA_Integer, SA_SmallInteger)):
@@ -453,11 +453,13 @@ class DataUploadService:
                 scale = getattr(sa_type_obj, 'scale', 2) or 2
                 return f"TRY_CONVERT(DECIMAL({precision},{scale}), REPLACE({base}, ' ', ''))"
             if isinstance(sa_type_obj, (SA_DATE, SA_DateTime)):
-                # Simplified date conversion for better performance
+                # Enhanced date cleaning to handle tab characters and special characters
+                date_cleaned = f"NULLIF(LTRIM(RTRIM(REPLACE(REPLACE(REPLACE({col_ref}, CHAR(9), ''), CHAR(10), ''), CHAR(13), ''))), '')"
+                
                 if date_format == 'UK':  # DD-MM format priority
-                    return f"COALESCE(TRY_CONVERT(DATETIME, {base}, 103), TRY_CONVERT(DATETIME, {base}, 121), TRY_CONVERT(DATETIME, {base}, 101))"
+                    return f"COALESCE(TRY_CONVERT(DATETIME, {date_cleaned}, 103), TRY_CONVERT(DATETIME, {date_cleaned}, 121), TRY_CONVERT(DATETIME, {date_cleaned}, 101))"
                 else:  # US format - MM-DD priority
-                    return f"COALESCE(TRY_CONVERT(DATETIME, {base}, 101), TRY_CONVERT(DATETIME, {base}, 121), TRY_CONVERT(DATETIME, {base}, 103))"
+                    return f"COALESCE(TRY_CONVERT(DATETIME, {date_cleaned}, 101), TRY_CONVERT(DATETIME, {date_cleaned}, 121), TRY_CONVERT(DATETIME, {date_cleaned}, 103))"
             if isinstance(sa_type_obj, SA_Boolean):
                 return (
                     "CASE "
