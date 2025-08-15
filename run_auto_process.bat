@@ -7,6 +7,9 @@ echo     Automated File Processing CLI
 echo ========================================
 echo.
 
+REM Change to the directory where this batch file is located
+cd /d "%~dp0"
+
 REM Check if Python is available
 python --version >nul 2>&1
 if errorlevel 1 (
@@ -17,7 +20,7 @@ if errorlevel 1 (
 
 REM Check if auto_process_cli.py exists
 if not exist "auto_process_cli.py" (
-    echo ERROR: auto_process_cli.py not found
+    echo ERROR: auto_process_cli.py not found in %CD%
     pause
     exit /b 1
 )
@@ -33,6 +36,6 @@ if "%~1"=="" (
     python auto_process_cli.py "%~1"
 )
 
-echo.
-echo Processing completed
-pause
+@REM echo.
+@REM echo Processing completed
+@REM pause

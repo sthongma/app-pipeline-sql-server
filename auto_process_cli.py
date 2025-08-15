@@ -25,6 +25,32 @@ from config.database import DatabaseConfig
 from constants import PathConstants
 import logging
 
+# Override messagebox for CLI to prevent GUI popups
+class CLIMessageBox:
+    @staticmethod
+    def showinfo(title, message):
+        print(f"INFO: {message}")
+    
+    @staticmethod
+    def showerror(title, message):
+        print(f"ERROR: {message}")
+    
+    @staticmethod
+    def showwarning(title, message):
+        print(f"WARNING: {message}")
+    
+    @staticmethod
+    def askyesno(title, message):
+        # For CLI, always return True for auto processing
+        return True
+
+# Replace tkinter messagebox with CLI version
+import tkinter.messagebox
+tkinter.messagebox.showinfo = CLIMessageBox.showinfo
+tkinter.messagebox.showerror = CLIMessageBox.showerror
+tkinter.messagebox.showwarning = CLIMessageBox.showwarning
+tkinter.messagebox.askyesno = CLIMessageBox.askyesno
+
 
 class CLIProgressCallback:
     """CLI Progress callbacks for file processing operations"""
