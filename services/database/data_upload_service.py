@@ -404,14 +404,19 @@ class DataUploadService:
             elif log_func:
                 log_func(f"📋 Creating table {schema_name}.{table_name} from data type settings")
             
-            df.head(0)[list(required_cols.keys())].to_sql(
+            # สร้าง empty DataFrame ที่มีเฉพาะคอลัมน์ที่มีอยู่ใน df (ไม่รวม updated_at)
+            df_cols = [col for col in required_cols.keys() if col != 'updated_at']
+            df.head(0)[df_cols].to_sql(
                 name=table_name,
                 con=self.engine,
                 schema=schema_name,
                 if_exists='replace',
                 index=False,
-                dtype=required_cols
+                dtype={col: required_cols[col] for col in df_cols}
             )
+            # เพิ่ม updated_at column ด้วย SQL
+            with self.engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [updated_at] DATETIME2 NULL"))
         else:
             # แก้ไขชนิดข้อมูลสำหรับตารางที่มีอยู่แล้ว
             self._fix_column_types(table_name, required_cols, schema_name, log_func)

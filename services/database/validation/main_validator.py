@@ -215,8 +215,11 @@ class MainValidator(BaseValidator):
         """
         phases = {}
         
+        # กรองเฉพาะคอลัมน์ที่มีใน staging table (ไม่รวม updated_at)
+        staging_cols = {col: dtype for col, dtype in required_cols.items() if col != 'updated_at'}
+        
         # Phase 1: Numeric validation
-        numeric_columns = self.numeric_validator.get_numeric_columns(required_cols)
+        numeric_columns = self.numeric_validator.get_numeric_columns(staging_cols)
         if numeric_columns:
             phases['Numeric Data Types'] = {
                 'type': 'numeric_validation',
@@ -226,7 +229,7 @@ class MainValidator(BaseValidator):
             }
         
         # Phase 2: Date validation
-        date_columns = self.date_validator.get_date_columns(required_cols)
+        date_columns = self.date_validator.get_date_columns(staging_cols)
         if date_columns:
             phases['Date/DateTime Formats'] = {
                 'type': 'date_validation',
@@ -236,7 +239,7 @@ class MainValidator(BaseValidator):
             }
         
         # Phase 3: String length validation
-        string_columns = self.string_validator.get_string_columns_with_length(required_cols)
+        string_columns = self.string_validator.get_string_columns_with_length(staging_cols)
         if string_columns:
             phases['String Length Limits'] = {
                 'type': 'string_length_validation',
@@ -246,7 +249,7 @@ class MainValidator(BaseValidator):
             }
         
         # Phase 4: Boolean validation
-        boolean_columns = self.boolean_validator.get_boolean_columns(required_cols)
+        boolean_columns = self.boolean_validator.get_boolean_columns(staging_cols)
         if boolean_columns:
             phases['Boolean Values'] = {
                 'type': 'boolean_validation',
