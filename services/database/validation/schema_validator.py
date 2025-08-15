@@ -16,6 +16,29 @@ class SchemaValidator(BaseValidator):
     ตรวจสอบว่า schema ของ staging table เข้ากันได้กับ final table หรือไม่
     """
     
+    def validate(self, conn, staging_table: str, schema_name: str, columns: List, 
+                total_rows: int, chunk_size: int, log_func=None, **kwargs) -> List[Dict]:
+        """
+        Implementation ของ abstract method จาก BaseValidator
+        
+        สำหรับ SchemaValidator จะ redirect ไปใช้ validate_schema_compatibility
+        
+        Args:
+            conn: Database connection (ไม่ใช้สำหรับ schema validation)
+            staging_table: Staging table name
+            schema_name: Schema name
+            columns: ไม่ใช้ - จะใช้ required_cols จาก kwargs แทน
+            total_rows: Total number of rows (ไม่ใช้)
+            chunk_size: Chunk size (ไม่ใช้)
+            log_func: Logging function
+            **kwargs: Additional parameters including 'required_cols'
+            
+        Returns:
+            List[Dict]: List of schema compatibility issues
+        """
+        required_cols = kwargs.get('required_cols', {})
+        return self.validate_schema_compatibility(staging_table, required_cols, schema_name, log_func)
+    
     def validate_schema_compatibility(self, staging_table: str, required_cols: Dict, 
                                    schema_name: str = 'bronze', log_func=None) -> List[Dict]:
         """

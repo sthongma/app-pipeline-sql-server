@@ -40,6 +40,31 @@ class MainValidator(BaseValidator):
         self.schema_validator = SchemaValidator(engine)
         self.index_manager = IndexManager(engine)
     
+    def validate(self, conn, staging_table: str, schema_name: str, columns: List, 
+                total_rows: int, chunk_size: int, log_func=None, **kwargs) -> List[Dict]:
+        """
+        Implementation ของ abstract method จาก BaseValidator
+        
+        สำหรับ MainValidator นี้จะไม่ใช้ method นี้โดยตรง 
+        แต่จะใช้ validate_data_in_staging แทน
+        
+        Args:
+            conn: Database connection
+            staging_table: Staging table name
+            schema_name: Schema name
+            columns: List of columns to validate
+            total_rows: Total number of rows
+            chunk_size: Chunk size for processing
+            log_func: Logging function
+            **kwargs: Additional parameters
+            
+        Returns:
+            List[Dict]: Empty list (not used directly)
+        """
+        # MainValidator ไม่ใช้ method นี้โดยตรง
+        # ใช้ validate_data_in_staging แทน
+        return []
+    
     def validate_data_in_staging(self, staging_table: str, logic_type: str, required_cols: Dict, 
                                 schema_name: str = 'bronze', log_func=None, progress_callback=None, 
                                 date_format: str = 'UK') -> Dict:

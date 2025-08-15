@@ -26,6 +26,30 @@ class IndexManager(BaseValidator):
         super().__init__(engine)
         self.created_indexes = []  # เก็บรายการ indexes ที่สร้างขึ้น
     
+    def validate(self, conn, staging_table: str, schema_name: str, columns: List, 
+                total_rows: int, chunk_size: int, log_func=None, **kwargs) -> List[Dict]:
+        """
+        Implementation ของ abstract method จาก BaseValidator
+        
+        สำหรับ IndexManager ไม่ได้ทำ validation โดยตรง แต่จัดการ indexes
+        Method นี้จึงไม่ใช้งาน
+        
+        Args:
+            conn: Database connection (ไม่ใช้)
+            staging_table: Staging table name (ไม่ใช้)
+            schema_name: Schema name (ไม่ใช้)
+            columns: List of columns (ไม่ใช้)
+            total_rows: Total number of rows (ไม่ใช้)
+            chunk_size: Chunk size (ไม่ใช้)
+            log_func: Logging function (ไม่ใช้)
+            **kwargs: Additional parameters (ไม่ใช้)
+            
+        Returns:
+            List[Dict]: Empty list (IndexManager ไม่ทำ validation)
+        """
+        # IndexManager ไม่ทำ validation โดยตรง
+        return []
+    
     def create_temp_indexes(self, staging_table: str, required_cols: Dict, 
                           schema_name: str, log_func=None) -> int:
         """
