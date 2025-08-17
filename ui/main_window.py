@@ -19,8 +19,8 @@ from ui.handlers.file_handler import FileHandler
 from ui.handlers.settings_handler import SettingsHandler
 
 # Import services
-from services.file_service import FileService
-from services.database_service import DatabaseService
+from services.orchestrators.file_orchestrator import FileOrchestrator
+from services.orchestrators.database_orchestrator import DatabaseOrchestrator
 from services.file import FileManagementService
 from config.database import DatabaseConfig
 from constants import AppConstants, DatabaseConstants
@@ -63,8 +63,8 @@ class MainWindow(ctk.CTkToplevel):
         self._attach_logging_to_gui()
 
         # สร้างบริการ
-        self.file_service = FileService(log_callback=logging.info)
-        self.db_service = DatabaseService()
+        self.file_service = FileOrchestrator(log_callback=logging.info)
+        self.db_service = DatabaseOrchestrator()
         self.file_mgmt_service = FileManagementService()
         
         # Initialize file handler

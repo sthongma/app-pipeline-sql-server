@@ -14,9 +14,9 @@ from dateutil import parser
 from constants import FileConstants, RegexPatterns, ErrorMessages
 
 
-def validate_file_path(file_path: str) -> tuple[bool, str]:
+def validate_file_path_detailed(file_path: str) -> tuple[bool, str]:
     """
-    ตรวจสอบความถูกต้องของ path ไฟล์
+    ตรวจสอบความถูกต้องของ path ไฟล์แบบละเอียด
     
     Args:
         file_path: ที่อยู่ไฟล์ที่ต้องการตรวจสอบ

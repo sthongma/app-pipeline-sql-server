@@ -24,7 +24,7 @@ File Service สำหรับ PIPELINE_SQLSERVER (รุ่นใหม่ท�
 from typing import Optional, Tuple
 import logging
 
-from .file import (
+from services.file import (
     FileReaderService,
     DataProcessorService,
     FileManagementService
@@ -33,7 +33,7 @@ from performance_optimizations import PerformanceOptimizer
 from config.settings import settings_manager
 
 
-class FileService:
+class FileOrchestrator:
     """
     บริการไฟล์หลัก (orchestrator)
     
@@ -299,10 +299,10 @@ class FileService:
             Tuple[bool, str]: (สำเร็จหรือไม่, ข้อความผลลัพธ์)
         """
         try:
-            from services.database_service import DatabaseService
+            from services.orchestrators.database_orchestrator import DatabaseOrchestrator
             
             # สร้าง database service
-            db_service = DatabaseService()
+            db_service = DatabaseOrchestrator()
             
             # ตรวจสอบการเชื่อมต่อ
             connection_ok, conn_msg = db_service.check_connection()

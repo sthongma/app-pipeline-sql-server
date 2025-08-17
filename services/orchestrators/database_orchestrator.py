@@ -8,15 +8,15 @@ import logging
 from typing import Any, Dict, Tuple
 
 from config.database import DatabaseConfig
-from .permission_checker_service import PermissionCheckerService
-from .database import (
+from services.utilities.permission_checker_service import PermissionCheckerService
+from services.database import (
     ConnectionService,
     SchemaService,
     DataValidationService,
     DataUploadService
 )
 
-class DatabaseService:
+class DatabaseOrchestrator:
     """
     บริการจัดการฐานข้อมูล SQL Server
     

@@ -131,6 +131,46 @@ def validate_database_config(config: Dict[str, Any]) -> Tuple[bool, str]:
         return False, f"เกิดข้อผิดพลาดในการตรวจสอบการตั้งค่า: {str(e)}"
 
 
+def validate_file_path(file_path: str) -> bool:
+    """
+    ตรวจสอบว่า file path ถูกต้องและมีไฟล์จริง
+    
+    Args:
+        file_path: เส้นทางไฟล์
+        
+    Returns:
+        bool: ถูกต้องหรือไม่
+    """
+    if not file_path:
+        return False
+    
+    try:
+        return os.path.exists(file_path) and os.path.isfile(file_path)
+    except Exception:
+        return False
+
+
+def validate_database_connection(engine) -> bool:
+    """
+    ตรวจสอบการเชื่อมต่อฐานข้อมูล
+    
+    Args:
+        engine: SQLAlchemy engine
+        
+    Returns:
+        bool: เชื่อมต่อได้หรือไม่
+    """
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
 def _is_supported_dtype(dtype_str: str) -> bool:
     """
     ตรวจสอบว่าชนิดข้อมูลรองรับหรือไม่ (internal function)

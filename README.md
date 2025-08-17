@@ -13,7 +13,7 @@
 🔧 **Centralized Configuration**: จัดการการตั้งค่าทั้งหมดจากที่เดียว  
 📊 **Type Safety**: ใช้ Type hints และ dataclass เพื่อความปลอดภัยของข้อมูล  
 🛠️ **Extensible**: ง่ายต่อการขยายและปรับปรุงโดย AI  
-🏗️ **Service-Oriented Architecture**: แยก business logic เป็น modular services ที่สามารถใช้งานแยกหรือรวมกันได้  
+🏗️ **Clean Orchestrator Architecture (v2.0)**: แยก business logic เป็น Orchestrator services และ modular services ที่มีโครงสร้างชัดเจน ไม่มี backward compatibility ที่ซับซ้อน  
 
 ## คุณสมบัติหลัก
 
@@ -30,12 +30,13 @@
 ✅ Error handling และ logging ที่ครบถ้วน  
 ✅ Performance optimization สำหรับไฟล์ขนาดใหญ่
 
-## โครงสร้างโปรเจกต์
+## โครงสร้างโปรเจกต์ (v2.0 Clean Architecture)
 
 ```
 PIPELINE_SQLSERVER/
 ├── __init__.py                      # Main package initialization
 ├── constants.py                     # ค่าคงที่ทั้งหมดของระบบ
+├── performance_optimizations.py     # Performance optimization classes
 ├── requirements.txt                 # Dependencies
 ├── pyproject.toml                   # Project configuration
 ├── install_requirements.bat         # สคริปต์ติดตั้งสำหรับ Windows
@@ -46,27 +47,46 @@ PIPELINE_SQLSERVER/
 ├── config/                          # การตั้งค่าและ configuration
 │   ├── __init__.py
 │   ├── database.py                  # การจัดการการเชื่อมต่อฐานข้อมูล
-│   └── settings.py                  # Settings manager แบบรวมศูนย์
+│   ├── settings.py                  # Settings manager แบบรวมศูนย์
+│   └── sql_config.json              # Configuration files
 │
-├── services/                        # Business logic และ services
+├── services/                        # Business logic และ services (v2.0)
 │   ├── __init__.py
-│   ├── database_service.py          # Orchestrator บริการฐานข้อมูล (รวม modular services)
-│   ├── file_service.py              # Orchestrator บริการไฟล์ (รวม modular services)
-│   ├── permission_checker_service.py# ตรวจสอบสิทธิ์ฐานข้อมูล
-│   ├── preload_service.py           # โหลดการตั้งค่า/ประเภทไฟล์ล่วงหน้า
+│   ├── orchestrators/               # High-level Orchestrator Services
+│   │   ├── __init__.py
+│   │   ├── file_orchestrator.py     # File operations orchestrator
+│   │   ├── database_orchestrator.py # Database operations orchestrator
+│   │   ├── config_orchestrator.py   # Configuration orchestrator
+│   │   ├── validation_orchestrator.py # Validation orchestrator
+│   │   └── utility_orchestrator.py  # Utility services orchestrator
 │   │
 │   ├── database/                    # Modular Database Services
 │   │   ├── __init__.py
 │   │   ├── connection_service.py    # จัดการการเชื่อมต่อฐานข้อมูล
 │   │   ├── schema_service.py        # จัดการ schema และ table
 │   │   ├── data_validation_service.py # ตรวจสอบข้อมูลใน staging
-│   │   └── data_upload_service.py   # อัปโหลดข้อมูลไปฐานข้อมูล
+│   │   ├── data_upload_service.py   # อัปโหลดข้อมูลไปฐานข้อมูล
+│   │   └── validation/              # Validation modules
+│   │       ├── __init__.py
+│   │       ├── base_validator.py    # Base validator class
+│   │       ├── main_validator.py    # Main validation logic
+│   │       ├── date_validator.py    # Date validation
+│   │       ├── numeric_validator.py # Numeric validation
+│   │       ├── string_validator.py  # String validation
+│   │       ├── boolean_validator.py # Boolean validation
+│   │       ├── schema_validator.py  # Schema validation
+│   │       └── index_manager.py     # Index management
 │   │
 │   ├── file/                        # Modular File Services
 │   │   ├── __init__.py
 │   │   ├── file_reader_service.py   # อ่านและตรวจจับไฟล์
 │   │   ├── data_processor_service.py# ประมวลผลและตรวจสอบข้อมูล
 │   │   └── file_management_service.py # จัดการไฟล์
+│   │
+│   ├── utilities/                   # Cross-cutting Utility Services
+│   │   ├── __init__.py
+│   │   ├── permission_checker_service.py # ตรวจสอบสิทธิ์ฐานข้อมูล
+│   │   └── preload_service.py       # โหลดการตั้งค่า/ประเภทไฟล์ล่วงหน้า
 │   │
 │   └── README.md                    # เอกสาร services โดยละเอียด
 │
@@ -96,7 +116,8 @@ PIPELINE_SQLSERVER/
 │   ├── logger.py                    # Logging helpers/handlers
 │   └── validators.py                # Validation functions
 │
-├── test_column_mapping.py           # ตัวอย่างไฟล์ทดสอบ
+├── test_clean_structure.py          # Clean structure test
+├── test_complete_structure.py       # Comprehensive structure test
 └── pipeline_gui_app.py              # GUI application entry point
 ```
 
@@ -233,38 +254,61 @@ python auto_process_cli.py --help
 
 ## สำหรับนักพัฒนา AI
 
-### โครงสร้างที่เป็นมิตรกับ AI
+### โครงสร้างที่เป็นมิตรกับ AI (v2.0 Clean Architecture)
 
 1. **Type Hints ครบถ้วน**: ทุกฟังก์ชันมี type annotations
 2. **Docstrings มาตรฐาน**: อธิบายพารามิเตอร์และ return values
 3. **Constants แยกออกมา**: ค่าคงที่ทั้งหมดอยู่ใน `constants.py`
 4. **Error Messages มาตรฐาน**: ข้อความแสดงข้อผิดพลาดแบบ centralized
 5. **Configuration Management**: จัดการการตั้งค่าแบบรวมศูนย์
+6. **Orchestrator Pattern**: โครงสร้างที่ชัดเจนด้วย orchestrator และ modular services
+7. **Clean Structure**: ไม่มี backward compatibility ที่ซับซ้อน มีมาตรฐานเดียวกันทั้งระบบ
 
-### การเพิ่มฟีเจอร์ใหม่
+### การเพิ่มฟีเจอร์ใหม่ (v2.0 Architecture)
 
 1. **เพิ่มประเภทไฟล์ใหม่**:
 ```python
-from config.settings import settings_manager
+from services.orchestrators.config_orchestrator import ConfigOrchestrator
 
-# เพิ่ม logic type ใหม่
-settings_manager.add_logic_type(
+# เพิ่ม logic type ใหม่ผ่าน orchestrator
+config_orchestrator = ConfigOrchestrator()
+config_orchestrator.add_file_type_configuration(
     "new_data_type",
     column_mapping={"OldCol": "new_col"},
     dtype_mapping={"OldCol": "NVARCHAR(255)"}
 )
 ```
 
-2. **เพิ่ม Validation Rule**:
+2. **เพิ่ม Validation Rule ใหม่**:
 ```python
-from utils.validators import validate_dataframe
+# services/database/validation/custom_validator.py
+from .base_validator import BaseValidator
 
-def custom_validation(df, logic_type):
-    # Custom validation logic
-    return True, "Valid"
+class CustomValidator(BaseValidator):
+    def validate(self, df):
+        # Custom validation logic
+        return []  # Return list of errors
+        
+# ลงทะเบียนใน ValidationOrchestrator
+from services.orchestrators.validation_orchestrator import ValidationOrchestrator
+validation_orchestrator = ValidationOrchestrator()
+validation_orchestrator.register_validator("custom", CustomValidator)
 ```
 
-3. **เพิ่ม UI Component**:
+3. **เพิ่ม Orchestrator ใหม่**:
+```python
+# services/orchestrators/new_orchestrator.py
+class NewOrchestrator:
+    def __init__(self):
+        # Initialize required modular services
+        pass
+    
+    def perform_operation(self):
+        # Coordinate multiple modular services
+        pass
+```
+
+4. **เพิ่ม UI Component**:
 ```python
 # ui/components/new_component.py
 import customtkinter as ctk

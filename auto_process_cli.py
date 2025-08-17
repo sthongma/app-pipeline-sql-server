@@ -17,10 +17,10 @@ from datetime import datetime
 # Import services and handlers
 from ui.handlers.file_handler import FileHandler
 from ui.handlers.settings_handler import SettingsHandler
-from services.file_service import FileService
-from services.database_service import DatabaseService
+from services.orchestrators.file_orchestrator import FileOrchestrator
+from services.orchestrators.database_orchestrator import DatabaseOrchestrator
 from services.file import FileManagementService
-from services.preload_service import PreloadService
+from services.utilities.preload_service import PreloadService
 from config.database import DatabaseConfig
 from constants import PathConstants
 import logging
@@ -121,8 +121,8 @@ class AutoProcessCLI:
         self.dtype_settings = self.settings_handler.load_dtype_settings()
         
         # Create services (same as GUI)
-        self.file_service = FileService(log_callback=self.log)
-        self.db_service = DatabaseService()
+        self.file_service = FileOrchestrator(log_callback=self.log)
+        self.db_service = DatabaseOrchestrator()
         self.file_mgmt_service = FileManagementService()
         self.preload_service = PreloadService()
         

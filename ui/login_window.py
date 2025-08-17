@@ -2,10 +2,10 @@ import customtkinter as ctk
 from tkinter import messagebox
 import json
 import os
-from services.database_service import DatabaseService
+from services.orchestrators.database_orchestrator import DatabaseOrchestrator
 from ui.main_window import MainWindow
 from ui.loading_dialog import LoadingDialog
-from services.preload_service import PreloadService
+from services.utilities.preload_service import PreloadService
 from constants import PathConstants, AppConstants
 import logging
 
@@ -22,7 +22,7 @@ class LoginWindow(ctk.CTk):
         self._base_pady = 10
         
         # สร้างบริการ
-        self.db_service = DatabaseService()
+        self.db_service = DatabaseOrchestrator()
         self.preload_service = PreloadService()
         
         # สร้าง UI
