@@ -12,6 +12,8 @@ from typing import Dict
 import pandas as pd
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import DBAPIError
+
+from config.json_manager import load_dtype_settings, load_column_settings
 from sqlalchemy.types import (
     DateTime,
     Integer as SA_Integer,
@@ -54,10 +56,9 @@ class DataUploadService:
         self._load_dtype_settings()
     
     def _load_dtype_settings(self):
-        """โหลดการตั้งค่าประเภทข้อมูลจากไฟล์"""
+        """โหลดการตั้งค่าประเภทข้อมูลจากไฟล์ใช้ JSON Manager"""
         try:
-            with open('config/dtype_settings.json', 'r', encoding='utf-8') as f:
-                self.dtype_settings = json.load(f)
+            self.dtype_settings = load_dtype_settings()
         except Exception as e:
             self.logger.warning(f"ไม่สามารถโหลด dtype_settings ได้: {e}")
             self.dtype_settings = {}
@@ -93,8 +94,7 @@ class DataUploadService:
             
             table_name = None
             try:
-                with open('config/column_settings.json', 'r', encoding='utf-8') as f:
-                    col_config = json.load(f)
+                col_config = load_column_settings()
                 table_name = col_config.get("__table_names__", {}).get(logic_type)
             except Exception:
                 table_name = None

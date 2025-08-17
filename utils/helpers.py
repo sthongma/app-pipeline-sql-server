@@ -14,31 +14,6 @@ from dateutil import parser
 from constants import FileConstants, RegexPatterns, ErrorMessages
 
 
-def validate_file_path_detailed(file_path: str) -> tuple[bool, str]:
-    """
-    ตรวจสอบความถูกต้องของ path ไฟล์แบบละเอียด
-    
-    Args:
-        file_path: ที่อยู่ไฟล์ที่ต้องการตรวจสอบ
-        
-    Returns:
-        tuple[bool, str]: (สำเร็จหรือไม่, ข้อความ)
-    """
-    try:
-        if not file_path:
-            return False, "File path not specified"
-            
-        if not os.path.exists(file_path):
-            return False, f"{ErrorMessages.FILE_NOT_FOUND}: {file_path}"
-            
-        if not os.path.isfile(file_path):
-            return False, "The specified path is not a file"
-            
-        return True, "File is valid"
-        
-    except Exception as e:
-        return False, f"Error validating file: {str(e)}"
-
 
 def normalize_column_name(column_name: Union[str, Any]) -> str:
     """
@@ -240,20 +215,5 @@ def safe_json_save(data: dict, file_path: str) -> bool:
         return False
 
 
-def get_file_size_mb(file_path: str) -> float:
-    """
-    คำนวณขนาดไฟล์เป็น MB
-    
-    Args:
-        file_path: ที่อยู่ไฟล์
-        
-    Returns:
-        float: ขนาดไฟล์เป็น MB
-    """
-    try:
-        size_bytes = os.path.getsize(file_path)
-        return size_bytes / (1024 * 1024)
-    except Exception:
-        return 0.0
 
 

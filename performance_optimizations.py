@@ -1,46 +1,54 @@
 """
-Performance Optimizations สำหรับ PIPELINE_SQLSERVER
+Performance optimization utilities for PIPELINE_SQLSERVER.
 
-การปรับปรุง Performance สำหรับการประมวลผลไฟล์ใหญ่:
-1. การอ่านไฟล์แบบ Chunking
-2. การประมวลผลแบบ Parallel Processing
-3. การจัดการ Memory ที่ดีขึ้น
-4. การแสดง Progress ที่ละเอียดขึ้น
-5. การยกเลิกการทำงานได้
+Provides optimized file processing capabilities:
+1. Chunked file reading for large datasets
+2. Parallel processing support
+3. Enhanced memory management
+4. Detailed progress tracking
+5. Cancellation support
 """
 
-import os
 import gc
+import logging
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple, Callable, Any
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import pandas as pd
-import logging
+
 
 class PerformanceOptimizer:
-    """คลาสสำหรับการปรับปรุง Performance"""
+    """Handles performance optimization for file processing operations."""
     
-    def __init__(self, log_callback: Optional[Callable] = None):
+    def __init__(self, log_callback: Optional[Callable[[str], None]] = None) -> None:
+        """
+        Initialize performance optimizer.
+        
+        Args:
+            log_callback: Callback function for logging messages
+        """
         self.log_callback = log_callback or logging.info
         self.cancellation_token = threading.Event()
-        self.chunk_size = 10000  # ขนาด chunk สำหรับการอ่านไฟล์
-        self.max_workers = min(4, os.cpu_count() or 1)  # จำนวน worker threads
+        self.chunk_size = 10000  # Default chunk size for file reading
+        self.max_workers = min(4, os.cpu_count() or 1)  # Number of worker threads
         
-    def set_cancellation_token(self, token: threading.Event):
-        """ตั้งค่า cancellation token สำหรับการยกเลิกการทำงาน"""
+    def set_cancellation_token(self, token: threading.Event) -> None:
+        """Set cancellation token for operation cancellation."""
         self.cancellation_token = token
         
     def read_large_file_chunked(self, file_path: str, file_type: str = 'excel') -> Tuple[bool, pd.DataFrame]:
         """
-        อ่านไฟล์ใหญ่แบบ chunked เพื่อประหยัด memory
+        Read large files using chunked approach to save memory.
         
         Args:
-            file_path: ที่อยู่ไฟล์
-            file_type: ประเภทไฟล์ ('excel', 'excel_xls', หรือ 'csv')
+            file_path: Path to the file
+            file_type: File type ('excel', 'excel_xls', or 'csv')
             
         Returns:
-            Tuple[bool, pd.DataFrame]: (สำเร็จหรือไม่, DataFrame)
+            Tuple[bool, pd.DataFrame]: (success status, resulting DataFrame)
         """
         try:
             file_size = os.path.getsize(file_path)
@@ -48,7 +56,7 @@ class PerformanceOptimizer:
             
             self.log_callback(f"📂 Read File: {os.path.basename(file_path)} ({file_size_mb:.1f} MB)")
             
-            if file_size_mb > 100:  # ไฟล์ใหญ่กว่า 100MB
+            if file_size_mb > 100:  # Files larger than 100MB
                 self.log_callback(f"⚠️ Large File, Use Chunked Reading")
                 return self._read_large_file_chunked(file_path, file_type)
             else:
@@ -60,7 +68,7 @@ class PerformanceOptimizer:
             return False, pd.DataFrame()
     
     def _read_small_file(self, file_path: str, file_type: str) -> Tuple[bool, pd.DataFrame]:
-        """อ่านไฟล์ขนาดเล็กแบบปกติ"""
+        """Read small files using standard approach."""
         try:
             if file_type == 'csv':
                 df = pd.read_csv(file_path, header=0, encoding='utf-8')
@@ -77,145 +85,29 @@ class PerformanceOptimizer:
             return False, pd.DataFrame()
     
     def _read_large_file_chunked(self, file_path: str, file_type: str) -> Tuple[bool, pd.DataFrame]:
-        """อ่านไฟล์ใหญ่แบบ chunked"""
+        """Read large files using chunked approach."""
         try:
             chunks = []
             total_rows = 0
             
             if file_type == 'csv':
-                # นับจำนวนแถวทั้งหมดก่อน
-                # พยายามใช้ UTF-8 ก่อน แล้ว fallback เป็น cp874/latin1 สำหรับไฟล์ที่เป็นภาษาไทยเก่าหรือปนรหัส
-                try:
-                    total_rows = sum(1 for _ in open(file_path, 'r', encoding='utf-8')) - 1
-                    encoding_used = 'utf-8'
-                except UnicodeDecodeError:
-                    try:
-                        total_rows = sum(1 for _ in open(file_path, 'r', encoding='cp874')) - 1
-                        encoding_used = 'cp874'
-                    except UnicodeDecodeError:
-                        total_rows = sum(1 for _ in open(file_path, 'r', encoding='latin1')) - 1
-                        encoding_used = 'latin1'
+                total_rows, encoding_used = self._get_csv_info(file_path)
                 self.log_callback(f"📊 Total Rows: {total_rows:,} (encoding={encoding_used})")
                 
-                # อ่านแบบ chunk
-                import warnings
-                with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", category=pd.errors.DtypeWarning)
-                    chunk_reader = pd.read_csv(file_path, header=0, encoding=encoding_used, chunksize=self.chunk_size, low_memory=False)
-                
-                # แจ้งเตือนเรื่อง mixed data types ในรูปแบบที่เข้าใจง่าย
-                self.log_callback("💡 Note: File contains mixed data types in some columns - this is normal and will be handled automatically")
-                
-                for i, chunk in enumerate(chunk_reader):
-                    if self.cancellation_token.is_set():
-                        self.log_callback("❌ Work Cancelled")
-                        return False, pd.DataFrame()
-                    
-                    chunks.append(chunk)
-                    processed_rows = (i + 1) * self.chunk_size
-                    progress = min(processed_rows / total_rows, 1.0)
-                    
-                    self.log_callback(f"📖 Read Chunk {i+1}: {len(chunk):,} rows ({progress*100:.1f}%)")
-                    
-                    # ปล่อย memory ทุก 10 chunks
-                    if (i + 1) % 10 == 0:
-                        gc.collect()
+                # Read in chunks with proper encoding
+                chunks = self._read_csv_chunks(file_path, encoding_used)
                         
-            elif file_type == 'excel_xls':  # .xls file
-                # สำหรับ .xls ไฟล์ใหญ่ ใช้ xlrd
-                import xlrd
-                
-                workbook = xlrd.open_workbook(file_path)
-                worksheet = workbook.sheet_by_index(0)
-                
-                # อ่าน header
-                headers = []
-                for col_idx in range(worksheet.ncols):
-                    cell_value = worksheet.cell_value(0, col_idx)
-                    headers.append(cell_value)
-                
-                # อ่านข้อมูลแบบ chunk
-                chunk_data = []
-                for row_idx in range(1, worksheet.nrows):
-                    if self.cancellation_token.is_set():
-                        self.log_callback("❌ Work Cancelled")
-                        return False, pd.DataFrame()
-                    
-                    row_data = []
-                    for col_idx in range(worksheet.ncols):
-                        cell_value = worksheet.cell_value(row_idx, col_idx)
-                        row_data.append(cell_value)
-                    
-                    chunk_data.append(row_data)
-                    
-                    # สร้าง chunk ทุก chunk_size แถว
-                    if len(chunk_data) >= self.chunk_size:
-                        chunk_df = pd.DataFrame(chunk_data, columns=headers)
-                        chunks.append(chunk_df)
-                        chunk_data = []
-                        
-                        self.log_callback(f"📖 Read Chunk {len(chunks)}: {len(chunk_df):,} rows")
-                        
-                        # ปล่อย memory
-                        gc.collect()
-                
-                # เพิ่มข้อมูลที่เหลือสำหรับ .xls
-                if chunk_data:
-                    chunk_df = pd.DataFrame(chunk_data, columns=headers)
-                    chunks.append(chunk_df)
+            elif file_type == 'excel_xls':
+                chunks = self._read_xls_chunks(file_path)
                         
             else:  # Excel .xlsx file
-                # สำหรับ Excel ไฟล์ใหญ่ ให้อ่านแบบ chunk ด้วย openpyxl
-                import openpyxl
-                from openpyxl.utils import get_column_letter
-                
-                workbook = openpyxl.load_workbook(file_path, read_only=True)
-                worksheet = workbook.active
-                
-                # อ่าน header
-                headers = []
-                for cell in worksheet[1]:
-                    headers.append(cell.value)
-                
-                # อ่านข้อมูลแบบ chunk
-                chunk_data = []
-                for row_idx in range(2, worksheet.max_row + 1):
-                    if self.cancellation_token.is_set():
-                        self.log_callback("❌ Work Cancelled")
-                        workbook.close()
-                        return False, pd.DataFrame()
-                    
-                    row_data = []
-                    for col_idx in range(1, len(headers) + 1):
-                        cell = worksheet.cell(row=row_idx, column=col_idx)
-                        row_data.append(cell.value)
-                    
-                    chunk_data.append(row_data)
-                    
-                    # สร้าง chunk ทุก chunk_size แถว
-                    if len(chunk_data) >= self.chunk_size:
-                        chunk_df = pd.DataFrame(chunk_data, columns=headers)
-                        chunks.append(chunk_df)
-                        chunk_data = []
-                        
-                        self.log_callback(f"📖 Read Chunk {len(chunks)}: {len(chunk_df):,} rows")
-                        
-                        # ปล่อย memory
-                        gc.collect()
-                
-                # เพิ่มข้อมูลที่เหลือ
-                if chunk_data:
-                    chunk_df = pd.DataFrame(chunk_data, columns=headers)
-                    chunks.append(chunk_df)
-                
-                if file_type != 'excel_xls':
-                    workbook.close()
+                chunks = self._read_xlsx_chunks(file_path)
             
-            # รวม chunks
+            # Combine chunks
             if chunks:
                 self.log_callback("🔄 Combining chunks...")
                 df = pd.concat(chunks, ignore_index=True)
-                del chunks  # ปล่อย memory
+                del chunks  # Release memory
                 gc.collect()
                 
                 self.log_callback(f"✅ Read File Success - {len(df):,} rows, {len(df.columns)} columns")
@@ -228,16 +120,133 @@ class PerformanceOptimizer:
             self.log_callback(f"❌ Error Reading File: {e}")
             return False, pd.DataFrame()
     
+    def _get_csv_info(self, file_path: str) -> Tuple[int, str]:
+        """Get CSV file information including encoding and row count."""
+        # Try UTF-8 first, then fallback to cp874/latin1 for legacy files
+        for encoding in ['utf-8', 'cp874', 'latin1']:
+            try:
+                total_rows = sum(1 for _ in open(file_path, 'r', encoding=encoding)) - 1
+                return total_rows, encoding
+            except UnicodeDecodeError:
+                continue
+        return 0, 'utf-8'  # Default fallback
+    
+    def _read_csv_chunks(self, file_path: str, encoding: str) -> List[pd.DataFrame]:
+        """Read CSV file in chunks."""
+        chunks = []
+        
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=pd.errors.DtypeWarning)
+            chunk_reader = pd.read_csv(file_path, header=0, encoding=encoding, 
+                                     chunksize=self.chunk_size, low_memory=False)
+        
+        self.log_callback("💡 Note: File contains mixed data types in some columns - this is normal")
+        
+        for i, chunk in enumerate(chunk_reader):
+            if self.cancellation_token.is_set():
+                self.log_callback("❌ Work Cancelled")
+                break
+            
+            chunks.append(chunk)
+            self.log_callback(f"📖 Read Chunk {i+1}: {len(chunk):,} rows")
+            
+            # Release memory every 10 chunks
+            if (i + 1) % 10 == 0:
+                gc.collect()
+        
+        return chunks
+    
+    def _read_xls_chunks(self, file_path: str) -> List[pd.DataFrame]:
+        """Read XLS file in chunks."""
+        import xlrd
+        
+        chunks = []
+        workbook = xlrd.open_workbook(file_path)
+        worksheet = workbook.sheet_by_index(0)
+        
+        # Read headers
+        headers = [worksheet.cell_value(0, col_idx) for col_idx in range(worksheet.ncols)]
+        
+        # Read data in chunks
+        chunk_data = []
+        for row_idx in range(1, worksheet.nrows):
+            if self.cancellation_token.is_set():
+                self.log_callback("❌ Work Cancelled")
+                break
+            
+            row_data = [worksheet.cell_value(row_idx, col_idx) for col_idx in range(worksheet.ncols)]
+            chunk_data.append(row_data)
+            
+            # Create chunk every chunk_size rows
+            if len(chunk_data) >= self.chunk_size:
+                chunk_df = pd.DataFrame(chunk_data, columns=headers)
+                chunks.append(chunk_df)
+                chunk_data = []
+                
+                self.log_callback(f"📖 Read Chunk {len(chunks)}: {len(chunk_df):,} rows")
+                gc.collect()
+        
+        # Add remaining data
+        if chunk_data:
+            chunk_df = pd.DataFrame(chunk_data, columns=headers)
+            chunks.append(chunk_df)
+        
+        return chunks
+    
+    def _read_xlsx_chunks(self, file_path: str) -> List[pd.DataFrame]:
+        """Read XLSX file in chunks."""
+        import openpyxl
+        
+        chunks = []
+        workbook = openpyxl.load_workbook(file_path, read_only=True)
+        worksheet = workbook.active
+        
+        # Read headers
+        headers = [cell.value for cell in worksheet[1]]
+        
+        # Read data in chunks
+        chunk_data = []
+        for row_idx in range(2, worksheet.max_row + 1):
+            if self.cancellation_token.is_set():
+                self.log_callback("❌ Work Cancelled")
+                workbook.close()
+                break
+            
+            row_data = []
+            for col_idx in range(1, len(headers) + 1):
+                cell = worksheet.cell(row=row_idx, column=col_idx)
+                row_data.append(cell.value)
+            
+            chunk_data.append(row_data)
+            
+            # Create chunk every chunk_size rows
+            if len(chunk_data) >= self.chunk_size:
+                chunk_df = pd.DataFrame(chunk_data, columns=headers)
+                chunks.append(chunk_df)
+                chunk_data = []
+                
+                self.log_callback(f"📖 Read Chunk {len(chunks)}: {len(chunk_df):,} rows")
+                gc.collect()
+        
+        # Add remaining data
+        if chunk_data:
+            chunk_df = pd.DataFrame(chunk_data, columns=headers)
+            chunks.append(chunk_df)
+        
+        workbook.close()
+        return chunks
+    
     def process_dataframe_in_chunks(self, df: pd.DataFrame, chunk_size: int = 5000) -> List[pd.DataFrame]:
         """
-        แบ่ง DataFrame เป็น chunks สำหรับการประมวลผล
+        Split DataFrame into chunks for processing.
         
         Args:
-            df: DataFrame ที่ต้องการแบ่ง
-            chunk_size: ขนาดของแต่ละ chunk
+            df: DataFrame to split
+            chunk_size: Size of each chunk
             
         Returns:
-            List[pd.DataFrame]: รายการ DataFrame chunks
+            List[pd.DataFrame]: List of DataFrame chunks
         """
         chunks = []
         total_rows = len(df)
@@ -255,28 +264,28 @@ class PerformanceOptimizer:
     def parallel_process_files(self, file_paths: List[str], process_func: Callable, 
                              progress_callback: Optional[Callable] = None) -> List[Tuple[bool, Any]]:
         """
-        ประมวลผลไฟล์หลายไฟล์แบบ parallel
+        Process multiple files in parallel.
         
         Args:
-            file_paths: รายการที่อยู่ไฟล์
-            process_func: ฟังก์ชันสำหรับประมวลผลไฟล์
-            progress_callback: callback สำหรับแสดงความคืบหน้า
+            file_paths: List of file paths
+            process_func: Function to process each file
+            progress_callback: Callback for progress updates
             
         Returns:
-            List[Tuple[bool, Any]]: ผลลัพธ์การประมวลผล
+            List[Tuple[bool, Any]]: Processing results
         """
         results = []
         completed = 0
         total_files = len(file_paths)
         
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # ส่งงานไปยัง executor
+            # Submit jobs to executor
             future_to_file = {
                 executor.submit(process_func, file_path): file_path 
                 for file_path in file_paths
             }
             
-            # รอผลลัพธ์
+            # Wait for results
             for future in as_completed(future_to_file):
                 if self.cancellation_token.is_set():
                     self.log_callback("❌ Work Cancelled")
@@ -299,28 +308,28 @@ class PerformanceOptimizer:
     
     def optimize_memory_usage(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        ปรับปรุงการใช้ memory ของ DataFrame
+        Optimize DataFrame memory usage.
         
         Args:
-            df: DataFrame ที่ต้องการปรับปรุง
+            df: DataFrame to optimize
             
         Returns:
-            pd.DataFrame: DataFrame ที่ปรับปรุงแล้ว
+            pd.DataFrame: Optimized DataFrame
         """
         try:
             initial_memory = df.memory_usage(deep=True).sum() / 1024 / 1024  # MB
             self.log_callback(f"💾 Memory Start: {initial_memory:.2f} MB")
             
-            # ลดขนาดของ numeric columns
+            # Downcast numeric columns
             for col in df.select_dtypes(include=['int64']).columns:
                 df[col] = pd.to_numeric(df[col], downcast='integer')
             
             for col in df.select_dtypes(include=['float64']).columns:
                 df[col] = pd.to_numeric(df[col], downcast='float')
             
-            # ลดขนาดของ object columns
+            # Optimize object columns
             for col in df.select_dtypes(include=['object']).columns:
-                if df[col].nunique() / len(df) < 0.5:  # ถ้า unique values น้อยกว่า 50%
+                if df[col].nunique() / len(df) < 0.5:  # If unique values < 50%
                     df[col] = df[col].astype('category')
             
             final_memory = df.memory_usage(deep=True).sum() / 1024 / 1024  # MB
@@ -336,19 +345,19 @@ class PerformanceOptimizer:
     
     def create_progress_tracker(self, total_items: int, description: str = "") -> Callable:
         """
-        สร้าง progress tracker สำหรับการติดตามความคืบหน้า
+        Create progress tracker for monitoring task progress.
         
         Args:
-            total_items: จำนวนรายการทั้งหมด
-            description: คำอธิบายการทำงาน
+            total_items: Total number of items to process
+            description: Description of the operation
             
         Returns:
-            Callable: ฟังก์ชันสำหรับอัปเดตความคืบหน้า
+            Callable: Function to update progress
         """
         start_time = time.time()
         completed = 0
         
-        def update_progress(items_completed: int = 1, custom_message: str = ""):
+        def update_progress(items_completed: int = 1, custom_message: str = "") -> Tuple[float, str]:
             nonlocal completed
             completed += items_completed
             
@@ -361,7 +370,7 @@ class PerformanceOptimizer:
                     remaining_time = estimated_total - elapsed_time
                     
                     message = custom_message or f"{description}: {completed}/{total_items}"
-                    time_info = f" (เหลือ {remaining_time:.1f}s)"
+                    time_info = f" (remaining {remaining_time:.1f}s)"
                     
                     return progress, message + time_info
                 else:
@@ -371,42 +380,48 @@ class PerformanceOptimizer:
         
         return update_progress
     
-    def cleanup_memory(self):
-        """ทำความสะอาด memory"""
+    def cleanup_memory(self) -> None:
+        """Clean up memory by forcing garbage collection."""
         gc.collect()
         self.log_callback("🧹 Cleaned up memory")
 
 
 class LargeFileProcessor:
-    """คลาสสำหรับการประมวลผลไฟล์ใหญ่โดยเฉพาะ"""
+    """Specialized processor for handling large files."""
     
-    def __init__(self, log_callback: Optional[Callable] = None):
+    def __init__(self, log_callback: Optional[Callable[[str], None]] = None) -> None:
+        """
+        Initialize large file processor.
+        
+        Args:
+            log_callback: Callback function for logging messages
+        """
         self.optimizer = PerformanceOptimizer(log_callback)
         self.log_callback = log_callback or logging.info
         
     def process_large_file(self, file_path: str, file_type: str, 
-                          processing_steps: List[Callable]) -> Tuple[bool, pd.DataFrame]:
+                          processing_steps: List[Callable[[pd.DataFrame], pd.DataFrame]]) -> Tuple[bool, pd.DataFrame]:
         """
-        ประมวลผลไฟล์ใหญ่ด้วยขั้นตอนที่กำหนด
+        Process large file with defined processing steps.
         
         Args:
-            file_path: ที่อยู่ไฟล์
-            file_type: ประเภทไฟล์
-            processing_steps: รายการฟังก์ชันสำหรับประมวลผล
+            file_path: Path to the file
+            file_type: Type of the file
+            processing_steps: List of processing functions
             
         Returns:
-            Tuple[bool, pd.DataFrame]: (สำเร็จหรือไม่, DataFrame ที่ประมวลผลแล้ว)
+            Tuple[bool, pd.DataFrame]: (success status, processed DataFrame)
         """
         try:
-            # ขั้นตอนที่ 1: อ่านไฟล์
+            # Step 1: Read file
             success, df = self.optimizer.read_large_file_chunked(file_path, file_type)
             if not success:
                 return False, pd.DataFrame()
             
-            # ขั้นตอนที่ 2: ปรับปรุง memory
+            # Step 2: Optimize memory
             df = self.optimizer.optimize_memory_usage(df)
             
-            # ขั้นตอนที่ 3: ประมวลผลตามขั้นตอนที่กำหนด
+            # Step 3: Process with defined steps
             for i, step_func in enumerate(processing_steps):
                 if self.optimizer.cancellation_token.is_set():
                     self.log_callback("❌ Work Cancelled")
@@ -415,7 +430,7 @@ class LargeFileProcessor:
                 self.log_callback(f"🔄 Step {i+1}/{len(processing_steps)}: {step_func.__name__}")
                 df = step_func(df)
                 
-                # ทำความสะอาด memory หลังแต่ละขั้นตอน
+                # Clean memory after each step
                 self.optimizer.cleanup_memory()
             
             return True, df
@@ -424,16 +439,16 @@ class LargeFileProcessor:
             self.log_callback(f"❌ Error Processing File: {e}")
             return False, pd.DataFrame()
     
-    def set_cancellation_token(self, token: threading.Event):
-        """ตั้งค่า cancellation token"""
+    def set_cancellation_token(self, token: threading.Event) -> None:
+        """Set cancellation token for operation cancellation."""
         self.optimizer.set_cancellation_token(token)
 
 
-# ฟังก์ชันช่วยเหลือสำหรับการประมวลผล
-def create_chunk_processor(chunk_size: int = 5000):
-    """สร้างฟังก์ชันสำหรับประมวลผลข้อมูลแบบ chunk"""
-    def process_in_chunks(df: pd.DataFrame, process_func: Callable) -> pd.DataFrame:
-        """ประมวลผล DataFrame แบบ chunk"""
+# Helper functions for processing
+def create_chunk_processor(chunk_size: int = 5000) -> Callable[[pd.DataFrame, Callable], pd.DataFrame]:
+    """Create function for chunk-based data processing."""
+    def process_in_chunks(df: pd.DataFrame, process_func: Callable[[pd.DataFrame], pd.DataFrame]) -> pd.DataFrame:
+        """Process DataFrame in chunks."""
         results = []
         total_chunks = (len(df) + chunk_size - 1) // chunk_size
         
@@ -442,7 +457,7 @@ def create_chunk_processor(chunk_size: int = 5000):
             processed_chunk = process_func(chunk)
             results.append(processed_chunk)
             
-            # แสดงความคืบหน้า
+            # Show progress
             chunk_num = (i // chunk_size) + 1
             logging.info(f"📊 Processing chunk {chunk_num}/{total_chunks}")
         
@@ -453,20 +468,20 @@ def create_chunk_processor(chunk_size: int = 5000):
 
 def estimate_processing_time(file_size_mb: float, processing_type: str = 'standard') -> float:
     """
-    ประมาณเวลาการประมวลผล
+    Estimate processing time based on file size.
     
     Args:
-        file_size_mb: ขนาดไฟล์ใน MB
-        processing_type: ประเภทการประมวลผล
+        file_size_mb: File size in MB
+        processing_type: Type of processing
         
     Returns:
-        float: เวลาที่ประมาณการ (วินาที)
+        float: Estimated time in seconds
     """
-    # อัตราการประมวลผลโดยประมาณ (MB/วินาที)
+    # Approximate processing rates (MB/second)
     rates = {
-        'fast': 10.0,      # 10 MB/วินาที
-        'standard': 5.0,   # 5 MB/วินาที
-        'slow': 2.0        # 2 MB/วินาที
+        'fast': 10.0,      # 10 MB/second
+        'standard': 5.0,   # 5 MB/second
+        'slow': 2.0        # 2 MB/second
     }
     
     rate = rates.get(processing_type, rates['standard'])
@@ -476,7 +491,7 @@ def estimate_processing_time(file_size_mb: float, processing_type: str = 'standa
 
 
 def format_file_size(size_bytes: int) -> str:
-    """แปลงขนาดไฟล์เป็นรูปแบบที่อ่านง่าย"""
+    """Convert file size to human-readable format."""
     if size_bytes == 0:
         return "0 B"
     
@@ -490,12 +505,12 @@ def format_file_size(size_bytes: int) -> str:
 
 
 def format_time(seconds: float) -> str:
-    """แปลงเวลาเป็นรูปแบบที่อ่านง่าย"""
+    """Convert time to human-readable format."""
     if seconds < 60:
-        return f"{seconds:.1f} วินาที"
+        return f"{seconds:.1f} seconds"
     elif seconds < 3600:
         minutes = seconds / 60
-        return f"{minutes:.1f} นาที"
+        return f"{minutes:.1f} minutes"
     else:
         hours = seconds / 3600
-        return f"{hours:.1f} ชั่วโมง" 
+        return f"{hours:.1f} hours"

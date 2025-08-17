@@ -1,77 +1,104 @@
-"""Settings Operation Handlers"""
-import os
-import json
+"""Settings Operation Handlers - Modernized with JSON Manager"""
+from config.json_manager import (
+    json_manager,
+    load_column_settings as load_column_config,
+    save_column_settings as save_column_config,
+    load_dtype_settings as load_dtype_config,
+    save_dtype_settings as save_dtype_config,
+    get_last_path,
+    set_last_path
+)
 
 
 class SettingsHandler:
+    """
+    Modernized Settings Handler using centralized JSON Manager.
+    
+    Provides backward compatibility while using the new unified system.
+    """
+    
     def __init__(self, settings_file, log_callback):
         """
         Initialize Settings Handler
         
         Args:
-            settings_file: Path to settings file
+            settings_file: Path to settings file (kept for compatibility)
             log_callback: Function to call for logging
         """
-        self.settings_file = settings_file
+        self.settings_file = settings_file  # Kept for compatibility
         self.log = log_callback
     
     def load_column_settings(self):
-        """โหลดการตั้งค่าคอลัมน์จากไฟล์"""
+        """Load column settings using JSON Manager."""
         try:
-            if os.path.exists(self.settings_file):
-                with open(self.settings_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+            settings = load_column_config()
+            return settings
         except Exception as e:
-            self.log(f"ไม่สามารถโหลดการตั้งค่าคอลัมน์ได้: {e}")
-        return {}
+            self.log(f"Cannot load column settings: {e}")
+            return {}
     
     def save_column_settings(self, column_settings):
-        """บันทึกการตั้งค่าคอลัมน์ลงไฟล์"""
+        """Save column settings using JSON Manager."""
         try:
-            os.makedirs(os.path.dirname(self.settings_file), exist_ok=True)
-            with open(self.settings_file, 'w', encoding='utf-8') as f:
-                json.dump(column_settings, f, ensure_ascii=False, indent=2)
-            self.log("บันทึกการตั้งค่าคอลัมน์เรียบร้อย")
+            success = save_column_config(column_settings)
+            if success:
+                self.log("Column settings saved successfully")
+            else:
+                self.log("Failed to save column settings")
         except Exception as e:
-            self.log(f"ไม่สามารถบันทึกการตั้งค่าคอลัมน์ได้: {e}")
+            self.log(f"Cannot save column settings: {e}")
     
     def load_dtype_settings(self):
-        """โหลดการตั้งค่าประเภทข้อมูลจากไฟล์ รวมทั้ง _date_format"""
+        """Load data type settings using JSON Manager."""
         try:
-            dtype_file = "config/dtype_settings.json"
-            if os.path.exists(dtype_file):
-                with open(dtype_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+            settings = load_dtype_config()
+            return settings
         except Exception as e:
-            self.log(f"ไม่สามารถโหลดการตั้งค่าประเภทข้อมูลได้: {e}")
-        return {}
+            self.log(f"Cannot load data type settings: {e}")
+            return {}
     
     def save_dtype_settings(self, dtype_settings):
-        """บันทึกการตั้งค่าประเภทข้อมูลลงไฟล์ รวมทั้ง _date_format ของแต่ละประเภทไฟล์"""
+        """Save data type settings using JSON Manager."""
         try:
-            dtype_file = "config/dtype_settings.json"
-            os.makedirs(os.path.dirname(dtype_file), exist_ok=True)
-            
-            with open(dtype_file, 'w', encoding='utf-8') as f:
-                json.dump(dtype_settings, f, ensure_ascii=False, indent=2)
-            self.log("บันทึกการตั้งค่าประเภทข้อมูลเรียบร้อย")
+            success = save_dtype_config(dtype_settings)
+            if success:
+                self.log("Data type settings saved successfully")
+            else:
+                self.log("Failed to save data type settings")
         except Exception as e:
-            self.log(f"ไม่สามารถบันทึกการตั้งค่าประเภทข้อมูลได้: {e}")
+            self.log(f"Cannot save data type settings: {e}")
     
     def load_last_path(self):
-        """โหลด path ล่าสุดจากไฟล์"""
+        """Load last search path using JSON Manager."""
         try:
-            with open('config/last_path.json', 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return data.get('last_path', None)
-        except Exception:
+            return get_last_path()
+        except Exception as e:
+            self.log(f"Cannot load last path: {e}")
             return None
     
     def save_last_path(self, path):
-        """บันทึก path ล่าสุดลงไฟล์"""
+        """Save last search path using JSON Manager."""
         try:
-            os.makedirs('config', exist_ok=True)
-            with open('config/last_path.json', 'w', encoding='utf-8') as f:
-                json.dump({'last_path': path}, f)
+            success = set_last_path(path)
+            if not success:
+                self.log("Failed to save last path")
         except Exception as e:
             self.log(f"Save last path error: {e}")
+
+
+# Convenience functions for direct access
+def get_column_settings():
+    """Get column settings directly."""
+    return load_column_config()
+
+def set_column_settings(settings):
+    """Set column settings directly."""
+    return save_column_config(settings)
+
+def get_dtype_settings():
+    """Get data type settings directly."""
+    return load_dtype_config()
+
+def set_dtype_settings(settings):
+    """Set data type settings directly."""
+    return save_dtype_config(settings)

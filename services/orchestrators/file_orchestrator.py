@@ -30,7 +30,7 @@ from services.file import (
     FileManagementService
 )
 from performance_optimizations import PerformanceOptimizer
-from config.settings import settings_manager
+from config.json_manager import load_column_settings, load_dtype_settings
 
 
 class FileOrchestrator:
@@ -58,13 +58,16 @@ class FileOrchestrator:
         self.data_processor = DataProcessorService(self.log_callback)
         self.file_manager = FileManagementService(search_path)
         
-        # อัปเดตข้อมูลจาก SettingsManager
-        self.file_reader.column_settings = settings_manager.column_settings
-        self.file_reader.dtype_settings = settings_manager.dtype_settings
+        # อัปเดตข้อมูลจาก JSON Manager
+        column_settings = load_column_settings()
+        dtype_settings = load_dtype_settings()
+        
+        self.file_reader.column_settings = column_settings
+        self.file_reader.dtype_settings = dtype_settings
         self.file_reader._settings_loaded = True
         
-        self.data_processor.column_settings = settings_manager.column_settings  
-        self.data_processor.dtype_settings = settings_manager.dtype_settings
+        self.data_processor.column_settings = column_settings  
+        self.data_processor.dtype_settings = dtype_settings
         self.data_processor._settings_loaded = True
         
         # สร้าง performance optimizer
@@ -72,7 +75,7 @@ class FileOrchestrator:
         
         # เก็บ reference สำหรับ backward compatibility
         self.search_path = self.file_reader.search_path
-        self.column_settings = settings_manager.column_settings
+        self.column_settings = column_settings
 
     # ========================
     # Main Interface Methods
@@ -252,21 +255,22 @@ class FileOrchestrator:
         return self.file_reader.normalize_col(col)
 
     def load_settings(self):
-        """โหลดการตั้งค่าใหม่จาก SettingsManager"""
-        # โหลดการตั้งค่าใหม่จาก SettingsManager
-        settings_manager.load_all_settings()
+        """โหลดการตั้งค่าใหม่จาก JSON Manager"""
+        # โหลดการตั้งค่าใหม่จาก JSON Manager
+        column_settings = load_column_settings()
+        dtype_settings = load_dtype_settings()
         
         # อัปเดตข้อมูลใน file_reader และ data_processor
-        self.file_reader.column_settings = settings_manager.column_settings
-        self.file_reader.dtype_settings = settings_manager.dtype_settings
+        self.file_reader.column_settings = column_settings
+        self.file_reader.dtype_settings = dtype_settings
         self.file_reader._settings_loaded = True
         
-        self.data_processor.column_settings = settings_manager.column_settings  
-        self.data_processor.dtype_settings = settings_manager.dtype_settings
+        self.data_processor.column_settings = column_settings  
+        self.data_processor.dtype_settings = dtype_settings
         self.data_processor._settings_loaded = True
         
         # อัปเดต reference ใน FileService
-        self.column_settings = settings_manager.column_settings
+        self.column_settings = column_settings
 
     def _process_dataframe_in_chunks(self, df, process_func, logic_type, chunk_size=5000):
         """ประมวลผล DataFrame แบบ chunk (legacy wrapper)"""

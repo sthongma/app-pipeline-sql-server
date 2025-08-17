@@ -1,10 +1,10 @@
 """
-Database configuration management สำหรับ PIPELINE_SQLSERVER
+Database configuration management for PIPELINE_SQLSERVER
 
-โมดูลนี้จัดการการตั้งค่าการเชื่อมต่อกับ SQL Server รวมถึง:
-- การโหลดและบันทึกการตั้งค่า
-- การสร้าง SQLAlchemy engine
-- การจัดการ connection strings
+This module handles SQL Server connection configuration including:
+- Loading and saving configuration settings
+- Creating SQLAlchemy engines
+- Managing connection strings
 """
 
 import os
@@ -22,9 +22,9 @@ class DatabaseConfig:
     
     def __init__(self) -> None:
         """
-        Initialize DatabaseConfig
+        Initialize DatabaseConfig.
         
-        โหลดการตั้งค่าจากไฟล์และสร้าง engine
+        Loads configuration from file and creates engine.
         """
         self.config: Optional[Dict[str, Any]] = None
         self.engine: Optional[Engine] = None
@@ -33,9 +33,9 @@ class DatabaseConfig:
 
     def load_config(self) -> None:
         """
-        โหลดการตั้งค่าจากไฟล์
+        Load configuration from file.
         
-        ใช้ค่าเริ่มต้นหากไม่มีไฟล์การตั้งค่า
+        Uses default values if no configuration file exists.
         """
         default_config = {
             "server": os.environ.get('COMPUTERNAME', 'localhost') + '\\SQLEXPRESS',
@@ -51,16 +51,16 @@ class DatabaseConfig:
         self.config = default_config.copy()
         self.config.update(saved_config)
         
-        # บันทึกการตั้งค่าถ้าไม่มีไฟล์
+        # Save configuration if file doesn't exist
         if not os.path.exists(self.CONFIG_FILE):
             self.save_config()
     
     def save_config(self) -> bool:
         """
-        บันทึกการตั้งค่าลงไฟล์
+        Save configuration to file.
         
         Returns:
-            bool: สำเร็จหรือไม่
+            bool: True if successful, False otherwise
         """
         if self.config is None:
             return False
@@ -69,14 +69,14 @@ class DatabaseConfig:
     
     def update_engine(self) -> None:
         """
-        อัปเดต SQLAlchemy engine ตามการตั้งค่าปัจจุบัน
+        Update SQLAlchemy engine according to current configuration.
         
-        สร้าง connection string และ engine ใหม่ตามการตั้งค่า
+        Creates new connection string and engine based on current settings.
         """
         if self.config is None:
             return
             
-        # ตรวจสอบการตั้งค่าก่อนสร้าง engine
+        # Validate configuration before creating engine
         is_valid, error_msg = validate_database_config(self.config)
         if not is_valid:
             raise ValueError(f"การตั้งค่าฐานข้อมูลไม่ถูกต้อง: {error_msg}")

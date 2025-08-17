@@ -18,9 +18,9 @@ from .index_manager import IndexManager
 
 class MainValidator(BaseValidator):
     """
-    Main orchestrator สำหรับการ validation
+    Main orchestrator for data validation.
     
-    ประสานงานระหว่าง validators ต่างๆ และจัดการ validation workflow
+    Coordinates between different validators and manages validation workflow.
     """
     
     def __init__(self, engine):

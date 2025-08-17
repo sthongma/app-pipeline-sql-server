@@ -1,7 +1,7 @@
 """
-Constants สำหรับ PIPELINE_SQLSERVER
+Constants for PIPELINE_SQLSERVER
 
-ไฟล์นี้เก็บค่าคงที่ต่างๆ ที่ใช้ในโปรเจกต์ เพื่อให้ AI สามารถเข้าใจและปรับปรุงได้ง่าย
+This file contains various constants used throughout the project for better maintainability and AI comprehension.
 """
 
 from typing import List, Dict
@@ -52,9 +52,9 @@ class FileConstants:
     
     # File size thresholds (in bytes)
     LARGE_FILE_THRESHOLD = 50 * 1024 * 1024  # 50MB
-    CHUNK_SIZE_LARGE = 50000  # rows - เพิ่มขึ้นจาก 10000 เพื่อลดจำนวนการเข้าถึง DB
-    CHUNK_SIZE_MEDIUM = 20000  # rows - เพิ่มขึ้นจาก 2000 
-    CHUNK_SIZE_SMALL = 10000   # rows - เพิ่มขึ้นจาก 1000
+    CHUNK_SIZE_LARGE = 50000  # rows - increased from 10000 to reduce DB access frequency
+    CHUNK_SIZE_MEDIUM = 20000  # rows - increased from 2000 for better performance
+    CHUNK_SIZE_SMALL = 10000   # rows - increased from 1000 for optimization
     
     # Default upload folder structure
     UPLOADED_FOLDER_NAME = "Uploaded_Files"
@@ -88,9 +88,7 @@ class AppConstants:
     # Logging settings
     LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
     
-    # Performance settings
-    CACHE_SIZE_LIMIT = 100  # number of cached items
-    SETTINGS_CACHE_ENABLED = True
+    # Performance settings (kept for future use)
 
 
 # === PATH CONSTANTS ===
@@ -102,7 +100,6 @@ class PathConstants:
     COLUMN_SETTINGS_FILE = os.path.join(CONFIG_DIR, "column_settings.json")
     DTYPE_SETTINGS_FILE = os.path.join(CONFIG_DIR, "dtype_settings.json")
     SQL_CONFIG_FILE = os.path.join(CONFIG_DIR, "sql_config.json")
-    LAST_PATH_FILE = os.path.join(CONFIG_DIR, "last_path.json")
     
     # Default search path
     DEFAULT_SEARCH_PATH = os.path.join(os.path.expanduser("~"), "Downloads")

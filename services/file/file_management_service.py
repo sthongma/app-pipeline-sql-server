@@ -15,6 +15,8 @@ from typing import List, Tuple, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 import logging
 
+from config.json_manager import load_file_management_settings, save_file_management_settings
+
 
 class FileManagementService:
     """
@@ -152,22 +154,17 @@ class FileManagementService:
     # ========================
     
     def load_settings(self) -> Dict[str, Any]:
-        """โหลดการตั้งค่าจากไฟล์ JSON"""
+        """โหลดการตั้งค่าจากไฟล์ JSON ใช้ JSON Manager"""
         try:
-            if os.path.exists(self.settings_file):
-                with open(self.settings_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            return {}
+            return load_file_management_settings()
         except Exception as e:
             logging.error(f"เกิดข้อผิดพลาดในการโหลดการตั้งค่า: {e}")
             return {}
     
     def save_settings(self, settings: Dict[str, Any]) -> bool:
-        """บันทึกการตั้งค่าลงไฟล์ JSON"""
+        """บันทึกการตั้งค่าลงไฟล์ JSON ใช้ JSON Manager"""
         try:
-            with open(self.settings_file, 'w', encoding='utf-8') as f:
-                json.dump(settings, f, ensure_ascii=False, indent=2)
-            return True
+            return save_file_management_settings(settings)
         except Exception as e:
             logging.error(f"เกิดข้อผิดพลาดในการบันทึกการตั้งค่า: {e}")
             return False

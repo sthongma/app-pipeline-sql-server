@@ -7,23 +7,24 @@ Uses the same settings and configuration as the GUI application
 Usage: python auto_process_cli.py [source_folder]
 """
 
+# Standard library imports
+import argparse
+import json
+import logging
 import os
 import sys
-import argparse
 import time
-import json
 from datetime import datetime
 
-# Import services and handlers
-from ui.handlers.file_handler import FileHandler
-from ui.handlers.settings_handler import SettingsHandler
-from services.orchestrators.file_orchestrator import FileOrchestrator
-from services.orchestrators.database_orchestrator import DatabaseOrchestrator
-from services.file import FileManagementService
-from services.utilities.preload_service import PreloadService
+# Local imports
 from config.database import DatabaseConfig
 from constants import PathConstants
-import logging
+from services.file import FileManagementService
+from services.orchestrators.database_orchestrator import DatabaseOrchestrator
+from services.orchestrators.file_orchestrator import FileOrchestrator
+from services.utilities.preload_service import PreloadService
+from ui.handlers.file_handler import FileHandler
+from ui.handlers.settings_handler import SettingsHandler
 
 # Override messagebox for CLI to prevent GUI popups
 class CLIMessageBox:

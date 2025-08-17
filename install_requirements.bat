@@ -74,8 +74,18 @@ if %ERRORLEVEL% NEQ 0 (
     echo ODBC Driver 17 for SQL Server is available.
 )
 
+REM Check and create JSON configuration files
+echo.
+echo Checking JSON configuration files...
+python install_requirements.py
+if %ERRORLEVEL% NEQ 0 (
+    echo Warning: Some configuration files may be missing or invalid.
+    echo Please check the output above for details.
+)
+
 echo.
 echo Installation completed successfully!
 echo You can now run the application using:
 echo - run_pipeline_gui.bat (GUI)
+echo - run_auto_process.bat (CLI)
 echo.
