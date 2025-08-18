@@ -1,3 +1,4 @@
-config/sql_config.json
+# config/sql_config.json - no longer used (using environment variables)
+.env
 *.pyc
 *.json

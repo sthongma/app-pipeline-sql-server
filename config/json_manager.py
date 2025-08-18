@@ -57,18 +57,6 @@ class JSONManager:
     def _initialize_file_configs(self) -> Dict[str, JSONFileConfig]:
         """Initialize configuration for all JSON files."""
         return {
-            'sql_config': JSONFileConfig(
-                filename='sql_config.json',
-                default_content={
-                    "server": "",
-                    "database": "",
-                    "auth_type": "Windows",
-                    "username": "",
-                    "password": ""
-                },
-                required_keys=['server', 'database', 'auth_type'],
-                validation_func=self._validate_sql_config
-            ),
             'app_settings': JSONFileConfig(
                 filename='app_settings.json',
                 default_content={
@@ -186,10 +174,6 @@ class JSONManager:
         return filename.replace('.json', '').replace('_', '_')
     
     # Validation functions
-    def _validate_sql_config(self, content: Dict[str, Any]) -> bool:
-        """Validate SQL configuration."""
-        required_keys = ['server', 'database', 'auth_type']
-        return all(key in content for key in required_keys)
     
     def _validate_app_settings(self, content: Dict[str, Any]) -> bool:
         """Validate application settings."""
@@ -217,7 +201,7 @@ class JSONManager:
         Load configuration by name with real-time file checking.
         
         Args:
-            config_name: Name of configuration (e.g., 'sql_config', 'app_settings')
+            config_name: Name of configuration (e.g., 'app_settings', 'column_settings')
             
         Returns:
             Dict containing configuration data
@@ -398,13 +382,6 @@ json_manager = JSONManager()
 
 
 # Convenience functions for backward compatibility
-def load_sql_config() -> Dict[str, Any]:
-    """Load SQL configuration."""
-    return json_manager.load('sql_config')
-
-def save_sql_config(config: Dict[str, Any]) -> bool:
-    """Save SQL configuration."""
-    return json_manager.save('sql_config', config)
 
 def load_app_settings() -> Dict[str, Any]:
     """Load application settings."""

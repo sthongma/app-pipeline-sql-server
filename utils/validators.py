@@ -101,35 +101,35 @@ def validate_database_config(config: Dict[str, Any]) -> Tuple[bool, str]:
     try:
         required_keys = ['server', 'database', 'auth_type']
         
-        # ตรวจสอบ key ที่จำเป็น
+        # Check required keys
         for key in required_keys:
             if key not in config:
-                return False, f"ไม่พบการตั้งค่า: {key}"
+                return False, f"Missing configuration: {key}"
                 
-        # ตรวจสอบ server
+        # Check server
         if not config.get('server'):
-            return False, "ไม่ได้ระบุ server"
+            return False, "Server not specified"
             
-        # ตรวจสอบ database
+        # Check database
         if not config.get('database'):
-            return False, "ไม่ได้ระบุ database"
+            return False, "Database not specified"
             
-        # ตรวจสอบ auth_type
+        # Check auth_type
         auth_type = config.get('auth_type')
         if auth_type not in [DatabaseConstants.AUTH_WINDOWS, DatabaseConstants.AUTH_SQL]:
-            return False, f"ประเภทการยืนยันตัวตนไม่ถูกต้อง: {auth_type}"
+            return False, f"Invalid authentication type: {auth_type}"
             
-        # ถ้าใช้ SQL Authentication ต้องมี username และ password
+        # If using SQL Authentication, must have username and password
         if auth_type == DatabaseConstants.AUTH_SQL:
             if not config.get('username'):
-                return False, "ไม่ได้ระบุ username สำหรับ SQL Authentication"
+                return False, "Username not specified for SQL Authentication"
             if not config.get('password'):
-                return False, "ไม่ได้ระบุ password สำหรับ SQL Authentication"
+                return False, "Password not specified for SQL Authentication"
                 
-        return True, "การตั้งค่าฐานข้อมูลถูกต้อง"
+        return True, "Database configuration is valid"
         
     except Exception as e:
-        return False, f"เกิดข้อผิดพลาดในการตรวจสอบการตั้งค่า: {str(e)}"
+        return False, f"Error validating configuration: {str(e)}"
 
 
 def validate_file_path(file_path: str) -> bool:

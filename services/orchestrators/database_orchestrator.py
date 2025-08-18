@@ -33,6 +33,9 @@ class DatabaseOrchestrator:
         self.logger = logging.getLogger(__name__)
         self.permission_checker = None  # จะสร้างตอนต้องใช้งาน
         
+        # Update engine if config is valid
+        self.db_config.update_engine()
+        
         # Initialize service components
         self.connection_service = ConnectionService(self.db_config)
         self.schema_service = SchemaService(self.connection_service.get_engine())

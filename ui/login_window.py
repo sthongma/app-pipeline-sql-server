@@ -1,12 +1,13 @@
 import customtkinter as ctk
 from tkinter import messagebox
-import json
 import os
 from services.orchestrators.database_orchestrator import DatabaseOrchestrator
 from ui.main_window import MainWindow
 from ui.loading_dialog import LoadingDialog
 from services.utilities.preload_service import PreloadService
-from constants import PathConstants, AppConstants
+from constants import AppConstants
+from config.database import DatabaseConfig
+from config.json_manager import json_manager
 import logging
 
 class LoginWindow(ctk.CTk):
@@ -24,6 +25,7 @@ class LoginWindow(ctk.CTk):
         # สร้างบริการ
         self.db_service = DatabaseOrchestrator()
         self.preload_service = PreloadService()
+        self.db_config = DatabaseConfig()
         
         # สร้าง UI
         self._create_ui()
@@ -114,37 +116,43 @@ class LoginWindow(ctk.CTk):
             self.password_entry.grid(row=6, column=1, sticky="w", padx=5, pady=5)
 
     def _load_saved_settings(self):
-        """Load saved settings"""
+        """Load settings from environment variables only"""
         try:
-            if os.path.exists(PathConstants.SQL_CONFIG_FILE):
-                with open(PathConstants.SQL_CONFIG_FILE, "r") as f:
-                    config = json.load(f)
+            # Load from environment variables only
+            server = os.getenv('DB_SERVER', '')
+            database = os.getenv('DB_NAME', '')
+            username = os.getenv('DB_USERNAME', '')
+            password = os.getenv('DB_PASSWORD', '')
+            
+            # Determine auth type based on username presence
+            auth_type = "SQL Server" if username else "Windows"
                     
-                self.server_entry.insert(0, config.get("server", ""))
-                self.db_entry.insert(0, config.get("database", ""))
-                self.auth_menu.set(config.get("auth_type", "Windows"))
-                self.username_entry.insert(0, config.get("username", ""))
-                self.password_entry.insert(0, config.get("password", ""))
-                
-                # เรียกใช้ _on_auth_change เพื่อซ่อน/แสดง username/password
-                self._on_auth_change(config.get("auth_type", "Windows"))
+            self.server_entry.insert(0, server)
+            self.db_entry.insert(0, database)
+            self.auth_menu.set(auth_type)
+            self.username_entry.insert(0, username)
+            self.password_entry.insert(0, password)
+            
+            # เรียกใช้ _on_auth_change เพื่อซ่อน/แสดง username/password
+            self._on_auth_change(auth_type)
         except Exception as e:
             logging.error(f"Error loading settings: {e}")
             
     def _save_settings(self):
-        """Save settings"""
+        """Save settings to .env file"""
         if self.remember_var.get():
-            config = {
-                "server": self.server_entry.get(),
-                "database": self.db_entry.get(),
-                "auth_type": self.auth_menu.get(),
-                "username": self.username_entry.get(),
-                "password": self.password_entry.get()
-            }
-            
             try:
-                with open(PathConstants.SQL_CONFIG_FILE, "w") as f:
-                    json.dump(config, f, indent=4)
+                success = self.db_config.save_to_env_file(
+                    server=self.server_entry.get(),
+                    database=self.db_entry.get(),
+                    auth_type=self.auth_menu.get(),
+                    username=self.username_entry.get(),
+                    password=self.password_entry.get()
+                )
+                if success:
+                    logging.info("Database configuration saved to .env file")
+                else:
+                    logging.error("Failed to save configuration to .env file")
             except Exception as e:
                 logging.error(f"Error saving settings: {e}")
                 
@@ -169,6 +177,13 @@ class LoginWindow(ctk.CTk):
             
         # บันทึกการตั้งค่า
         self._save_settings()
+        
+        # Update DatabaseConfig engine
+        try:
+            self.db_config.update_engine()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to update database configuration: {str(e)}")
+            return
         
         # ทดสอบการเชื่อมต่อ ตรวจสิทธิ์ และ preload ใน dialog เดียว (background)
         try:

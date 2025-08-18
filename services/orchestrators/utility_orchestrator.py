@@ -274,9 +274,8 @@ class UtilityOrchestrator:
                 'disk_space': {}
             }
             
-            # ตรวจสอบไฟล์ config
+            # ตรวจสอบไฟล์ config (sql_config.json no longer needed - using env vars)
             config_files = [
-                'config/sql_config.json',
                 'config/column_settings.json',
                 'config/dtype_settings.json'
             ]

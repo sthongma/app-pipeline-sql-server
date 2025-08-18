@@ -18,6 +18,7 @@ from datetime import datetime
 
 # Local imports
 from config.database import DatabaseConfig
+from config.json_manager import json_manager
 from constants import PathConstants
 from services.file import FileManagementService
 from services.orchestrators.database_orchestrator import DatabaseOrchestrator
@@ -147,15 +148,19 @@ class AutoProcessCLI:
         """Validate database connection and permissions"""
         self.log("Checking database connection...")
         
-        # Check if config file exists
-        if not os.path.exists(PathConstants.SQL_CONFIG_FILE):
-            self.log("ERROR: Database configuration file not found. Please login through GUI first.")
-            return False
-        
-        # Load database configuration
+        # Load database configuration from environment variables
         try:
-            with open(PathConstants.SQL_CONFIG_FILE, "r") as f:
-                config = json.load(f)
+            db_config = DatabaseConfig()
+            config = db_config.config
+            if not config:
+                self.log("ERROR: Database configuration not found. Please set environment variables (DB_SERVER, DB_NAME).")
+                return False
+            
+            # Check if essential configuration is present
+            if not config.get('server') or not config.get('database'):
+                self.log("ERROR: DB_SERVER or DB_NAME environment variables not set.")
+                return False
+                
             self.log(f"Loaded database configuration: {config.get('server', 'Unknown')}")
         except Exception as e:
             self.log(f"ERROR: Failed to load database configuration: {e}")
