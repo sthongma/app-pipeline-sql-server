@@ -1,10 +1,12 @@
 # PIPELINE_SQLSERVER
 
-ระบบ ETL (Extract, Transform, Load) ที่ออกแบบเพื่อให้ AI ทำงานได้ง่าย สำหรับประมวลผลและอัปโหลดไฟล์ Excel/CSV ไปยัง SQL Server ผ่าน GUI
+ระบบ ETL (Extract, Transform, Load) ที่ออกแบบเพื่อให้ AI ทำงานได้ง่าย สำหรับประมวลผลและอัปโหลดไฟล์ Excel/CSV ไปยัง SQL Server ผ่าน GUI และ CLI
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+> **🎯 Production Ready** - พร้อมใช้งานจริงด้วย Clean Architecture v2.0 และระบบ Environment Variables
 
 ## จุดเด่นสำหรับ AI Development
 
@@ -133,25 +135,52 @@ PIPELINE_SQLSERVER/
 
 1. **Clone repository**:
 ```bash
-git clone <repository-url>
+git clone https://github.com/yourusername/PIPELINE_SQLSERVER.git
 cd PIPELINE_SQLSERVER
 ```
 
-2. **ติดตั้ง dependencies (Windows แนะนำใช้สคริปต์อัตโนมัติ)**:
+2. **สร้าง Virtual Environment (แนะนำ)**:
 ```bash
-# วิธีแนะนำ (Windows)
+# Windows
+python -m venv venv
+venv\Scripts\activate
+
+# Linux/Mac
+python -m venv venv
+source venv/bin/activate
+```
+
+3. **ติดตั้ง dependencies**:
+```bash
+# วิธีแนะนำ (Windows) - ใช้สคริปต์อัตโนมัติ
 install_requirements.bat
 
-# หรือแบบปกติ
+# หรือติดตั้งแบบปกติ
 pip install -r requirements.txt
 
-# ติดตั้งเป็น package (ถ้าต้องการ)
+# หรือติดตั้งเป็น package
 pip install -e .
 ```
 
-3. **ติดตั้ง development dependencies** (optional):
+4. **ตั้งค่า environment variables**:
 ```bash
-pip install -e ".[dev]"
+# รันสคริปต์ตรวจสอบการติดตั้ง (จะสร้าง .env ให้อัตโนมัติ)
+python install_requirements.py
+
+# แล้วแก้ไขไฟล์ .env ตามการตั้งค่าฐานข้อมูลของคุณ
+```
+
+5. **ตั้งค่าฐานข้อมูล** (แก้ไขไฟล์ `.env`):
+```env
+# ข้อมูลการเชื่อมต่อฐานข้อมูล
+DB_SERVER=localhost\SQLEXPRESS
+DB_NAME=YourDatabase
+
+# การยืนยันตัวตน (ถ้าใช้ SQL Authentication)
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
+
+# สำหรับ Windows Authentication ให้เว้นว่าง username และ password
 ```
 
 ## การใช้งาน
@@ -190,33 +219,63 @@ python auto_process_cli.py --help
 - CLI จะประมวลผลไฟล์ทั้งหมดในโฟลเดอร์อัตโนมัติ
 - ไม่ต้องเลือกไฟล์ทีละไฟล์เหมือน GUI
 
+### Quick Start (เริ่มใช้งานเร็ว)
+
+1. **ติดตั้งและตั้งค่า**:
+```bash
+git clone https://github.com/yourusername/PIPELINE_SQLSERVER.git
+cd PIPELINE_SQLSERVER
+pip install -r requirements.txt
+python install_requirements.py
+```
+
+2. **แก้ไข .env**:
+```env
+DB_SERVER=localhost\SQLEXPRESS
+DB_NAME=YourDatabase
+# สำหรับ Windows Auth ให้เว้นว่าง username และ password
+```
+
+3. **รัน GUI**:
+```bash
+python pipeline_gui_app.py
+# หรือใช้ batch file (Windows)
+run_pipeline_gui.bat
+```
+
+4. **รัน CLI** (สำหรับงานอัตโนมัติ):
+```bash
+python auto_process_cli.py "C:\path\to\your\data\folder"
+# หรือใช้ batch file (Windows)  
+run_auto_process.bat
+```
+
 ### การตั้งค่าการเชื่อมต่อฐานข้อมูล
 
+> **⚠️ หมายเหตุ**: ตั้งแต่เวอร์ชัน v2.1 ระบบใช้ Environment Variables แทน JSON files แล้ว
+
+#### Environment Variables (.env file)
+
 1. **Windows Authentication** (แนะนำ):
-```json
-{
-    "server": "localhost\\SQLEXPRESS",
-    "database": "your_database",
-    "auth_type": "Windows",
-    "username": "",
-    "password": ""
-}
+```env
+DB_SERVER=localhost\SQLEXPRESS
+DB_NAME=your_database
+# เว้นว่าง username และ password สำหรับ Windows Auth
+DB_USERNAME=
+DB_PASSWORD=
 ```
 
 2. **SQL Server Authentication**:
-```json
-{
-    "server": "localhost\\SQLEXPRESS", 
-    "database": "your_database",
-    "auth_type": "SQL",
-    "username": "your_username",
-    "password": "your_password"
-}
+```env
+DB_SERVER=localhost\SQLEXPRESS
+DB_NAME=your_database  
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
 ```
 
 ## การกำหนดค่าและไฟล์ข้อมูล
 
-หลังจากล็อกอิน ระบบจะบันทึกไฟล์ตั้งค่าที่โฟลเดอร์ `config/` อัตโนมัติ เช่น `sql_config.json`, `app_settings.json`, `column_settings.json`, `dtype_settings.json`.
+ระบบใช้ **JSON Manager** สำหรับจัดการการตั้งค่าแบบ real-time และบันทึกไฟล์ตั้งค่าที่โฟลเดอร์ `config/` อัตโนมัติ เช่น `app_settings.json`, `column_settings.json`, `dtype_settings.json`
 
 ### Column Settings (`config/column_settings.json`)
 ```json
@@ -342,23 +401,75 @@ mypy .
 - **Batch Operations**: Database inserts แบบ batch
 - **Memory Management**: การจัดการหน่วยความจำที่มีประสิทธิภาพ
 
+## API Documentation
+
+### สำหรับนักพัฒนา - การใช้งาน Services
+
+#### DatabaseOrchestrator
+```python
+from services.orchestrators.database_orchestrator import DatabaseOrchestrator
+
+db_orchestrator = DatabaseOrchestrator()
+success, message = db_orchestrator.check_connection()
+```
+
+#### FileOrchestrator
+```python
+from services.orchestrators.file_orchestrator import FileOrchestrator
+
+file_orchestrator = FileOrchestrator()
+success, dataframe = file_orchestrator.read_excel_file("data.xlsx", "sales_data")
+```
+
+#### JSON Manager
+```python
+from config.json_manager import json_manager, get_last_path, set_last_path
+
+# ใช้ convenience functions
+path = get_last_path()
+set_last_path("C:/new/path")
+
+# หรือใช้ manager โดยตรง
+json_manager.set('app_settings', 'theme', 'dark')
+```
+
 ## Troubleshooting
 
 ### ปัญหาการเชื่อมต่อฐานข้อมูล
-1. ตรวจสอบว่า SQL Server กำลังทำงาน
-2. ตรวจสอบ ODBC Driver 17 for SQL Server
-3. ตรวจสอบ firewall settings
-4. ทดสอบการเชื่อมต่อด้วย SQL Server Management Studio
+1. **ตรวจสอบ Environment Variables**:
+   ```bash
+   python auto_process_cli.py --verbose
+   # จะแสดงสถานะ environment variables
+   ```
+
+2. **ตรวจสอบ SQL Server**:
+   - ตรวจสอบว่า SQL Server กำลังทำงาน
+   - ตรวจสอบ ODBC Driver 17/18 for SQL Server
+   - ทดสอบการเชื่อมต่อด้วย SQL Server Management Studio
+
+3. **ตรวจสอบไฟล์ .env**:
+   ```env
+   # ตรวจสอบการสะกดและรูปแบบ
+   DB_SERVER=localhost\SQLEXPRESS  # ไม่ใช่ localhost\\SQLEXPRESS
+   DB_NAME=YourDatabase           # ต้องไม่มีช่องว่าง
+   ```
 
 ### ปัญหาการอ่านไฟล์
 1. ตรวจสอบว่าไฟล์ไม่ถูกเปิดในโปรแกรมอื่น
 2. ตรวจสอบสิทธิ์การเข้าถึงไฟล์
 3. ตรวจสอบรูปแบบของไฟล์ (Excel/CSV)
+4. ตรวจสอบการตั้งค่าประเภทไฟล์ใน GUI
 
 ### ปัญหา Performance
 1. ใช้ chunking สำหรับไฟล์ขนาดใหญ่
 2. ปิดโปรแกรมอื่นที่ไม่จำเป็น
 3. ตรวจสอบ disk space
+4. ใช้ CLI สำหรับการประมวลผลจำนวนมาก
+
+### ปัญหา Environment Variables
+1. **Windows**: ใช้ไฟล์ `.env` แทนการตั้งค่าใน system
+2. **ตรวจสอบไฟล์**: ตรวจสอบว่าไฟล์ `.env` อยู่ในโฟลเดอร์รูท
+3. **รีสตาร์ท**: รีสตาร์ทโปรแกรมหลังแก้ไข `.env`
 
 ## Contributing
 
