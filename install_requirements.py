@@ -105,12 +105,12 @@ def check_and_create_env_file() -> bool:
 # Set these values according to your SQL Server setup
 
 # Database Connection
-DB_SERVER=your-sql-server-name
-DB_NAME=your-database-name
+DB_SERVER=
+DB_NAME=
 
 # SQL Server Authentication (optional - leave blank for Windows Authentication)
-DB_USERNAME=your-username
-DB_PASSWORD=your-password
+DB_USERNAME=
+DB_PASSWORD=
 
 # Logging Configuration
 STRUCTURED_LOGGING=false
@@ -174,8 +174,6 @@ def main():
     # 5. Create additional directories if needed
     print("\n[5] Checking additional directories...")
     additional_dirs = [
-        "logs",
-        "processed",
         "temp"
     ]
     
