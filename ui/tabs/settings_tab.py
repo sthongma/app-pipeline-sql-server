@@ -40,7 +40,7 @@ class SettingsTab:
         self._create_ui_step_by_step()
     
     def _start_async_ui_building(self, ui_progress_callback):
-        """เริ่ม UI building แบบ async"""
+        """Start async UI building"""
         if ui_progress_callback:
             ui_progress_callback("Starting to build UI for file types...")
         

@@ -1,11 +1,12 @@
 """
-Validator functions สำหรับ PIPELINE_SQLSERVER
+Validator functions for PIPELINE_SQLSERVER
 
-ฟังก์ชันสำหรับตรวจสอบความถูกต้องของข้อมูลต่างๆ
+Functions for validating various types of data and configurations
 """
 
 import os
 import re
+import json
 import pandas as pd
 from typing import Dict, List, Tuple, Any, Optional
 
@@ -203,5 +204,84 @@ def _is_supported_dtype(dtype_str: str) -> bool:
             return True
             
     return False
+
+
+def validate_json_config(config_data: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Validate JSON configuration against a schema
+    
+    Args:
+        config_data: Configuration data to validate
+        schema: Schema definition with required fields and types
+        
+    Returns:
+        Tuple[bool, str]: (is_valid, error_message)
+    """
+    try:
+        # Check required fields
+        required_fields = schema.get('required', [])
+        for field in required_fields:
+            if field not in config_data:
+                return False, f"Missing required field: {field}"
+        
+        # Check field types
+        field_types = schema.get('types', {})
+        for field, expected_type in field_types.items():
+            if field in config_data:
+                value = config_data[field]
+                if expected_type == 'string' and not isinstance(value, str):
+                    return False, f"Field '{field}' must be a string"
+                elif expected_type == 'integer' and not isinstance(value, int):
+                    return False, f"Field '{field}' must be an integer"
+                elif expected_type == 'boolean' and not isinstance(value, bool):
+                    return False, f"Field '{field}' must be a boolean"
+                elif expected_type == 'dict' and not isinstance(value, dict):
+                    return False, f"Field '{field}' must be a dictionary"
+                elif expected_type == 'list' and not isinstance(value, list):
+                    return False, f"Field '{field}' must be a list"
+        
+        # Check field values
+        field_values = schema.get('values', {})
+        for field, allowed_values in field_values.items():
+            if field in config_data:
+                value = config_data[field]
+                if value not in allowed_values:
+                    return False, f"Field '{field}' must be one of: {allowed_values}"
+        
+        return True, ""
+        
+    except (TypeError, ValueError) as e:
+        return False, f"Validation error: {str(e)}"
+
+
+def validate_config_file(file_path: str, schema: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Validate a JSON configuration file against a schema
+    
+    Args:
+        file_path: Path to the configuration file
+        schema: Schema definition
+        
+    Returns:
+        Tuple[bool, str]: (is_valid, error_message)
+    """
+    try:
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return False, f"Configuration file not found: {file_path}"
+        
+        # Load and parse JSON
+        with open(file_path, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+        
+        # Validate against schema
+        return validate_json_config(config_data, schema)
+        
+    except (FileNotFoundError, PermissionError) as e:
+        return False, f"File access error: {str(e)}"
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON format: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error: {str(e)}"
 
 

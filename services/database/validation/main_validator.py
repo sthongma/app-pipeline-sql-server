@@ -43,10 +43,10 @@ class MainValidator(BaseValidator):
     def validate(self, conn, staging_table: str, schema_name: str, columns: List, 
                 total_rows: int, chunk_size: int, log_func=None, **kwargs) -> List[Dict]:
         """
-        Implementation ของ abstract method จาก BaseValidator
+        Implementation of abstract method from BaseValidator
         
-        สำหรับ MainValidator นี้จะไม่ใช้ method นี้โดยตรง 
-        แต่จะใช้ validate_data_in_staging แทน
+        For MainValidator, this method is not used directly 
+        but validate_data_in_staging is used instead
         
         Args:
             conn: Database connection
@@ -69,7 +69,7 @@ class MainValidator(BaseValidator):
                                 schema_name: str = 'bronze', log_func=None, progress_callback=None, 
                                 date_format: str = 'UK') -> Dict:
         """
-        Main method สำหรับการ validate ข้อมูลใน staging table
+        Main method for validating data in staging table
         
         Args:
             staging_table: Staging table name
@@ -189,7 +189,7 @@ class MainValidator(BaseValidator):
     
     def _get_total_rows(self, staging_table: str, schema_name: str) -> int:
         """
-        ดึงจำนวนแถวทั้งหมดใน staging table
+        Get total number of rows in staging table
         
         Args:
             staging_table: Staging table name
@@ -204,7 +204,7 @@ class MainValidator(BaseValidator):
     
     def _build_validation_phases(self, required_cols: Dict, date_format: str) -> Dict:
         """
-        สร้าง validation phases สำหรับ chunked processing
+        Build validation phases for chunked processing
         
         Args:
             required_cols: Required columns and data types
@@ -264,7 +264,7 @@ class MainValidator(BaseValidator):
                              staging_table: str, total_rows: int, log_func, progress_callback, 
                              base_progress: float, date_format: str) -> List[Dict]:
         """
-        รัน validation phase เดียว
+        Run a single validation phase
         
         Args:
             phase_name: Name of the validation phase
@@ -325,7 +325,7 @@ class MainValidator(BaseValidator):
                                  columns: List, total_rows: int, chunk_size: int, 
                                  log_func, **kwargs) -> List[Dict]:
         """
-        ตรวจสอบหลายคอลัมน์แบบ parallel เพื่อเพิ่มประสิทธิภาพ
+        Validate multiple columns in parallel for improved performance
         
         Args:
             validator: Validator instance
@@ -393,7 +393,7 @@ class MainValidator(BaseValidator):
     
     def _generate_summary(self, validation_results: Dict, log_func) -> str:
         """
-        สร้าง summary ของผลลัพธ์การ validation
+        Generate summary of validation results
         
         Args:
             validation_results: Validation results dictionary
@@ -420,7 +420,7 @@ class MainValidator(BaseValidator):
     
     def get_validation_statistics(self, staging_table: str, schema_name: str) -> Dict:
         """
-        ดึงสถิติของข้อมูลใน staging table
+        Get statistics of data in staging table
         
         Args:
             staging_table: Staging table name

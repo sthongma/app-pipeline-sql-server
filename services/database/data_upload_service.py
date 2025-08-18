@@ -56,7 +56,7 @@ class DataUploadService:
         self._load_dtype_settings()
     
     def _load_dtype_settings(self):
-        """โหลดการตั้งค่าประเภทข้อมูลจากไฟล์ใช้ JSON Manager"""
+        """Load data type settings from file using JSON Manager"""
         try:
             self.dtype_settings = load_dtype_settings()
         except Exception as e:

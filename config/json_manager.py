@@ -131,7 +131,7 @@ class JSONManager:
             
             shutil.copy2(source_path, backup_path)
             return backup_path
-        except Exception:
+        except (FileNotFoundError, PermissionError, shutil.Error):
             return None
     
     def _load_file(self, filename: str) -> Dict[str, Any]:
@@ -178,7 +178,7 @@ class JSONManager:
             
             return True
             
-        except Exception:
+        except (FileNotFoundError, PermissionError, json.JSONDecodeError, TypeError):
             return False
     
     def _get_config_name(self, filename: str) -> str:
@@ -389,7 +389,7 @@ class JSONManager:
                         deleted_count += 1
                         
             return deleted_count
-        except Exception:
+        except (OSError, PermissionError):
             return 0
 
 

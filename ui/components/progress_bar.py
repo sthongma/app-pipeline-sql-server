@@ -19,7 +19,7 @@ class ProgressBar(ctk.CTkFrame):
         self.detail_label.pack(fill="x", padx=8)
 
     def update(self, progress, status_text="", detail_text=""):
-        """อัปเดต Progress Bar และข้อความสถานะ"""
+        """Update Progress Bar and status text"""
         try:
             if 0.0 <= float(progress) <= 1.0:
                 self.progress_bar.set(progress)
@@ -32,12 +32,12 @@ class ProgressBar(ctk.CTkFrame):
             self.detail_label.configure(text=detail_text)
 
     def reset(self):
-        """รีเซ็ต Progress Bar และข้อความ"""
+        """Reset Progress Bar and text"""
         self.progress_bar.set(0)
         self.status_label.configure(text="Status: -")
         self.detail_label.configure(text="")
 
     def set_status(self, status_text, detail_text=""):
-        """ตั้งค่าเฉพาะข้อความสถานะและรายละเอียด"""
+        """Set only status text and detail text"""
         self.status_label.configure(text=f"Status: {status_text}")
         self.detail_label.configure(text=detail_text or "")

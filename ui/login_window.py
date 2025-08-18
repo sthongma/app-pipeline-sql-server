@@ -114,7 +114,7 @@ class LoginWindow(ctk.CTk):
             self.password_entry.grid(row=6, column=1, sticky="w", padx=5, pady=5)
 
     def _load_saved_settings(self):
-        """โหลดการตั้งค่าที่บันทึกไว้"""
+        """Load saved settings"""
         try:
             if os.path.exists(PathConstants.SQL_CONFIG_FILE):
                 with open(PathConstants.SQL_CONFIG_FILE, "r") as f:
@@ -132,7 +132,7 @@ class LoginWindow(ctk.CTk):
             logging.error(f"Error loading settings: {e}")
             
     def _save_settings(self):
-        """บันทึกการตั้งค่า"""
+        """Save settings"""
         if self.remember_var.get():
             config = {
                 "server": self.server_entry.get(),
@@ -149,7 +149,7 @@ class LoginWindow(ctk.CTk):
                 logging.error(f"Error saving settings: {e}")
                 
     def _connect(self):
-        """เชื่อมต่อกับ SQL Server"""
+        """Connect to SQL Server"""
         config = {
             "server": self.server_entry.get(),
             "database": self.db_entry.get(),
@@ -262,7 +262,7 @@ class LoginWindow(ctk.CTk):
             messagebox.showerror("Error", f"An error occurred: {str(e)}")
             
     def _start_ui_creation(self):
-        """เริ่มการสร้าง UI ใน main thread"""
+        """Start UI creation in main thread"""
         try:
             # อัพเดท progress
             self.ui_loading_dialog.update_message("Starting MainWindow creation...")
@@ -272,7 +272,7 @@ class LoginWindow(ctk.CTk):
             messagebox.showerror("Error", f"Error creating UI: {str(e)}")
     
     def _create_main_window_step1(self):
-        """สร้าง MainWindow ขั้นตอนที่ 1"""
+        """Create MainWindow step 1"""
         try:
             self.ui_loading_dialog.update_message("Creating MainWindow...")
             # สร้าง MainWindow พร้อม progress callback
@@ -309,7 +309,7 @@ class LoginWindow(ctk.CTk):
             messagebox.showerror("Error", f"Error creating UI: {str(e)}")
     
     def _finish_ui_creation(self):
-        """เสร็จสิ้นการสร้าง UI"""
+        """Finish UI creation"""
         try:
             self.ui_loading_dialog.update_message("MainWindow and UI created!")
             
@@ -328,13 +328,13 @@ class LoginWindow(ctk.CTk):
             messagebox.showerror("Error", f"Error creating UI: {str(e)}")
             
     def _on_main_window_close(self, main_window):
-        """จัดการเมื่อปิดหน้าต่างหลัก"""
+        """Handle main window close event"""
         main_window.destroy()
         self.destroy()  # ปิดแอปพลิเคชัน 
 
     # ===== Combined background task =====
     def _connect_and_prepare(self, config, progress_callback=None):
-        """รวมขั้นตอน: เชื่อมต่อ -> ตรวจสิทธิ์ -> preload ข้อมูล"""
+        """Combined steps: connect -> check permissions -> preload data"""
         # 1) ทดสอบการเชื่อมต่อ
         if progress_callback:
             progress_callback("Testing database connection...")

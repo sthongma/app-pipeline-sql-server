@@ -1,5 +1,5 @@
 """
-Database Service สำหรับ PIPELINE_SQLSERVER
+Database Service for PIPELINE_SQLSERVER
 
 Orchestrator service that coordinates database operations using modular services
 """
@@ -18,16 +18,16 @@ from services.database import (
 
 class DatabaseOrchestrator:
     """
-    บริการจัดการฐานข้อมูล SQL Server
+    SQL Server database management service
     
     Orchestrator service that coordinates all database operations using modular services
     """
     
     def __init__(self) -> None:
         """
-        เริ่มต้น DatabaseService
+        Initialize DatabaseService
         
-        สร้าง database config และ service instances
+        Create database config and service instances
         """
         self.db_config = DatabaseConfig()
         self.logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ class DatabaseOrchestrator:
         self.engine = self.connection_service.get_engine()
 
     def _get_permission_checker(self, log_callback=None):
-        """สร้างหรือคืนค่า PermissionCheckerService"""
+        """Create or return PermissionCheckerService"""
         if self.permission_checker is None:
             # ใช้ silent callback เป็นค่าเริ่มต้นสำหรับ GUI
             default_callback = log_callback or (lambda msg: None)
@@ -108,7 +108,7 @@ class DatabaseOrchestrator:
         return self.connection_service.test_connection(config)
 
     def update_config(self, server=None, database=None, auth_type=None, username=None, password=None):
-        """อัปเดตการตั้งค่าการเชื่อมต่อ"""
+        """Update connection configuration"""
         self.connection_service.update_config(
             server=server,
             database=database,
@@ -126,7 +126,7 @@ class DatabaseOrchestrator:
         self.upload_service.engine = new_engine
 
     def ensure_schemas_exist(self, schema_names):
-        """ตรวจสอบและสร้าง schema ตามที่ระบุ ถ้ายังไม่มี"""
+        """Check and create schemas as specified if they don't exist"""
         return self.schema_service.ensure_schemas_exist(schema_names)
 
     def upload_data(self, df, logic_type, required_cols, schema_name='bronze', log_func=None, force_recreate=False, clear_existing=True):

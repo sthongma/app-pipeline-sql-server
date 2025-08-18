@@ -1,8 +1,8 @@
 """
-Validation Orchestrator สำหรับ PIPELINE_SQLSERVER
+Validation Orchestrator for PIPELINE_SQLSERVER
 
-Orchestrator service สำหรับจัดการ validation services ต่างๆ
-ประสานงานระหว่าง validators และ validation-related services
+Orchestrator service for managing various validation services
+Coordinates between validators and validation-related services
 """
 
 import logging
@@ -22,7 +22,7 @@ class ValidationOrchestrator:
     """
     Validation Orchestrator Service
     
-    ทำหน้าที่เป็น orchestrator สำหรับการจัดการ:
+    Acts as orchestrator for managing:
     - Data validation
     - Schema validation
     - Column validation
@@ -32,11 +32,11 @@ class ValidationOrchestrator:
     
     def __init__(self, engine=None, log_callback=None):
         """
-        เริ่มต้น Validation Orchestrator
+        Initialize Validation Orchestrator
         
         Args:
             engine: SQLAlchemy engine
-            log_callback: ฟังก์ชันสำหรับแสดง log
+            log_callback: Function for logging
         """
         self.engine = engine
         self.log_callback = log_callback if log_callback else (lambda msg: None)

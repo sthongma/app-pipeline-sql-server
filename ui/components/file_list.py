@@ -11,13 +11,13 @@ class FileList(ctk.CTkScrollableFrame):
         self.select_all_var = ctk.BooleanVar(value=False)
 
     def clear(self):
-        """ล้างรายการช่องติ๊กทั้งหมด"""
+        """Clear all checkbox items"""
         for widget in self.winfo_children():
             widget.destroy()
         self.file_checkboxes.clear()
 
     def add_file(self, file_path, logic_type):
-        """เพิ่มช่องติ๊กสำหรับไฟล์ที่พบ"""
+        """Add checkbox for found file"""
         # ดึงเวลาที่ไฟล์ถูกสร้าง
         created_time = datetime.fromtimestamp(os.path.getctime(file_path))
         created_time_str = created_time.strftime("%Y-%m-%d %H:%M:%S")

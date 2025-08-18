@@ -24,7 +24,7 @@ class MainTab:
         self._create_ui()
     
     def _create_ui(self):
-        """สร้างส่วนประกอบ UI ทั้งหมดใน Main Tab"""
+        """Create all UI components in Main Tab"""
         # --- Status Bar ---
         self.status_bar = StatusBar(self.parent)
         self.status_bar.pack(pady=8)
@@ -45,7 +45,7 @@ class MainTab:
         self.textbox.pack(pady=10, padx=10, fill="x")
     
     def _create_control_buttons(self):
-        """สร้างปุ่มควบคุมและปุ่มจัดการโฟลเดอร์ในแถวเดียวกัน"""
+        """Create control buttons and folder management buttons in the same row"""
         button_frame = ctk.CTkFrame(self.parent)
         button_frame.pack(pady=4)
         

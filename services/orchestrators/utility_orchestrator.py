@@ -1,8 +1,8 @@
 """
-Utility Orchestrator สำหรับ PIPELINE_SQLSERVER
+Utility Orchestrator for PIPELINE_SQLSERVER
 
-Orchestrator service สำหรับจัดการ utility services ต่างๆ
-ประสานงานระหว่าง permission checker, performance optimizer และ utility functions
+Orchestrator service for managing various utility services
+Coordinates between permission checker, performance optimizer and utility functions
 """
 
 import logging
@@ -20,7 +20,7 @@ class UtilityOrchestrator:
     """
     Utility Orchestrator Service
     
-    ทำหน้าที่เป็น orchestrator สำหรับการจัดการ:
+    Acts as orchestrator for managing:
     - Permission checking
     - Performance optimization
     - File utilities
@@ -30,11 +30,11 @@ class UtilityOrchestrator:
     
     def __init__(self, engine=None, log_callback=None):
         """
-        เริ่มต้น Utility Orchestrator
+        Initialize Utility Orchestrator
         
         Args:
             engine: SQLAlchemy engine
-            log_callback: ฟังก์ชันสำหรับแสดง log
+            log_callback: Function for logging
         """
         self.engine = engine
         self.log_callback = log_callback if log_callback else (lambda msg: None)
@@ -46,7 +46,7 @@ class UtilityOrchestrator:
         self.logger.info("UtilityOrchestrator initialized")
     
     def _initialize_services(self):
-        """เริ่มต้น utility services ทั้งหมด"""
+        """Initialize all utility services"""
         try:
             # Permission checker
             self.permission_checker = PermissionCheckerService(

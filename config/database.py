@@ -83,16 +83,26 @@ class DatabaseConfig:
             
         if self.config["auth_type"] == DatabaseConstants.AUTH_WINDOWS:
             # Windows Authentication - เพิ่มการรองรับ Unicode
+            # Support environment variables for server and database
+            server = os.getenv('DB_SERVER', self.config["server"])
+            database = os.getenv('DB_NAME', self.config["database"])
+            
             connection_string = (
-                f'mssql+pyodbc://{self.config["server"]}/{self.config["database"]}'
+                f'mssql+pyodbc://{server}/{database}'
                 f'?driver={DatabaseConstants.DEFAULT_DRIVER}&Trusted_Connection=yes&'
                 f'charset=utf8&autocommit=true'
             )
         else:
             # SQL Server Authentication - เพิ่มการรองรับ Unicode
+            # Support environment variables for sensitive data
+            server = os.getenv('DB_SERVER', self.config["server"])
+            database = os.getenv('DB_NAME', self.config["database"])
+            username = os.getenv('DB_USERNAME', self.config.get("username", ""))
+            password = os.getenv('DB_PASSWORD', self.config.get("password", ""))
+            
             connection_string = (
-                f'mssql+pyodbc://{self.config["username"]}:{self.config["password"]}'
-                f'@{self.config["server"]}/{self.config["database"]}'
+                f'mssql+pyodbc://{username}:{password}'
+                f'@{server}/{database}'
                 f'?driver={DatabaseConstants.DEFAULT_DRIVER}&'
                 f'charset=utf8&autocommit=true'
             )

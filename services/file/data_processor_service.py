@@ -1,8 +1,8 @@
 """
-Data Processor Service สำหรับ PIPELINE_SQLSERVER
+Data Processor Service for PIPELINE_SQLSERVER
 
-จัดการการประมวลผล ตรวจสอบ และแปลงข้อมูล
-แยกออกมาจาก FileService เพื่อให้แต่ละ service มีหน้าที่ชัดเจน
+Handles data processing, validation, and transformation
+Separated from FileService to provide clear responsibilities for each service
 """
 
 import json
@@ -23,25 +23,25 @@ from constants import PathConstants
 
 class DataProcessorService:
     """
-    บริการประมวลผลข้อมูล
+    Data processing service
     
-    รับผิดชอบ:
-    - การตรวจสอบข้อมูล (validation)
-    - การแปลงประเภทข้อมูล (data type conversion)
-    - การทำความสะอาดข้อมูล (data cleaning)
-    - การตัดข้อมูลที่ยาวเกิน (string truncation)
+    Responsibilities:
+    - Data validation
+    - Data type conversion
+    - Data cleaning
+    - String truncation for oversized data
     """
     
     def __init__(self, log_callback: Optional[callable] = None) -> None:
         """
-        เริ่มต้น DataProcessorService
+        Initialize DataProcessorService
         
         Args:
-            log_callback (Optional[callable]): ฟังก์ชันสำหรับแสดง log
+            log_callback (Optional[callable]): Function for displaying logs
         """
         self.log_callback = log_callback if log_callback else print
         
-        # Cache สำหรับการตั้งค่า
+        # Settings cache
         self._settings_cache: Dict[str, Any] = {}
         self._cache_lock = threading.Lock()
         self._settings_loaded = False
@@ -65,12 +65,12 @@ class DataProcessorService:
         self.log_callback(formatted_message)
     
     def load_settings(self) -> None:
-        """โหลดการตั้งค่าคอลัมน์และประเภทข้อมูล"""
+        """Load column and data type settings"""
         if self._settings_loaded:
             return
             
         try:
-            # โหลดการตั้งค่าคอลัมน์
+            # Load column settings
             settings_file = PathConstants.COLUMN_SETTINGS_FILE
             if os.path.exists(settings_file):
                 with open(settings_file, 'r', encoding='utf-8') as f:
@@ -78,7 +78,7 @@ class DataProcessorService:
             else:
                 self.column_settings = {}
             
-            # โหลดการตั้งค่าประเภทข้อมูล
+            # Load data type settings
             dtype_file = PathConstants.DTYPE_SETTINGS_FILE
             if os.path.exists(dtype_file):
                 with open(dtype_file, 'r', encoding='utf-8') as f:
@@ -94,11 +94,11 @@ class DataProcessorService:
             self._settings_loaded = True
 
     def _convert_dtype_to_sqlalchemy(self, dtype_str):
-        """แปลง string dtype เป็น SQLAlchemy type object (ใช้ cache)"""
+        """Convert string dtype to SQLAlchemy type object (cached)"""
         if not isinstance(dtype_str, str):
             return NVARCHAR(255)
             
-        # ใช้ cache สำหรับ dtype ที่แปลงแล้ว
+        # Use cache for converted dtypes
         cache_key = str(dtype_str).upper()
         if cache_key in self._settings_cache:
             return self._settings_cache[cache_key]
@@ -109,7 +109,7 @@ class DataProcessorService:
             result = None
             if dtype_str.startswith('NVARCHAR'):
                 if dtype_str == 'NVARCHAR(MAX)':
-                    # ใช้ Text สำหรับ NVARCHAR(MAX) เพื่อรองรับข้อมูลยาว
+                    # Use Text for NVARCHAR(MAX) to support long data
                     result = Text()
                 else:
                     try:
@@ -137,7 +137,7 @@ class DataProcessorService:
             else:
                 result = NVARCHAR(500)
                 
-            # เก็บใน cache
+            # Store in cache
             with self._cache_lock:
                 self._settings_cache[cache_key] = result
             return result
@@ -149,7 +149,7 @@ class DataProcessorService:
             return result
 
     def get_required_dtypes(self, file_type):
-        """รับ dtype ของคอลัมน์ {new_col: dtype} ตามประเภทไฟล์ (ใช้ cache)"""
+        """Get column dtypes {new_col: dtype} by file type (cached)"""
         if not file_type or file_type not in self.column_settings:
             return {}
             
@@ -177,12 +177,12 @@ class DataProcessorService:
         if not file_type or file_type not in self.dtype_settings:
             return df
         
-        # คืนค่า DataFrame เดิม เนื่องจากการแปลงจะทำใน SQL แล้ว
+        # Return original DataFrame as conversion will be done in SQL
         self.log_with_time(f"🔄 Conversion will be performed in the staging table using SQL")
         return df
 
     def clean_and_validate_datetime_columns(self, df, file_type):
-        """ทำความสะอาดและตรวจสอบข้อมูลคอลัมน์วันที่ (เปลี่ยนเป็น SQL-based validation)"""
+        """Clean and validate date columns (SQL-based validation)"""
         if not file_type or file_type not in self.dtype_settings:
             return df
         
@@ -191,7 +191,7 @@ class DataProcessorService:
         return df
 
     def clean_numeric_columns(self, df, file_type):
-        """ทำความสะอาดข้อมูลคอลัมน์ตัวเลข (เปลี่ยนเป็น SQL-based cleaning)"""
+        """Clean numeric column data (SQL-based cleaning)"""
         if not file_type or file_type not in self.dtype_settings:
             return df
         
@@ -200,7 +200,7 @@ class DataProcessorService:
         return df
 
     def truncate_long_strings(self, df, logic_type):
-        """ตัดข้อมูล string ที่ยาวเกินกำหนดและแสดงรายงาน (เปลี่ยนเป็น SQL-based truncation)"""
+        """Truncate oversized strings and show report (SQL-based truncation)"""
         if not logic_type or logic_type not in self.dtype_settings:
             return df
         
@@ -209,7 +209,7 @@ class DataProcessorService:
         return df
 
     def comprehensive_data_validation(self, df, logic_type):
-        """ตรวจสอบข้อมูลอย่างละเอียดก่อนประมวลผล"""
+        """Validate data thoroughly before processing"""
         validation_report = {
             'status': True,
             'column_issues': {},
@@ -269,7 +269,7 @@ class DataProcessorService:
         return validation_report
 
     def _validate_column_data_type(self, series, col_name, expected_dtype):
-        """ตรวจสอบชนิดข้อมูลของคอลัมน์เฉพาะ"""
+        """Validate specific column data types"""
         issues = {}
         
         try:
@@ -394,7 +394,7 @@ class DataProcessorService:
         return issues
 
     def generate_pre_processing_report(self, df, logic_type):
-        """สร้างรายงานสรุปก่อนประมวลผลข้อมูล"""
+        """Create summary report before data processing"""
         # ตรวจสอบคอลัมน์เบื้องต้นเท่านั้น
         validation_result = self.validate_columns(df, logic_type)
         
@@ -406,7 +406,7 @@ class DataProcessorService:
             return True
 
     def check_invalid_numeric(self, df, logic_type):
-        """ตรวจสอบค่าที่ไม่ใช่ตัวเลขในคอลัมน์ที่เป็นตัวเลข พร้อมรายงานละเอียด"""
+        """Check non-numeric values in numeric columns with detailed report"""
         validation_report = {
             'has_issues': False,
             'invalid_data': {},
@@ -471,7 +471,7 @@ class DataProcessorService:
         return True, f"พบคอลัมน์ครบถ้วนสำหรับ {logic_type}"
 
     def validate_columns(self, df, logic_type):
-        """ตรวจสอบคอลัมน์ที่จำเป็น (dynamic)"""
+        """Validate required columns (dynamic)"""
         if not self.column_settings or logic_type not in self.column_settings:
             return False, "ยังไม่ได้ตั้งค่าคอลัมน์สำหรับประเภทไฟล์นี้"
             
@@ -484,7 +484,7 @@ class DataProcessorService:
         return True, {}
 
     def _print_conversion_report(self, log):
-        """แสดงรายงานการแปลงข้อมูล"""
+        """Show data transformation report"""
         if log['successful_conversions']:
             # แสดงเฉพาะจำนวนคอลัมน์ที่แปลงสำเร็จ ไม่แสดงรายชื่อทั้งหมด
             success_count = len(log['successful_conversions'])
@@ -506,7 +506,7 @@ class DataProcessorService:
             self.log_with_time(f"\n⚠️ คำเตือน: {', '.join(log['warnings'])}")
 
     def _reset_log_flags(self):
-        """รีเซ็ต log flags เพื่อให้แสดง log ใหม่ในไฟล์ถัดไป"""
+        """Reset log flags to show new logs for next file"""
         # ลบ attributes ที่เกี่ยวข้องกับ log flags
         for attr in dir(self):
             if attr.startswith(('_truncation_log_shown', '_text_skip_log_', '_truncate_log_', 
@@ -518,7 +518,7 @@ class DataProcessorService:
 
 
     def _extract_varchar_length(self, dtype_str):
-        """ดึงความยาวจาก NVARCHAR(n)"""
+        """Extract length from NVARCHAR(n)"""
         try:
             if 'MAX' in dtype_str:
                 return 999999
@@ -531,7 +531,7 @@ class DataProcessorService:
     # ฟังก์ชัน auto-fix ถูกยกเลิก
 
     def process_dataframe_in_chunks(self, df, process_func, logic_type, chunk_size=5000):
-        """ประมวลผล DataFrame แบบ chunk เพื่อประหยัด memory"""
+        """Process DataFrame in chunks to save memory"""
         try:
             if len(df) <= chunk_size:
                 return process_func(df, logic_type)

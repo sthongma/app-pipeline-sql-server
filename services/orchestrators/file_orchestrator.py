@@ -1,22 +1,22 @@
 """
-File Service สำหรับ PIPELINE_SQLSERVER (รุ่นใหม่ที่จัดระเบียบแล้ว)
+File Service for PIPELINE_SQLSERVER (Reorganized New Version)
 
-เป็น orchestrator ที่รวม services ต่างๆ เข้าด้วยกัน:
-- FileReaderService: อ่านและตรวจจับไฟล์
-- DataProcessorService: ประมวลผลและตรวจสอบข้อมูล
-- FileManagementService: จัดการไฟล์
+Orchestrator that combines various services:
+- FileReaderService: Read and detect files
+- DataProcessorService: Process and validate data
+- FileManagementService: Manage files
 
-ตัวอย่างการใช้งาน:
-    # สำหรับ GUI
+Usage examples:
+    # For GUI
     file_service = FileService(log_callback=gui_log_function)
     
-    # สำหรับ CLI
+    # For CLI
     file_service = FileService(log_callback=logging.info)
     
-    # การใช้งานปกติ (interface เดิม)
+    # Normal usage (original interface)
     success, df = file_service.read_excel_file("data.xlsx", "sales_data")
     
-    # การใช้งานแยกส่วน
+    # Separate usage
     file_info = file_service.get_file_info("data.xlsx")
     validation = file_service.validate_file_before_processing("data.xlsx", "sales_data")
 """
@@ -35,21 +35,21 @@ from config.json_manager import load_column_settings, load_dtype_settings
 
 class FileOrchestrator:
     """
-    บริการไฟล์หลัก (orchestrator)
+    Main file service (orchestrator)
     
-    รับผิดชอบ:
-    - การประสานงานระหว่าง services ต่างๆ
-    - การอ่านและประมวลผลไฟล์แบบครบวงจร
-    - การให้ interface เดียวกันกับระบบเดิม
+    Responsibilities:
+    - Coordinate between different services
+    - Complete file reading and processing
+    - Provide same interface as legacy system
     """
     
     def __init__(self, search_path: Optional[str] = None, log_callback: Optional[callable] = None) -> None:
         """
-        เริ่มต้น FileService
+        Initialize FileService
         
         Args:
-            search_path (Optional[str]): ที่อยู่โฟลเดอร์สำหรับค้นหาไฟล์
-            log_callback (Optional[callable]): ฟังก์ชันสำหรับแสดง log
+            search_path (Optional[str]): Folder path for file search
+            log_callback (Optional[callable]): Function for logging
         """
         self.log_callback = log_callback if log_callback else logging.info
         
@@ -83,12 +83,12 @@ class FileOrchestrator:
     
     def preview_file_columns(self, file_path, logic_type, max_rows=5):
         """
-        ตรวจสอบคอลัมน์ของไฟล์โดยอ่านเฉพาะแถวแรกๆ เพื่อประหยัดเวลา
+        Check file columns by reading only the first few rows to save time
         
         Args:
-            file_path: ที่อยู่ไฟล์
-            logic_type: ประเภทไฟล์
-            max_rows: จำนวนแถวที่อ่านสำหรับ preview (default: 5)
+            file_path: File path
+            logic_type: File type
+            max_rows: Number of rows to read for preview (default: 5)
             
         Returns:
             tuple: (success, result/error_message, columns_info)
@@ -143,12 +143,12 @@ class FileOrchestrator:
 
     def read_excel_file(self, file_path, logic_type):
         """
-        อ่านไฟล์ Excel หรือ CSV ตามประเภทที่กำหนด โดยไม่ใช้ระบบแก้ไขอัตโนมัติ
+        Read Excel or CSV file according to specified type without using automatic correction system
         
         Args:
-            file_path: ที่อยู่ไฟล์
-            logic_type: ประเภทไฟล์
-            ไม่มีการใช้งานระบบแก้ไขอัตโนมัติ
+            file_path: File path
+            logic_type: File type
+            No automatic correction system is used
         """
         try:
             # รีเซ็ต log flags สำหรับไฟล์ใหม่
@@ -194,48 +194,48 @@ class FileOrchestrator:
     # ========================
     
     def set_search_path(self, path):
-        """ตั้งค่า path สำหรับค้นหาไฟล์ Excel"""
+        """Set path for Excel file search"""
         self.search_path = path
         self.file_reader.set_search_path(path)
 
     def find_data_files(self):
-        """ค้นหาไฟล์ Excel และ CSV ใน path ที่กำหนด"""
+        """Find Excel and CSV files in specified path"""
         return self.file_reader.find_data_files()
 
     def detect_file_type(self, file_path):
-        """ตรวจสอบประเภทของไฟล์"""
+        """Detect file type"""
         return self.file_reader.detect_file_type(file_path)
 
     def get_column_name_mapping(self, file_type):
-        """รับ mapping ชื่อคอลัมน์ตามประเภทไฟล์"""
+        """Get column name mapping by file type"""
         return self.file_reader.get_column_name_mapping(file_type)
 
     def get_required_dtypes(self, file_type):
-        """รับ dtype ของคอลัมน์ตามประเภทไฟล์"""
+        """Get column dtypes by file type"""
         return self.data_processor.get_required_dtypes(file_type)
 
     def validate_columns(self, df, logic_type):
-        """ตรวจสอบคอลัมน์ที่จำเป็น"""
+        """Validate required columns"""
         return self.data_processor.validate_columns(df, logic_type)
 
     def comprehensive_data_validation(self, df, logic_type):
-        """ตรวจสอบข้อมูลอย่างละเอียดก่อนประมวลผล"""
+        """Comprehensive data validation before processing"""
         return self.data_processor.comprehensive_data_validation(df, logic_type)
 
     def check_invalid_numeric(self, df, logic_type):
-        """ตรวจสอบค่าที่ไม่ใช่ตัวเลขในคอลัมน์ที่เป็นตัวเลข"""
+        """Check non-numeric values in numeric columns"""
         return self.data_processor.check_invalid_numeric(df, logic_type)
 
     def generate_pre_processing_report(self, df, logic_type):
-        """สร้างรายงานสรุปก่อนประมวลผลข้อมูล (deprecated - ใช้ SQL validation แทน)"""
+        """Generate pre-processing summary report (deprecated - use SQL validation instead)"""
         return self.data_processor.generate_pre_processing_report(df, logic_type)
 
     def apply_dtypes(self, df, file_type):
-        """แปลงประเภทข้อมูลตามการตั้งค่า"""
+        """Convert data types according to settings"""
         return self.data_processor.apply_dtypes(df, file_type)
 
     def move_uploaded_files(self, file_paths, logic_types=None):
-        """ย้ายไฟล์ที่อัปโหลดแล้วไปยังโฟลเดอร์ Uploaded_Files"""
+        """Move uploaded files to Uploaded_Files folder"""
         return self.file_manager.move_uploaded_files(file_paths, logic_types, self.search_path)
 
     # ========================
@@ -243,19 +243,19 @@ class FileOrchestrator:
     # ========================
     
     def get_required_columns(self, file_type):
-        """(Deprecated) ใช้ get_required_dtypes แทน"""
+        """(Deprecated) Use get_required_dtypes instead"""
         return self.data_processor.get_required_dtypes(file_type)
 
     def standardize_column_name(self, col_name):
-        """แปลงชื่อคอลัมน์ให้เป็นรูปแบบมาตรฐาน"""
+        """Convert column names to standard format"""
         return self.file_reader.standardize_column_name(col_name)
 
     def normalize_col(self, col):
-        """ปรับปรุงการ normalize column"""
+        """Improve column normalization"""
         return self.file_reader.normalize_col(col)
 
     def load_settings(self):
-        """โหลดการตั้งค่าใหม่จาก JSON Manager"""
+        """Load new settings from JSON Manager"""
         # โหลดการตั้งค่าใหม่จาก JSON Manager
         column_settings = load_column_settings()
         dtype_settings = load_dtype_settings()
@@ -273,34 +273,34 @@ class FileOrchestrator:
         self.column_settings = column_settings
 
     def _process_dataframe_in_chunks(self, df, process_func, logic_type, chunk_size=5000):
-        """ประมวลผล DataFrame แบบ chunk (legacy wrapper)"""
+        """Process DataFrame in chunks (legacy wrapper)"""
         return self.data_processor.process_dataframe_in_chunks(df, process_func, logic_type, chunk_size)
 
     def _reset_log_flags(self):
-        """รีเซ็ต log flags (legacy wrapper)"""
+        """Reset log flags (legacy wrapper)"""
         self.data_processor._reset_log_flags()
 
     def clean_numeric_columns(self, df, file_type):
-        """ทำความสะอาดข้อมูลคอลัมน์ตัวเลข"""
+        """Clean numeric column data"""
         return self.data_processor.clean_numeric_columns(df, file_type)
 
     def truncate_long_strings(self, df, logic_type):
-        """ตัดข้อมูล string ที่ยาวเกินกำหนด"""
+        """Truncate strings that exceed specified length"""
         return self.data_processor.truncate_long_strings(df, logic_type)
 
 
     def upload_data_with_auto_schema_update(self, df, logic_type, processing_report=None, schema_name='bronze'):
         """
-        อัปโหลดข้อมูลพร้อมการอัพเดท schema อัตโนมัติ
+        Upload data with automatic schema update
         
         Args:
-            df: DataFrame ที่จะอัปโหลด
-            logic_type: ประเภทไฟล์
-            processing_report: (ไม่ใช้งาน)
-            schema_name: ชื่อ schema ในฐานข้อมูล
+            df: DataFrame to upload
+            logic_type: File type
+            processing_report: (Not used)
+            schema_name: Schema name in database
             
         Returns:
-            Tuple[bool, str]: (สำเร็จหรือไม่, ข้อความผลลัพธ์)
+            Tuple[bool, str]: (Success status, Result message)
         """
         try:
             from services.orchestrators.database_orchestrator import DatabaseOrchestrator
@@ -340,7 +340,7 @@ class FileOrchestrator:
 
 
     def print_detailed_validation_report(self, df, logic_type):
-        """แสดงรายงานการตรวจสอบข้อมูลแบบละเอียด (legacy method)"""
+        """Display detailed data validation report (legacy method)"""
         # สร้างรายงานแบบละเอียด
         self.log_callback("\n" + "="*80)
         self.log_callback("🔍 Detailed data validation report")

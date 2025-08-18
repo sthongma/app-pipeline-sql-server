@@ -1,10 +1,10 @@
 """
-File Management Service สำหรับ PIPELINE_SQLSERVER
+File Management Service for PIPELINE_SQLSERVER
 
-รับผิดชอบการจัดการไฟล์:
-- การย้ายไฟล์ที่ประมวลผลแล้ว
-- การจัดระเบียบโฟลเดอร์
-- การจัดการ settings
+Responsible for file management:
+- Moving processed files
+- Organizing folders
+- Managing settings
 """
 
 import os
@@ -20,12 +20,12 @@ from config.json_manager import load_file_management_settings, save_file_managem
 
 class FileManagementService:
     """
-    บริการจัดการไฟล์
+    File management service
     
-    รับผิดชอบ:
-    - การย้ายไฟล์ที่ประมวลผลแล้ว
-    - การจัดระเบียบโฟลเดอร์
-    - การจัดการ settings
+    Responsibilities:
+    - Moving processed files
+    - Organizing folders
+    - Managing settings
     """
     
     def __init__(self, base_path: Optional[str] = None):
@@ -33,14 +33,14 @@ class FileManagementService:
         Initialize File Management Service
         
         Args:
-            base_path: ที่อยู่ฐานสำหรับการทำงาน (default: current directory)
+            base_path: Base path for operations (default: current directory)
         """
         self.base_path = base_path or os.getcwd()
         self.settings_file = os.path.join(self.base_path, 'config', 'file_management_settings.json')
         self._ensure_config_dir()
     
     def _ensure_config_dir(self):
-        """สร้างโฟลเดอร์ config หากไม่มี"""
+        """Create config folder if it doesn't exist"""
         config_dir = os.path.dirname(self.settings_file)
         os.makedirs(config_dir, exist_ok=True)
     
@@ -49,7 +49,7 @@ class FileManagementService:
     # ========================
     
     def move_uploaded_files(self, file_paths, logic_types=None, search_path=None):
-        """ย้ายไฟล์ที่อัปโหลดแล้วไปยังโฟลเดอร์ Uploaded_Files"""
+        """Move uploaded files to Uploaded_Files folder"""
         try:
             if not search_path:
                 search_path = self.base_path
@@ -98,7 +98,7 @@ class FileManagementService:
             return False, str(e)
     
     def create_organized_folder_structure(self, base_folder: str, file_type: str) -> str:
-        """สร้างโครงสร้างโฟลเดอร์ตามรูปแบบ file_type/ปี-เดือน-วัน"""
+        """Create folder structure in format file_type/year-month-day"""
         current_date = datetime.now()
         date_folder = current_date.strftime('%Y-%m-%d')
         organized_path = os.path.join(base_folder, "Processed_Files", file_type, date_folder)
@@ -110,16 +110,16 @@ class FileManagementService:
     # ========================
     
     def get_supported_file_extensions(self) -> List[str]:
-        """รายการนามสกุลไฟล์ที่รองรับ"""
+        """List of supported file extensions"""
         return ['.xlsx', '.xls', '.csv']
     
     def is_supported_file(self, file_path: str) -> bool:
-        """ตรวจสอบว่าไฟล์ได้รับการรองรับหรือไม่"""
+        """Check if file is supported"""
         file_ext = os.path.splitext(file_path)[1].lower()
         return file_ext in self.get_supported_file_extensions()
     
     def get_file_type_info(self, file_path: str) -> Dict[str, str]:
-        """ดึงข้อมูลประเภทไฟล์"""
+        """Get file type information"""
         file_ext = os.path.splitext(file_path)[1].lower()
         file_types = {
             '.xlsx': {'type': 'Excel (New)', 'engine': 'openpyxl'},
@@ -129,13 +129,13 @@ class FileManagementService:
         return file_types.get(file_ext, {'type': 'Unknown', 'engine': 'none'})
     
     def get_file_type_from_filename(self, filename: str) -> str:
-        """ดึงชื่อประเภทไฟล์จากชื่อไฟล์"""
+        """Extract file type name from filename"""
         name_without_ext = os.path.splitext(filename)[0]
         file_type = ''.join([c for c in name_without_ext if c.isalpha() or c == '_'])
         return file_type if file_type else "Unknown"
     
     def group_files_by_type(self, file_paths: List[str]) -> Dict[str, List[str]]:
-        """จัดกลุ่มไฟล์ตามประเภท"""
+        """Group files by type"""
         grouped = {ext: [] for ext in self.get_supported_file_extensions()}
         grouped['unsupported'] = []
         
@@ -154,7 +154,7 @@ class FileManagementService:
     # ========================
     
     def load_settings(self) -> Dict[str, Any]:
-        """โหลดการตั้งค่าจากไฟล์ JSON ใช้ JSON Manager"""
+        """Load settings from JSON file using JSON Manager"""
         try:
             return load_file_management_settings()
         except Exception as e:
@@ -162,7 +162,7 @@ class FileManagementService:
             return {}
     
     def save_settings(self, settings: Dict[str, Any]) -> bool:
-        """บันทึกการตั้งค่าลงไฟล์ JSON ใช้ JSON Manager"""
+        """Save settings to JSON file using JSON Manager"""
         try:
             return save_file_management_settings(settings)
         except Exception as e:
@@ -170,7 +170,7 @@ class FileManagementService:
             return False
     
     def cleanup_temp_files(self, temp_directories: List[str]) -> None:
-        """ลบโฟลเดอร์ temporary ที่ไม่ได้ใช้แล้ว"""
+        """Delete unused temporary folders"""
         for temp_dir in temp_directories:
             try:
                 if os.path.exists(temp_dir):
@@ -179,7 +179,7 @@ class FileManagementService:
                 logging.error(f"ไม่สามารถลบโฟลเดอร์ temp {temp_dir}: {e}")
     
     def get_disk_usage(self, path: str) -> Dict[str, int]:
-        """ตรวจสอบการใช้งานพื้นที่ดิสก์"""
+        """Check disk space usage"""
         try:
             usage = shutil.disk_usage(path)
             return {

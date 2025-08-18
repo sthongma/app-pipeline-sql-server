@@ -25,6 +25,7 @@ from services.orchestrators.file_orchestrator import FileOrchestrator
 from services.utilities.preload_service import PreloadService
 from ui.handlers.file_handler import FileHandler
 from ui.handlers.settings_handler import SettingsHandler
+from utils.logger import setup_logging
 
 # Override messagebox for CLI to prevent GUI popups
 class CLIMessageBox:
@@ -298,7 +299,30 @@ Notes:
         version='Auto Process CLI v3.0 (Standalone)'
     )
     
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose logging'
+    )
+    
     args = parser.parse_args()
+    
+    # Setup logging with environment variable support
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    setup_logging(level=log_level)
+    
+    # Log environment variables status
+    env_vars = ['DB_SERVER', 'DB_NAME', 'DB_USERNAME', 'DB_PASSWORD']
+    logging.info("🔧 Environment Variables Status:")
+    for var in env_vars:
+        value = os.getenv(var)
+        if value:
+            if 'PASSWORD' in var or 'USERNAME' in var:
+                logging.info(f"  {var}: *** (set)")
+            else:
+                logging.info(f"  {var}: {value}")
+        else:
+            logging.info(f"  {var}: (not set)")
     
     # Create CLI instance
     cli = AutoProcessCLI()
