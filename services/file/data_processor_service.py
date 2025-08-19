@@ -530,7 +530,7 @@ class DataProcessorService:
 
     # ฟังก์ชัน auto-fix ถูกยกเลิก
 
-    def process_dataframe_in_chunks(self, df, process_func, logic_type, chunk_size=5000):
+    def process_dataframe_in_chunks(self, df, process_func, logic_type, chunk_size=25000):
         """Process DataFrame in chunks to save memory"""
         try:
             if len(df) <= chunk_size:
