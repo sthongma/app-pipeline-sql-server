@@ -7,23 +7,26 @@ Uses the same settings and configuration as the GUI application
 Usage: python auto_process_cli.py [source_folder]
 """
 
+# Standard library imports
+import argparse
+import json
+import logging
 import os
 import sys
-import argparse
 import time
-import json
 from datetime import datetime
 
-# Import services and handlers
+# Local imports
+from config.database import DatabaseConfig
+from config.json_manager import json_manager
+from constants import PathConstants
+from services.file import FileManagementService
+from services.orchestrators.database_orchestrator import DatabaseOrchestrator
+from services.orchestrators.file_orchestrator import FileOrchestrator
+from services.utilities.preload_service import PreloadService
 from ui.handlers.file_handler import FileHandler
 from ui.handlers.settings_handler import SettingsHandler
-from services.file_service import FileService
-from services.database_service import DatabaseService
-from services.file import FileManagementService
-from services.preload_service import PreloadService
-from config.database import DatabaseConfig
-from constants import PathConstants
-import logging
+from utils.logger import setup_logging
 
 # Override messagebox for CLI to prevent GUI popups
 class CLIMessageBox:
@@ -121,8 +124,8 @@ class AutoProcessCLI:
         self.dtype_settings = self.settings_handler.load_dtype_settings()
         
         # Create services (same as GUI)
-        self.file_service = FileService(log_callback=self.log)
-        self.db_service = DatabaseService()
+        self.file_service = FileOrchestrator(log_callback=self.log)
+        self.db_service = DatabaseOrchestrator()
         self.file_mgmt_service = FileManagementService()
         self.preload_service = PreloadService()
         
@@ -145,15 +148,19 @@ class AutoProcessCLI:
         """Validate database connection and permissions"""
         self.log("Checking database connection...")
         
-        # Check if config file exists
-        if not os.path.exists(PathConstants.SQL_CONFIG_FILE):
-            self.log("ERROR: Database configuration file not found. Please login through GUI first.")
-            return False
-        
-        # Load database configuration
+        # Load database configuration from environment variables
         try:
-            with open(PathConstants.SQL_CONFIG_FILE, "r") as f:
-                config = json.load(f)
+            db_config = DatabaseConfig()
+            config = db_config.config
+            if not config:
+                self.log("ERROR: Database configuration not found. Please set environment variables (DB_SERVER, DB_NAME).")
+                return False
+            
+            # Check if essential configuration is present
+            if not config.get('server') or not config.get('database'):
+                self.log("ERROR: DB_SERVER or DB_NAME environment variables not set.")
+                return False
+                
             self.log(f"Loaded database configuration: {config.get('server', 'Unknown')}")
         except Exception as e:
             self.log(f"ERROR: Failed to load database configuration: {e}")
@@ -297,7 +304,30 @@ Notes:
         version='Auto Process CLI v3.0 (Standalone)'
     )
     
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose logging'
+    )
+    
     args = parser.parse_args()
+    
+    # Setup logging with environment variable support
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    setup_logging(level=log_level)
+    
+    # Log environment variables status
+    env_vars = ['DB_SERVER', 'DB_NAME', 'DB_USERNAME', 'DB_PASSWORD']
+    logging.info("🔧 Environment Variables Status:")
+    for var in env_vars:
+        value = os.getenv(var)
+        if value:
+            if 'PASSWORD' in var or 'USERNAME' in var:
+                logging.info(f"  {var}: *** (set)")
+            else:
+                logging.info(f"  {var}: {value}")
+        else:
+            logging.info(f"  {var}: (not set)")
     
     # Create CLI instance
     cli = AutoProcessCLI()

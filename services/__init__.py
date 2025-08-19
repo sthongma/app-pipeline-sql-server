@@ -1,26 +1,23 @@
 """
-Services module สำหรับ PIPELINE_SQLSERVER (จัดระเบียบใหม่)
+Services module สำหรับ PIPELINE_SQLSERVER (Clean Structure)
 
 ประกอบด้วย:
-- DatabaseService: การจัดการการเชื่อมต่อและการดำเนินการกับฐานข้อมูล
-- FileService: orchestrator หลักสำหรับการจัดการไฟล์ (backward compatible)
-- FileReaderService: การอ่านและตรวจจับไฟล์
-- DataProcessorService: การประมวลผลและตรวจสอบข้อมูล
-- FileManagementService: การจัดการไฟล์
+- Orchestrators: การประสานงานระหว่าง services
+- Database services: การจัดการฐานข้อมูล
+- File services: การจัดการไฟล์
+- Utility services: บริการสนับสนุน
 """
 
-from .database_service import DatabaseService
-from .file_service import FileService
+# Import modular services only
 from .file import FileReaderService, DataProcessorService, FileManagementService
-from .permission_checker_service import PermissionCheckerService
-from .preload_service import PreloadService
+from .database import ConnectionService, SchemaService, DataValidationService, DataUploadService
 
 __all__ = [
-    'DatabaseService', 
-    'FileService',
     'FileReaderService',
     'DataProcessorService', 
     'FileManagementService',
-    'PermissionCheckerService',
-    'PreloadService'
+    'ConnectionService',
+    'SchemaService',
+    'DataValidationService',
+    'DataUploadService'
 ]

@@ -1,6 +1,6 @@
 """
-Main Window - รีแฟคเตอร์แล้ว
-แยกส่วนประกอบ UI และ handlers ออกเป็นไฟล์แยก
+Main Window - Refactored
+Separated UI components and handlers into separate files
 """
 import os
 import threading
@@ -19,8 +19,8 @@ from ui.handlers.file_handler import FileHandler
 from ui.handlers.settings_handler import SettingsHandler
 
 # Import services
-from services.file_service import FileService
-from services.database_service import DatabaseService
+from services.orchestrators.file_orchestrator import FileOrchestrator
+from services.orchestrators.database_orchestrator import DatabaseOrchestrator
 from services.file import FileManagementService
 from config.database import DatabaseConfig
 from constants import AppConstants, DatabaseConstants
@@ -61,10 +61,13 @@ class MainWindow(ctk.CTkToplevel):
         
         # ผูก logging เข้ากับ GUI
         self._attach_logging_to_gui()
+        
+        # Log environment variables status for debugging
+        self._log_environment_status()
 
         # สร้างบริการ
-        self.file_service = FileService(log_callback=logging.info)
-        self.db_service = DatabaseService()
+        self.file_service = FileOrchestrator(log_callback=logging.info)
+        self.db_service = DatabaseOrchestrator()
         self.file_mgmt_service = FileManagementService()
         
         # Initialize file handler
@@ -93,7 +96,7 @@ class MainWindow(ctk.CTkToplevel):
         self.after(100, self._run_check_sql_connection_async)
     
     def _create_ui(self, ui_progress_callback=None, on_ready_callback=None):
-        """สร้างส่วนประกอบ UI ทั้งหมด"""
+        """Create all UI components"""
         if ui_progress_callback:
             ui_progress_callback("Building Tab View...")
         
@@ -127,7 +130,7 @@ class MainWindow(ctk.CTkToplevel):
     
     
     def _create_main_tab(self, parent):
-        """สร้างส่วนประกอบใน Main Tab"""
+        """Create components in Main Tab"""
         # Create main tab with callbacks
         callbacks = {
             'toggle_select_all': self._toggle_select_all,
@@ -148,14 +151,14 @@ class MainWindow(ctk.CTkToplevel):
         self.textbox = self.main_tab_ui.textbox
     
     def _create_log_tab(self, parent):
-        """สร้างส่วนประกอบใน Log Tab"""
+        """Create components in Log Tab"""
         self.log_tab_ui = LogTab(parent)
         
         # เก็บ reference ไปยัง log textbox
         self.log_textbox = self.log_tab_ui.log_textbox
     
     def _create_settings_tab_async(self, parent, ui_progress_callback=None, on_ready_callback=None):
-        """สร้างส่วนประกอบใน Settings Tab แบบ async"""
+        """Create components in Settings Tab asynchronously"""
         if ui_progress_callback:
             ui_progress_callback("Preparing Settings Tab...")
             
@@ -182,7 +185,7 @@ class MainWindow(ctk.CTkToplevel):
                 ui_progress_callback("No file types — skipping Settings UI; ready immediately")
 
     def _on_all_ui_built(self, on_ready_callback):
-        """ถูกเรียกเมื่อ SettingsTab สร้าง UI ทั้งหมดเสร็จ เพื่อแจ้งว่า MainWindow พร้อมใช้งาน"""
+        """Called when SettingsTab finishes building all UI to indicate MainWindow is ready for use"""
         try:
             if callable(on_ready_callback):
                 on_ready_callback()
@@ -190,7 +193,7 @@ class MainWindow(ctk.CTkToplevel):
             pass
     
     def _create_settings_tab(self, parent, ui_progress_callback=None):
-        """สร้างส่วนประกอบใน Settings Tab (เดิม - สำหรับ fallback)"""
+        """Create components in Settings Tab (legacy - for fallback)"""
         # Create settings tab with callbacks
         callbacks = {
             'save_column_settings': self._save_column_settings,
@@ -208,39 +211,39 @@ class MainWindow(ctk.CTkToplevel):
     
     # ===== Callback Methods สำหรับ UI Components =====
     def _save_column_settings(self):
-        """บันทึกการตั้งค่าคอลัมน์"""
+        """Save column settings"""
         self.settings_handler.save_column_settings(self.column_settings)
         # รีโหลดการตั้งค่าใน services ทั้งหมด
         self._reload_settings_in_services()
     
     def _save_dtype_settings(self):
-        """บันทึกการตั้งค่าประเภทข้อมูล"""
+        """Save data type settings"""
         self.settings_handler.save_dtype_settings(self.dtype_settings)
         # รีโหลดการตั้งค่าใน services ทั้งหมด
         self._reload_settings_in_services()
     
     def _toggle_select_all(self):
-        """สลับการเลือกไฟล์ทั้งหมด"""
+        """Toggle select all files"""
         self.main_tab_ui.toggle_select_all()
     
     def _browse_excel_path(self):
-        """เลือกโฟลเดอร์"""
+        """Select folder"""
         self.file_handler.browse_excel_path(self.settings_handler.save_last_path)
     
     def _run_check_thread(self):
-        """เริ่มการตรวจสอบไฟล์"""
+        """Start file checking"""
         ui_callbacks = self._get_ui_callbacks()
         self.file_handler.run_check_thread(ui_callbacks)
     
     def _confirm_upload(self):
-        """ยืนยันการอัปโหลด"""
+        """Confirm upload"""
         ui_callbacks = self._get_ui_callbacks()
         self.file_handler.confirm_upload(self.file_list.get_selected_files, ui_callbacks)
     
 
     
     def _reload_settings_in_services(self):
-        """รีโหลดการตั้งค่าใน services ทั้งหมด"""
+        """Reload settings in all services"""
         try:
             # รีโหลดการตั้งค่าใน file_service
             if hasattr(self.file_service, '_settings_loaded'):
@@ -263,7 +266,7 @@ class MainWindow(ctk.CTkToplevel):
             self.log(f"Error reloading settings: {e}")
     
     def _get_ui_callbacks(self):
-        """สร้าง dictionary ของ UI callbacks"""
+        """Create dictionary of UI callbacks"""
         return {
             'reset_progress': self.progress_bar.reset,
             'set_progress_status': self.progress_bar.set_status,
@@ -281,7 +284,7 @@ class MainWindow(ctk.CTkToplevel):
     
     # ===== Logging Methods =====
     def log(self, message):
-        """มาตรฐานการ log จากส่วนต่างๆ ของ GUI: ส่งเข้าระบบ logging"""
+        """Standard logging from various GUI components: send to logging system"""
         try:
             logging.info(str(message))
         except Exception:
@@ -289,36 +292,59 @@ class MainWindow(ctk.CTkToplevel):
             self._append_log_message(str(message))
 
     def _append_log_message(self, formatted_message: str) -> None:
-        """เพิ่มข้อความที่ถูก format แล้วลง GUI โดยตรง (ถูกเรียกจาก logging handler)"""
+        """Add formatted message directly to GUI (called from logging handler)"""
         if not formatted_message.endswith("\n"):
             formatted_message += "\n"
         self.after(0, self._update_textbox, formatted_message)
         self.after(0, self._update_log_textbox, formatted_message)
         
     def _update_textbox(self, message):
-        """อัปเดตกล่องข้อความในแท็บหลัก"""
+        """Update textbox in main tab"""
         if hasattr(self, 'textbox') and self.textbox:
             self.textbox.insert("end", message)
             self.textbox.see("end")
         
     def _update_log_textbox(self, message):
-        """อัปเดตกล่องข้อความในแท็บ Log"""
+        """Update textbox in Log tab"""
         if hasattr(self, 'log_textbox') and self.log_textbox:
             self.log_textbox.insert("end", message)
             self.log_textbox.see("end")
 
 
     def _attach_logging_to_gui(self) -> None:
-        """แนบ logging handler ให้ส่ง log ทั้งระบบเข้า GUI"""
-        gui_handler = create_gui_log_handler(self._append_log_message, level=logging.INFO)
+        """Attach logging handler to send system logs to GUI"""
+        # Check if structured logging is enabled via environment variable
+        structured_logging = os.getenv('STRUCTURED_LOGGING', 'false').lower() == 'true'
+        
+        gui_handler = create_gui_log_handler(
+            self._append_log_message, 
+            level=logging.INFO,
+            structured=structured_logging
+        )
         root_logger = logging.getLogger()
         # ป้องกันซ้ำด้วยการตรวจสอบ class ของ handler
         if not any(h.__class__ is gui_handler.__class__ for h in root_logger.handlers):
             root_logger.addHandler(gui_handler)
     
+    def _log_environment_status(self) -> None:
+        """Log current environment variables status for debugging"""
+        env_vars = ['DB_SERVER', 'DB_NAME', 'DB_USERNAME', 'DB_PASSWORD', 'STRUCTURED_LOGGING']
+        logging.info("🔧 Environment Variables Status:")
+        
+        for var in env_vars:
+            value = os.getenv(var)
+            if value:
+                # Don't log sensitive values, just indicate they're set
+                if 'PASSWORD' in var or 'USERNAME' in var:
+                    logging.info(f"  {var}: *** (set)")
+                else:
+                    logging.info(f"  {var}: {value}")
+            else:
+                logging.info(f"  {var}: (not set)")
+    
     # ===== Database Connection =====
     def _run_check_sql_connection_async(self) -> None:
-        """รันตรวจสอบการเชื่อมต่อ SQL แบบ background เพื่อลดการค้าง UI"""
+        """Run SQL connection check in background to reduce UI freezing"""
         def worker():
             # ปิด popup warning ใน service ระหว่างเช็คแบบ background
             success, message = self.db_service.check_connection(show_warning=False)

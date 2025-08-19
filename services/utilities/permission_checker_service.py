@@ -1,7 +1,7 @@
 """
-Permission Checker Service สำหรับ PIPELINE_SQLSERVER
+Permission Checker Service for PIPELINE_SQLSERVER
 
-ตรวจสอบสิทธิ์ SQL Server ที่จำเป็นสำหรับการทำงานของแอปพลิเคชัน
+Checks SQL Server permissions required for application operation
 """
 
 import logging
@@ -11,9 +11,9 @@ from sqlalchemy import text
 
 class PermissionCheckerService:
     """
-    บริการตรวจสอบสิทธิ์ SQL Server
+    SQL Server permission checking service
     
-    ตรวจสอบสิทธิ์ที่จำเป็น:
+    Checks required permissions:
     - CREATE SCHEMA
     - CREATE TABLE 
     - DROP TABLE
@@ -24,11 +24,11 @@ class PermissionCheckerService:
     
     def __init__(self, engine=None, log_callback=None):
         """
-        เริ่มต้น Permission Checker Service
+        Initialize Permission Checker Service
         
         Args:
-            engine: SQLAlchemy engine (ถ้าไม่มีจะสร้างใหม่)
-            log_callback: ฟังก์ชันสำหรับแสดง log (None = silent mode)
+            engine: SQLAlchemy engine (if not provided, will create new one)
+            log_callback: Function for logging (None = silent mode)
         """
         self.engine = engine
         # ใช้ silent callback เป็นค่าเริ่มต้น (ไม่แสดง log ใน CLI)

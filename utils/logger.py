@@ -1,32 +1,48 @@
 import logging
-from typing import Callable, Optional
+import json
+import time
+from typing import Callable, Optional, Dict, Any
 
 from constants import AppConstants
 
 
 class _GuiLogHandler(logging.Handler):
-    """Logging handler ที่ส่งข้อความที่ถูก format แล้วไปยัง callback ของ GUI"""
+    """Logging handler that sends formatted messages to GUI callback"""
 
-    def __init__(self, gui_callback: Callable[[str], None], level: int = logging.INFO) -> None:
+    def __init__(self, gui_callback: Callable[[str], None], level: int = logging.INFO, structured: bool = False) -> None:
         super().__init__(level)
         self._gui_callback = gui_callback
+        self._structured = structured
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            msg = self.format(record)
-            # ส่งข้อความหนึ่งบรรทัดที่ถูก format แล้วไปยัง GUI
+            if self._structured:
+                # Create structured log entry
+                log_entry = {
+                    'timestamp': time.time(),
+                    'level': record.levelname,
+                    'message': record.getMessage(),
+                    'module': record.module,
+                    'function': record.funcName,
+                    'line': record.lineno
+                }
+                msg = json.dumps(log_entry, ensure_ascii=False)
+            else:
+                msg = self.format(record)
+            
+            # Send formatted message to GUI
             self._gui_callback(msg)
-        except Exception:
-            # อย่าทำให้แอปหลุดเพราะ log handler
+        except (ValueError, TypeError, OSError):
+            # Don't crash app because of log handler
             self.handleError(record)
 
 
 def setup_logging(level: int = logging.INFO, force: bool = False) -> None:
-    """ตั้งค่า logging พื้นฐานด้วยรูปแบบมาตรฐานของแอป
+    """Set up basic logging with standard app format
 
     Args:
-        level: ระดับ log เริ่มต้น
-        force: หาก True จะบังคับ reconfigure แม้เคยตั้งค่าไปแล้ว
+        level: Default log level
+        force: If True, will force reconfigure even if already configured
     """
     # ถ้า root logger เคยมี handler แล้ว และไม่ได้ force ให้ข้าม
     if logging.getLogger().handlers and not force:
@@ -37,18 +53,21 @@ def setup_logging(level: int = logging.INFO, force: bool = False) -> None:
 
 def create_gui_log_handler(gui_callback: Callable[[str], None],
                            level: int = logging.INFO,
-                           formatter: Optional[logging.Formatter] = None) -> logging.Handler:
-    """สร้าง GUI log handler ที่จะส่งข้อความไปยัง callback ของ GUI
+                           formatter: Optional[logging.Formatter] = None,
+                           structured: bool = False) -> logging.Handler:
+    """Create GUI log handler that sends messages to GUI callback
 
     Args:
-        gui_callback: ฟังก์ชันรับข้อความที่ถูก format แล้ว (หนึ่งบรรทัด)
-        level: ระดับ log ของ handler
-        formatter: ตัว formatter ที่จะใช้ (ถ้าไม่ระบุ จะใช้ AppConstants.LOG_FORMAT)
+        gui_callback: Function to receive formatted messages (one line)
+        level: Log level for handler
+        formatter: Formatter to use (if not specified, will use AppConstants.LOG_FORMAT)
+        structured: If True, sends JSON formatted logs instead of plain text
     """
-    handler = _GuiLogHandler(gui_callback, level)
-    if formatter is None:
+    handler = _GuiLogHandler(gui_callback, level, structured)
+    if not structured and formatter is None:
         formatter = logging.Formatter(AppConstants.LOG_FORMAT)
-    handler.setFormatter(formatter)
+    if formatter and not structured:
+        handler.setFormatter(formatter)
     return handler
 
 

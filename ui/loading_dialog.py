@@ -4,7 +4,7 @@ import time
 from typing import Callable, Any
 
 class LoadingDialog(ctk.CTkToplevel):
-    """Loading dialog สำหรับแสดงสถานะการโหลด พร้อมรายการขั้นตอน, เคล็ดลับ และเวลา"""
+    """Loading dialog for displaying loading status with step list, tips and timing"""
     
     def __init__(
         self,

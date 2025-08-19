@@ -1,98 +1,115 @@
 """
-Database configuration management สำหรับ PIPELINE_SQLSERVER
+Database configuration management for PIPELINE_SQLSERVER
 
-โมดูลนี้จัดการการตั้งค่าการเชื่อมต่อกับ SQL Server รวมถึง:
-- การโหลดและบันทึกการตั้งค่า
-- การสร้าง SQLAlchemy engine
-- การจัดการ connection strings
+This module handles SQL Server connection configuration including:
+- Loading and saving configuration settings
+- Creating SQLAlchemy engines
+- Managing connection strings
 """
 
 import os
-import json
+import re
 from typing import Dict, Any, Optional
 from sqlalchemy import create_engine, Engine
 
-from constants import DatabaseConstants, PathConstants
-from utils.helpers import safe_json_load, safe_json_save
+from constants import DatabaseConstants
 from utils.validators import validate_database_config
 
 
+def load_env_file(env_file_path: str = ".env") -> None:
+    """Load environment variables from .env file."""
+    if not os.path.exists(env_file_path):
+        return
+    
+    try:
+        with open(env_file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and '=' in line and not line.startswith('#'):
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    # Only set if not already in environment
+                    if key not in os.environ:
+                        os.environ[key] = value
+    except Exception:
+        pass  # Silently ignore errors
+
+
 class DatabaseConfig:
-    CONFIG_FILE = PathConstants.SQL_CONFIG_FILE
     
     def __init__(self) -> None:
         """
-        Initialize DatabaseConfig
+        Initialize DatabaseConfig.
         
-        โหลดการตั้งค่าจากไฟล์และสร้าง engine
+        Loads configuration from environment variables.
         """
         self.config: Optional[Dict[str, Any]] = None
         self.engine: Optional[Engine] = None
         self.load_config()
-        self.update_engine()
+        # Don't create engine automatically - wait for valid config
 
     def load_config(self) -> None:
         """
-        โหลดการตั้งค่าจากไฟล์
-        
-        ใช้ค่าเริ่มต้นหากไม่มีไฟล์การตั้งค่า
+        Load configuration from environment variables and .env file.
         """
-        default_config = {
-            "server": os.environ.get('COMPUTERNAME', 'localhost') + '\\SQLEXPRESS',
-            "database": '',
-            "auth_type": DatabaseConstants.AUTH_WINDOWS,
-            "username": "",
-            "password": ""
+        # Load .env file first
+        load_env_file()
+        
+        # Load configuration from environment variables
+        self.config = {
+            "server": os.getenv('DB_SERVER', ''),
+            "database": os.getenv('DB_NAME', ''),
+            "auth_type": "SQL Server" if os.getenv('DB_USERNAME') else DatabaseConstants.AUTH_WINDOWS,
+            "username": os.getenv('DB_USERNAME', ''),
+            "password": os.getenv('DB_PASSWORD', '')
         }
-        
-        # ใช้ safe_json_load แทน
-        saved_config = safe_json_load(self.CONFIG_FILE, {})
-        
-        self.config = default_config.copy()
-        self.config.update(saved_config)
-        
-        # บันทึกการตั้งค่าถ้าไม่มีไฟล์
-        if not os.path.exists(self.CONFIG_FILE):
-            self.save_config()
     
     def save_config(self) -> bool:
         """
-        บันทึกการตั้งค่าลงไฟล์
+        Configuration is managed via environment variables only.
         
         Returns:
-            bool: สำเร็จหรือไม่
+            bool: Always True (no file operations needed)
         """
-        if self.config is None:
-            return False
-            
-        return safe_json_save(self.config, self.CONFIG_FILE)
+        # Environment variables are the only source of configuration
+        return True
     
     def update_engine(self) -> None:
         """
-        อัปเดต SQLAlchemy engine ตามการตั้งค่าปัจจุบัน
+        Update SQLAlchemy engine according to current configuration.
         
-        สร้าง connection string และ engine ใหม่ตามการตั้งค่า
+        Creates new connection string and engine based on current settings.
         """
         if self.config is None:
             return
             
-        # ตรวจสอบการตั้งค่าก่อนสร้าง engine
+        # Validate configuration before creating engine
         is_valid, error_msg = validate_database_config(self.config)
         if not is_valid:
-            raise ValueError(f"การตั้งค่าฐานข้อมูลไม่ถูกต้อง: {error_msg}")
+            # Don't raise error - just log it and return
+            return
             
         if self.config["auth_type"] == DatabaseConstants.AUTH_WINDOWS:
-            # Windows Authentication - เพิ่มการรองรับ Unicode
+            # Windows Authentication
+            server = self.config["server"]
+            database = self.config["database"]
+            
             connection_string = (
-                f'mssql+pyodbc://{self.config["server"]}/{self.config["database"]}'
+                f'mssql+pyodbc://{server}/{database}'
                 f'?driver={DatabaseConstants.DEFAULT_DRIVER}&Trusted_Connection=yes&'
                 f'charset=utf8&autocommit=true'
             )
         else:
-            # SQL Server Authentication - เพิ่มการรองรับ Unicode
+            # SQL Server Authentication
+            server = self.config["server"]
+            database = self.config["database"]
+            username = self.config["username"]
+            password = self.config["password"]
+            
             connection_string = (
-                f'mssql+pyodbc://{self.config["username"]}:{self.config["password"]}'
-                f'@{self.config["server"]}/{self.config["database"]}'
+                f'mssql+pyodbc://{username}:{password}'
+                f'@{server}/{database}'
                 f'?driver={DatabaseConstants.DEFAULT_DRIVER}&'
                 f'charset=utf8&autocommit=true'
             )
@@ -185,3 +202,83 @@ class DatabaseConfig:
             except Exception:
                 return False
         return False
+    
+    def save_to_env_file(self, server: str, database: str, auth_type: str, 
+                         username: str = "", password: str = "") -> bool:
+        """
+        Save database configuration to .env file.
+        
+        Args:
+            server: Database server
+            database: Database name
+            auth_type: Authentication type
+            username: Username (for SQL Server auth)
+            password: Password (for SQL Server auth)
+            
+        Returns:
+            bool: Success status
+        """
+        try:
+            env_file_path = ".env"
+            
+            # Prepare new values
+            new_values = {
+                'DB_SERVER': server,
+                'DB_NAME': database,
+                'DB_USERNAME': username if auth_type == "SQL Server" else '',
+                'DB_PASSWORD': password if auth_type == "SQL Server" else ''
+            }
+            
+            if os.path.exists(env_file_path):
+                # Read existing .env file
+                with open(env_file_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                # Update existing values
+                updated_lines = []
+                updated_keys = set()
+                
+                for line in lines:
+                    line = line.rstrip()
+                    if '=' in line and not line.strip().startswith('#'):
+                        key = line.split('=')[0].strip()
+                        if key in new_values:
+                            updated_lines.append(f"{key}={new_values[key]}\n")
+                            updated_keys.add(key)
+                        else:
+                            updated_lines.append(line + '\n')
+                    else:
+                        updated_lines.append(line + '\n')
+                
+                # Add missing keys
+                for key, value in new_values.items():
+                    if key not in updated_keys:
+                        updated_lines.append(f"{key}={value}\n")
+            else:
+                # Create new .env file
+                updated_lines = [
+                    "# Database Configuration for PIPELINE_SQLSERVER\n",
+                    f"DB_SERVER={new_values['DB_SERVER']}\n",
+                    f"DB_NAME={new_values['DB_NAME']}\n",
+                    f"DB_USERNAME={new_values['DB_USERNAME']}\n",
+                    f"DB_PASSWORD={new_values['DB_PASSWORD']}\n",
+                    "\n",
+                    "# Logging Configuration\n",
+                    "STRUCTURED_LOGGING=false\n"
+                ]
+            
+            # Write back to file
+            with open(env_file_path, 'w', encoding='utf-8') as f:
+                f.writelines(updated_lines)
+            
+            # Update environment variables in current process
+            for key, value in new_values.items():
+                os.environ[key] = value
+            
+            # Reload config
+            self.load_config()
+            
+            return True
+            
+        except Exception as e:
+            return False

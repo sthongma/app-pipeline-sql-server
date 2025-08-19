@@ -1,7 +1,7 @@
 """
-Helper functions สำหรับ PIPELINE_SQLSERVER
+Helper functions for PIPELINE_SQLSERVER
 
-ฟังก์ชันยูทิลิตี้ที่ใช้ในหลายส่วนของแอปพลิเคชัน
+Utility functions used across multiple parts of the application
 """
 
 import os
@@ -14,66 +14,41 @@ from dateutil import parser
 from constants import FileConstants, RegexPatterns, ErrorMessages
 
 
-def validate_file_path(file_path: str) -> tuple[bool, str]:
-    """
-    ตรวจสอบความถูกต้องของ path ไฟล์
-    
-    Args:
-        file_path: ที่อยู่ไฟล์ที่ต้องการตรวจสอบ
-        
-    Returns:
-        tuple[bool, str]: (สำเร็จหรือไม่, ข้อความ)
-    """
-    try:
-        if not file_path:
-            return False, "File path not specified"
-            
-        if not os.path.exists(file_path):
-            return False, f"{ErrorMessages.FILE_NOT_FOUND}: {file_path}"
-            
-        if not os.path.isfile(file_path):
-            return False, "The specified path is not a file"
-            
-        return True, "File is valid"
-        
-    except Exception as e:
-        return False, f"Error validating file: {str(e)}"
-
 
 def normalize_column_name(column_name: Union[str, Any]) -> str:
     """
-    ปรับปรุงชื่อคอลัมน์ให้เป็นรูปแบบมาตรฐาน
+    Normalize column name to standard format
     
     Args:
-        column_name: ชื่อคอลัมน์ต้นฉบับ
+        column_name: Original column name
         
     Returns:
-        str: ชื่อคอลัมน์ที่ปรับปรุงแล้ว
+        str: Normalized column name
     """
     if pd.isna(column_name):
         return ""
         
-    # แปลงเป็น string และลบช่องว่างข้างหน้า-หลัง
+    # Convert to string and remove leading/trailing whitespace
     name = str(column_name).strip().lower()
     
-    # แทนที่อักขระพิเศษด้วย underscore
+    # Replace special characters with underscore
     name = re.sub(RegexPatterns.COLUMN_CLEANUP, FileConstants.REPLACEMENT_CHAR, name)
     
-    # ลบ underscore ที่ขึ้นต้นและลงท้าย
+    # Remove leading and trailing underscores
     return name.strip(FileConstants.REPLACEMENT_CHAR)
 
 
 def parse_date_safe(value: Any, dayfirst: bool = True, date_format: str = 'UK') -> Optional[pd.Timestamp]:
     """
-    แปลงค่าเป็นวันที่อย่างปลอดภัย
+    Safely parse value to date
     
     Args:
-        value: ค่าที่ต้องการแปลง
-        dayfirst: ให้วันมาก่อนเดือนหรือไม่ (True สำหรับรูปแบบ UK)
-        date_format: รูปแบบวันที่ ('UK' หรือ 'US')
+        value: Value to parse
+        dayfirst: Whether day comes before month (True for UK format)
+        date_format: Date format ('UK' or 'US')
         
     Returns:
-        Optional[pd.Timestamp]: วันที่ที่แปลงแล้ว หรือ None ถ้าแปลงไม่ได้
+        Optional[pd.Timestamp]: Parsed date or None if parsing fails
     """
     try:
         if pd.isna(value) or value == "":
@@ -84,26 +59,26 @@ def parse_date_safe(value: Any, dayfirst: bool = True, date_format: str = 'UK') 
             if not value:
                 return None
         
-        # ใช้ date_format ถ้าไม่ระบุ dayfirst
+        # Use date_format if dayfirst is not specified
         if date_format and date_format != 'UK':
             dayfirst = False
                 
         return parser.parse(str(value), dayfirst=dayfirst)
         
-    except Exception:
+    except (ValueError, TypeError, parser.ParserError):
         return None
 
 
 def parse_date_with_format(value: Any, date_format: str = 'UK') -> Optional[pd.Timestamp]:
     """
-    แปลงค่าเป็นวันที่ตามรูปแบบที่กำหนด
+    Parse value to date according to specified format
     
     Args:
-        value: ค่าที่ต้องการแปลง
-        date_format: รูปแบบวันที่ ('UK' สำหรับ DD-MM หรือ 'US' สำหรับ MM-DD)
+        value: Value to parse
+        date_format: Date format ('UK' for DD-MM or 'US' for MM-DD)
         
     Returns:
-        Optional[pd.Timestamp]: วันที่ที่แปลงแล้ว หรือ None ถ้าแปลงไม่ได้
+        Optional[pd.Timestamp]: Parsed date or None if parsing fails
     """
     try:
         if pd.isna(value) or value == "":
@@ -114,16 +89,16 @@ def parse_date_with_format(value: Any, date_format: str = 'UK') -> Optional[pd.T
             if not value:
                 return None
         
-        # กำหนด dayfirst ตาม date_format
+        # Set dayfirst based on date_format
         dayfirst = (date_format == 'UK')
         
-        # ลองแปลงด้วย dateutil.parser ก่อน
+        # Try parsing with dateutil.parser first
         try:
             return parser.parse(str(value), dayfirst=dayfirst)
         except:
             pass
         
-        # ถ้าแปลงไม่ได้ ลองแปลงด้วย pandas
+        # If parsing fails, try with pandas
         try:
             if dayfirst:
                 return pd.to_datetime(value, format='%d/%m/%Y', errors='coerce')
@@ -132,7 +107,7 @@ def parse_date_with_format(value: Any, date_format: str = 'UK') -> Optional[pd.T
         except:
             pass
         
-        # ลองแปลงด้วยรูปแบบอื่นๆ
+        # Try parsing with other formats
         try:
             return pd.to_datetime(value, errors='coerce')
         except:
@@ -140,25 +115,25 @@ def parse_date_with_format(value: Any, date_format: str = 'UK') -> Optional[pd.T
             
         return None
         
-    except Exception:
+    except (ValueError, TypeError, parser.ParserError):
         return None
 
 
 def clean_numeric_value(value: Any) -> Optional[float]:
     """
-    ทำความสะอาดค่าตัวเลข
+    Clean numeric value
     
     Args:
-        value: ค่าที่ต้องการทำความสะอาด
+        value: Value to clean
         
     Returns:
-        Optional[float]: ค่าตัวเลขที่ทำความสะอาดแล้ว หรือ None ถ้าไม่ใช่ตัวเลข
+        Optional[float]: Cleaned numeric value or None if not numeric
     """
     try:
         if pd.isna(value) or value == "":
             return None
             
-        # แปลงเป็น string และลบอักขระที่ไม่ใช่ตัวเลข
+        # Convert to string and remove non-numeric characters
         cleaned = re.sub(RegexPatterns.NUMERIC_ONLY, "", str(value))
         
         if not cleaned or cleaned == "-":
@@ -166,20 +141,20 @@ def clean_numeric_value(value: Any) -> Optional[float]:
             
         return float(cleaned)
         
-    except Exception:
+    except (ValueError, TypeError):
         return None
 
 
 def format_error_message(error: Exception, context: str = "") -> str:
     """
-    จัดรูปแบบข้อความแสดงข้อผิดพลาด
+    Format error message
     
     Args:
-        error: ข้อผิดพลาดที่เกิดขึ้น
-        context: บริบทของข้อผิดพลาด
+        error: Exception that occurred
+        context: Context of the error
         
     Returns:
-        str: ข้อความแสดงข้อผิดพลาดที่จัดรูปแบบแล้ว
+        str: Formatted error message
     """
     error_msg = str(error)
     
@@ -191,14 +166,14 @@ def format_error_message(error: Exception, context: str = "") -> str:
 
 def safe_json_load(file_path: str, default: dict = None) -> dict:
     """
-    โหลดไฟล์ JSON อย่างปลอดภัย
+    Safely load JSON file
     
     Args:
-        file_path: ที่อยู่ไฟล์ JSON
-        default: ค่าเริ่มต้นถ้าโหลดไม่ได้
+        file_path: Path to JSON file
+        default: Default value if loading fails
         
     Returns:
-        dict: ข้อมูลจากไฟล์ JSON หรือค่าเริ่มต้น
+        dict: Data from JSON file or default value
     """
     import json
     
@@ -209,7 +184,7 @@ def safe_json_load(file_path: str, default: dict = None) -> dict:
         if os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
-    except Exception:
+    except (FileNotFoundError, json.JSONDecodeError, PermissionError):
         pass
         
     return default
@@ -217,43 +192,28 @@ def safe_json_load(file_path: str, default: dict = None) -> dict:
 
 def safe_json_save(data: dict, file_path: str) -> bool:
     """
-    บันทึกไฟล์ JSON อย่างปลอดภัย
+    Safely save JSON file
     
     Args:
-        data: ข้อมูลที่ต้องการบันทึก
-        file_path: ที่อยู่ไฟล์ที่ต้องการบันทึก
+        data: Data to save
+        file_path: Path to save file
         
     Returns:
-        bool: สำเร็จหรือไม่
+        bool: Whether operation was successful
     """
     import json
     
     try:
-        # สร้างโฟลเดอร์ถ้ายังไม่มี
+        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
         return True
         
-    except Exception:
+    except (FileNotFoundError, PermissionError, TypeError):
         return False
 
 
-def get_file_size_mb(file_path: str) -> float:
-    """
-    คำนวณขนาดไฟล์เป็น MB
-    
-    Args:
-        file_path: ที่อยู่ไฟล์
-        
-    Returns:
-        float: ขนาดไฟล์เป็น MB
-    """
-    try:
-        size_bytes = os.path.getsize(file_path)
-        return size_bytes / (1024 * 1024)
-    except Exception:
-        return 0.0
 
 

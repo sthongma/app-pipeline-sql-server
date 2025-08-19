@@ -1,3 +1,93 @@
-config/sql_config.json
+# Environment variables and sensitive data
+.env
+.env.local
+.env.production
+.env.development
+
+# Python
 *.pyc
-*.json
+*.pyo
+*.pyd
+__pycache__/
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Configuration files (exclude backups to avoid sensitive data)
+config/backups/
+
+# Logs and temporary files
+logs/
+*.log
+temp/
+processed/
+*.tmp
+
+# Database backups and dumps
+backups/
+*.bak
+*.sql
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Custom exclusions for this project
+config/sql_config.json
+
+# Configuration JSON files (user-specific settings)
+config/*.json
+!config/example_*.json
+!config/template_*.json

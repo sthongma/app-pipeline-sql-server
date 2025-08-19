@@ -18,7 +18,7 @@ class LogTab:
         self._create_ui()
     
     def _create_ui(self):
-        """สร้างส่วนประกอบใน Log Tab"""
+        """Create components in Log Tab"""
         # Toolbar
         toolbar = ctk.CTkFrame(self.parent)
         toolbar.pack(fill="x", padx=10, pady=(8, 0))
@@ -34,7 +34,7 @@ class LogTab:
         self.log_textbox.pack(pady=8, padx=10, fill="both", expand=True)
     
     def _copy_log_to_clipboard(self):
-        """คัดลอกข้อความ log ทั้งหมดไปยัง clipboard"""
+        """Copy all log text to clipboard"""
         log_text = self.log_textbox.get("1.0", "end").strip()
         # Get the root window to access clipboard
         root = self.parent.winfo_toplevel()

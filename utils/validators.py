@@ -1,11 +1,12 @@
 """
-Validator functions สำหรับ PIPELINE_SQLSERVER
+Validator functions for PIPELINE_SQLSERVER
 
-ฟังก์ชันสำหรับตรวจสอบความถูกต้องของข้อมูลต่างๆ
+Functions for validating various types of data and configurations
 """
 
 import os
 import re
+import json
 import pandas as pd
 from typing import Dict, List, Tuple, Any, Optional
 
@@ -100,35 +101,75 @@ def validate_database_config(config: Dict[str, Any]) -> Tuple[bool, str]:
     try:
         required_keys = ['server', 'database', 'auth_type']
         
-        # ตรวจสอบ key ที่จำเป็น
+        # Check required keys
         for key in required_keys:
             if key not in config:
-                return False, f"ไม่พบการตั้งค่า: {key}"
+                return False, f"Missing configuration: {key}"
                 
-        # ตรวจสอบ server
+        # Check server
         if not config.get('server'):
-            return False, "ไม่ได้ระบุ server"
+            return False, "Server not specified"
             
-        # ตรวจสอบ database
+        # Check database
         if not config.get('database'):
-            return False, "ไม่ได้ระบุ database"
+            return False, "Database not specified"
             
-        # ตรวจสอบ auth_type
+        # Check auth_type
         auth_type = config.get('auth_type')
         if auth_type not in [DatabaseConstants.AUTH_WINDOWS, DatabaseConstants.AUTH_SQL]:
-            return False, f"ประเภทการยืนยันตัวตนไม่ถูกต้อง: {auth_type}"
+            return False, f"Invalid authentication type: {auth_type}"
             
-        # ถ้าใช้ SQL Authentication ต้องมี username และ password
+        # If using SQL Authentication, must have username and password
         if auth_type == DatabaseConstants.AUTH_SQL:
             if not config.get('username'):
-                return False, "ไม่ได้ระบุ username สำหรับ SQL Authentication"
+                return False, "Username not specified for SQL Authentication"
             if not config.get('password'):
-                return False, "ไม่ได้ระบุ password สำหรับ SQL Authentication"
+                return False, "Password not specified for SQL Authentication"
                 
-        return True, "การตั้งค่าฐานข้อมูลถูกต้อง"
+        return True, "Database configuration is valid"
         
     except Exception as e:
-        return False, f"เกิดข้อผิดพลาดในการตรวจสอบการตั้งค่า: {str(e)}"
+        return False, f"Error validating configuration: {str(e)}"
+
+
+def validate_file_path(file_path: str) -> bool:
+    """
+    ตรวจสอบว่า file path ถูกต้องและมีไฟล์จริง
+    
+    Args:
+        file_path: เส้นทางไฟล์
+        
+    Returns:
+        bool: ถูกต้องหรือไม่
+    """
+    if not file_path:
+        return False
+    
+    try:
+        return os.path.exists(file_path) and os.path.isfile(file_path)
+    except Exception:
+        return False
+
+
+def validate_database_connection(engine) -> bool:
+    """
+    ตรวจสอบการเชื่อมต่อฐานข้อมูล
+    
+    Args:
+        engine: SQLAlchemy engine
+        
+    Returns:
+        bool: เชื่อมต่อได้หรือไม่
+    """
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        return True
+    except Exception:
+        return False
 
 
 def _is_supported_dtype(dtype_str: str) -> bool:
@@ -163,5 +204,84 @@ def _is_supported_dtype(dtype_str: str) -> bool:
             return True
             
     return False
+
+
+def validate_json_config(config_data: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Validate JSON configuration against a schema
+    
+    Args:
+        config_data: Configuration data to validate
+        schema: Schema definition with required fields and types
+        
+    Returns:
+        Tuple[bool, str]: (is_valid, error_message)
+    """
+    try:
+        # Check required fields
+        required_fields = schema.get('required', [])
+        for field in required_fields:
+            if field not in config_data:
+                return False, f"Missing required field: {field}"
+        
+        # Check field types
+        field_types = schema.get('types', {})
+        for field, expected_type in field_types.items():
+            if field in config_data:
+                value = config_data[field]
+                if expected_type == 'string' and not isinstance(value, str):
+                    return False, f"Field '{field}' must be a string"
+                elif expected_type == 'integer' and not isinstance(value, int):
+                    return False, f"Field '{field}' must be an integer"
+                elif expected_type == 'boolean' and not isinstance(value, bool):
+                    return False, f"Field '{field}' must be a boolean"
+                elif expected_type == 'dict' and not isinstance(value, dict):
+                    return False, f"Field '{field}' must be a dictionary"
+                elif expected_type == 'list' and not isinstance(value, list):
+                    return False, f"Field '{field}' must be a list"
+        
+        # Check field values
+        field_values = schema.get('values', {})
+        for field, allowed_values in field_values.items():
+            if field in config_data:
+                value = config_data[field]
+                if value not in allowed_values:
+                    return False, f"Field '{field}' must be one of: {allowed_values}"
+        
+        return True, ""
+        
+    except (TypeError, ValueError) as e:
+        return False, f"Validation error: {str(e)}"
+
+
+def validate_config_file(file_path: str, schema: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Validate a JSON configuration file against a schema
+    
+    Args:
+        file_path: Path to the configuration file
+        schema: Schema definition
+        
+    Returns:
+        Tuple[bool, str]: (is_valid, error_message)
+    """
+    try:
+        # Check if file exists
+        if not os.path.exists(file_path):
+            return False, f"Configuration file not found: {file_path}"
+        
+        # Load and parse JSON
+        with open(file_path, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+        
+        # Validate against schema
+        return validate_json_config(config_data, schema)
+        
+    except (FileNotFoundError, PermissionError) as e:
+        return False, f"File access error: {str(e)}"
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON format: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error: {str(e)}"
 
 

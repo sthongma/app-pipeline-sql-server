@@ -1,0 +1,11 @@
+{
+  "last_search_path": "",
+  "window_size": [
+    900,
+    780
+  ],
+  "theme": "test_backup",
+  "auto_move_files": true,
+  "backup_enabled": true,
+  "log_level": "INFO"
+}

@@ -1,8 +1,8 @@
 """
-File Reader Service สำหรับ PIPELINE_SQLSERVER
+File Reader Service for PIPELINE_SQLSERVER
 
-จัดการการอ่านไฟล์ Excel/CSV และการค้นหาไฟล์
-แยกออกมาจาก FileService เพื่อให้แต่ละ service มีหน้าที่ชัดเจน
+Handles Excel/CSV file reading and file searching
+Separated from FileService to give each service clear responsibilities
 """
 
 import json
@@ -18,22 +18,22 @@ from constants import PathConstants
 
 class FileReaderService:
     """
-    บริการอ่านไฟล์
+    File reading service
     
-    รับผิดชอบ:
-    - การค้นหาไฟล์ Excel/CSV
-    - การอ่านไฟล์ Excel/CSV
-    - การตรวจจับประเภทไฟล์ (file type detection)
-    - การจัดการ column mapping
+    Responsibilities:
+    - Searching for Excel/CSV files
+    - Reading Excel/CSV files
+    - File type detection
+    - Managing column mapping
     """
     
     def __init__(self, search_path: Optional[str] = None, log_callback: Optional[callable] = None) -> None:
         """
-        เริ่มต้น FileReaderService
+        Initialize FileReaderService
         
         Args:
-            search_path (Optional[str]): ที่อยู่โฟลเดอร์สำหรับค้นหาไฟล์
-            log_callback (Optional[callable]): ฟังก์ชันสำหรับแสดง log
+            search_path (Optional[str]): Folder path for file search
+            log_callback (Optional[callable]): Function for logging
         """
         # หากไม่ได้ระบุ path ให้ใช้ Downloads เป็นค่า default
         if search_path:

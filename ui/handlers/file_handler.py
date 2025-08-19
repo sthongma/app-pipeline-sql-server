@@ -24,7 +24,7 @@ class FileHandler:
         self.log = log_callback
     
     def browse_excel_path(self, save_callback):
-        """เลือกโฟลเดอร์สำหรับค้นหาไฟล์"""
+        """Select folder for file search"""
         folder = filedialog.askdirectory()
         if folder:
             self.file_service.set_search_path(folder)
@@ -32,12 +32,12 @@ class FileHandler:
             messagebox.showinfo("Success", f"Set search path for Excel files to\n{folder}")
     
     def run_check_thread(self, ui_callbacks):
-        """เริ่มการตรวจสอบไฟล์ใน thread แยก"""
+        """Start file checking in separate thread"""
         thread = threading.Thread(target=self._check_files, args=(ui_callbacks,))
         thread.start()
     
     def _check_files(self, ui_callbacks):
-        """ตรวจสอบไฟล์ใน Path ที่กำหนด"""
+        """Check files in specified path"""
         try:
             # รีเซ็ต UI
             ui_callbacks['reset_progress']()
