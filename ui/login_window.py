@@ -178,6 +178,9 @@ class LoginWindow(ctk.CTk):
         # บันทึกการตั้งค่า
         self._save_settings()
         
+        # Reload config to get updated environment variables
+        self.db_config.load_config()
+        
         # Update DatabaseConfig engine
         try:
             self.db_config.update_engine()

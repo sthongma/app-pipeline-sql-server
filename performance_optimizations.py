@@ -32,12 +32,25 @@ class PerformanceOptimizer:
         """
         self.log_callback = log_callback or logging.info
         self.cancellation_token = threading.Event()
-        self.chunk_size = 10000  # Default chunk size for file reading
+        self.chunk_size = 50000  # Default optimized chunk size for large files
         self.max_workers = min(4, os.cpu_count() or 1)  # Number of worker threads
         
     def set_cancellation_token(self, token: threading.Event) -> None:
         """Set cancellation token for operation cancellation."""
         self.cancellation_token = token
+        
+    def get_optimal_chunk_size(self, file_size_mb: float) -> int:
+        """Calculate optimal chunk size based on file size and available memory."""
+        if file_size_mb < 50:
+            return 25000
+        elif file_size_mb < 100:
+            return 50000
+        elif file_size_mb < 200:
+            return 75000
+        elif file_size_mb < 500:
+            return 100000
+        else:
+            return 150000  # For very large files
         
     def read_large_file_chunked(self, file_path: str, file_type: str = 'excel') -> Tuple[bool, pd.DataFrame]:
         """
@@ -56,7 +69,13 @@ class PerformanceOptimizer:
             
             self.log_callback(f"📂 Read File: {os.path.basename(file_path)} ({file_size_mb:.1f} MB)")
             
-            if file_size_mb > 100:  # Files larger than 100MB
+            # Set optimal chunk size based on file size
+            optimal_chunk_size = self.get_optimal_chunk_size(file_size_mb)
+            if optimal_chunk_size != self.chunk_size:
+                self.chunk_size = optimal_chunk_size
+                self.log_callback(f"🔧 Optimized chunk size for this file: {self.chunk_size:,} rows")
+            
+            if file_size_mb > 50:  # Lower threshold for chunked reading
                 self.log_callback(f"⚠️ Large File, Use Chunked Reading")
                 return self._read_large_file_chunked(file_path, file_type)
             else:
@@ -103,10 +122,36 @@ class PerformanceOptimizer:
             else:  # Excel .xlsx file
                 chunks = self._read_xlsx_chunks(file_path)
             
-            # Combine chunks
+            # Combine chunks with memory optimization
             if chunks:
-                self.log_callback("🔄 Combining chunks...")
-                df = pd.concat(chunks, ignore_index=True)
+                self.log_callback(f"🔄 Combining {len(chunks)} chunks...")
+                
+                # Progressive concatenation to avoid memory spike
+                if len(chunks) > 10:  # For large number of chunks
+                    self.log_callback("💾 Using progressive concatenation for large dataset")
+                    result = chunks[0]
+                    for i, chunk in enumerate(chunks[1:], 1):
+                        if self.cancellation_token.is_set():
+                            self.log_callback("❌ Work Cancelled")
+                            break
+                        
+                        result = pd.concat([result, chunk], ignore_index=True)
+                        
+                        # Progress feedback
+                        if i % 5 == 0:
+                            progress = (i / (len(chunks) - 1)) * 100
+                            self.log_callback(f"🔗 Combining: {i}/{len(chunks)-1} chunks ({progress:.1f}%)")
+                        
+                        # Memory cleanup
+                        del chunk
+                        if i % 5 == 0:
+                            gc.collect()
+                    
+                    df = result
+                else:
+                    # Standard concatenation for smaller datasets
+                    df = pd.concat(chunks, ignore_index=True)
+                
                 del chunks  # Release memory
                 gc.collect()
                 
@@ -132,28 +177,35 @@ class PerformanceOptimizer:
         return 0, 'utf-8'  # Default fallback
     
     def _read_csv_chunks(self, file_path: str, encoding: str) -> List[pd.DataFrame]:
-        """Read CSV file in chunks."""
+        """Read CSV file in chunks with optimized performance."""
         chunks = []
         
         import warnings
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=pd.errors.DtypeWarning)
+            # Use optimized chunk size and memory settings
             chunk_reader = pd.read_csv(file_path, header=0, encoding=encoding, 
-                                     chunksize=self.chunk_size, low_memory=False)
+                                     chunksize=self.chunk_size, low_memory=False,
+                                     engine='c')  # Use C engine for better performance
         
-        self.log_callback("💡 Note: File contains mixed data types in some columns - this is normal")
+        self.log_callback("💡 Using optimized CSV reader with C engine")
         
+        total_processed = 0
         for i, chunk in enumerate(chunk_reader):
             if self.cancellation_token.is_set():
                 self.log_callback("❌ Work Cancelled")
                 break
             
             chunks.append(chunk)
-            self.log_callback(f"📖 Read Chunk {i+1}: {len(chunk):,} rows")
+            total_processed += len(chunk)
             
-            # Release memory every 10 chunks
-            if (i + 1) % 10 == 0:
+            # Enhanced progress feedback
+            self.log_callback(f"📖 Chunk {i+1}: {len(chunk):,} rows (Total: {total_processed:,})")
+            
+            # Aggressive memory cleanup for large files
+            if (i + 1) % 5 == 0:
                 gc.collect()
+                self.log_callback(f"🧹 Memory cleanup after {i+1} chunks")
         
         return chunks
     
@@ -195,46 +247,63 @@ class PerformanceOptimizer:
         return chunks
     
     def _read_xlsx_chunks(self, file_path: str) -> List[pd.DataFrame]:
-        """Read XLSX file in chunks."""
+        """Read XLSX file in chunks with optimized performance."""
         import openpyxl
         
         chunks = []
-        workbook = openpyxl.load_workbook(file_path, read_only=True)
+        self.log_callback("🔄 Opening Excel file with read-only mode...")
+        
+        # Use read-only mode with data_only for better performance
+        workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
         worksheet = workbook.active
         
-        # Read headers
-        headers = [cell.value for cell in worksheet[1]]
+        # Get total rows for progress tracking
+        total_rows = worksheet.max_row - 1  # Exclude header
+        self.log_callback(f"📊 Total rows to process: {total_rows:,}")
         
-        # Read data in chunks
+        # Read headers using optimized method
+        headers = [cell.value for cell in next(worksheet.iter_rows(min_row=1, max_row=1))]
+        
+        # Read data in larger chunks with batch processing
         chunk_data = []
-        for row_idx in range(2, worksheet.max_row + 1):
+        processed_rows = 0
+        
+        # Use iter_rows for better performance instead of cell-by-cell access
+        for row in worksheet.iter_rows(min_row=2, values_only=True):
             if self.cancellation_token.is_set():
                 self.log_callback("❌ Work Cancelled")
                 workbook.close()
                 break
             
-            row_data = []
-            for col_idx in range(1, len(headers) + 1):
-                cell = worksheet.cell(row=row_idx, column=col_idx)
-                row_data.append(cell.value)
+            chunk_data.append(list(row))
+            processed_rows += 1
             
-            chunk_data.append(row_data)
+            # Progress feedback every 10,000 rows
+            if processed_rows % 10000 == 0:
+                progress = (processed_rows / total_rows) * 100
+                self.log_callback(f"📖 Processing: {processed_rows:,}/{total_rows:,} rows ({progress:.1f}%)")
             
-            # Create chunk every chunk_size rows
+            # Create chunk when reaching chunk_size
             if len(chunk_data) >= self.chunk_size:
                 chunk_df = pd.DataFrame(chunk_data, columns=headers)
                 chunks.append(chunk_df)
                 chunk_data = []
                 
-                self.log_callback(f"📖 Read Chunk {len(chunks)}: {len(chunk_df):,} rows")
+                chunk_num = len(chunks)
+                self.log_callback(f"✅ Completed Chunk {chunk_num}: {len(chunk_df):,} rows")
+                
+                # Aggressive memory cleanup for large files
+                del chunk_df
                 gc.collect()
         
         # Add remaining data
         if chunk_data:
             chunk_df = pd.DataFrame(chunk_data, columns=headers)
             chunks.append(chunk_df)
+            self.log_callback(f"✅ Final Chunk {len(chunks)}: {len(chunk_df):,} rows")
         
         workbook.close()
+        self.log_callback(f"🎯 Chunking Complete: {len(chunks)} chunks created")
         return chunks
     
     def process_dataframe_in_chunks(self, df: pd.DataFrame, chunk_size: int = 5000) -> List[pd.DataFrame]:
