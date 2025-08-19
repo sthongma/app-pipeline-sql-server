@@ -86,3 +86,8 @@ coverage.xml
 
 # Custom exclusions for this project
 config/sql_config.json
+
+# Configuration JSON files (user-specific settings)
+config/*.json
+!config/example_*.json
+!config/template_*.json
