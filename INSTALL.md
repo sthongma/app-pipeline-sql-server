@@ -17,7 +17,7 @@ Before installing, ensure you have:
 
 ```batch
 # Clone the repository
-git clone https://github.com/your-username/PIPELINE_SQLSERVER.git
+git clone https://github.com/ST-415/PIPELINE_SQLSERVER.git
 cd PIPELINE_SQLSERVER
 
 # Run automated installation
@@ -28,7 +28,7 @@ install_requirements.bat
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/PIPELINE_SQLSERVER.git
+git clone https://github.com/ST-415/PIPELINE_SQLSERVER.git
 cd PIPELINE_SQLSERVER
 
 # Create virtual environment (recommended)
