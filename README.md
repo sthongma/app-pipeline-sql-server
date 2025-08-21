@@ -24,7 +24,7 @@ A user-friendly desktop application that simplifies importing Excel and CSV file
 ### 1. Installation
 
 ```bash
-git clone https://github.com/your-username/PIPELINE_SQLSERVER.git
+git clone https://github.com/ST-415/PIPELINE_SQLSERVER.git
 cd PIPELINE_SQLSERVER
 
 # Install dependencies
