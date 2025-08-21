@@ -5,7 +5,7 @@ All notable changes to SQL Server Data Pipeline will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.0] - 2024-08-21
+## [2.2.0]
 
 ### 🎯 Release Preparation
 - **Documentation Cleanup**: Removed internal development documentation for cleaner release
@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.1.0] - 2024-01-XX
+## [2.1.0]
 
 ### 🎯 Major Changes
 - **Environment Variables**: Migrated from JSON config to `.env` file for database configuration
@@ -63,7 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.0.0] - 2024-12-XX
+## [2.0.0]
 
 ### 🏗️ Architecture Overhaul
 - **Clean Architecture v2.0**: Complete restructure with Service-Oriented Architecture
@@ -114,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.5.0] - 2024-11-XX
+## [1.5.0]
 
 ### ✨ Added
 - **Performance Optimizations**:
@@ -145,7 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.0] - 2024-10-XX
+## [1.0.0]
 
 ### ✨ Initial Features
 - **Core ETL Functionality**:
