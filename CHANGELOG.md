@@ -1,8 +1,31 @@
 # Changelog
 
-All notable changes to PIPELINE_SQLSERVER will be documented in this file.
+All notable changes to SQL Server Data Pipeline will be documented in this file.
 
-## [2.1.0] - 2025-01-XX (Latest)
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.2.0] - 2024-08-21
+
+### 🎯 Release Preparation
+- **Documentation Cleanup**: Removed internal development documentation for cleaner release
+- **International Support**: Updated all user-facing documentation to English
+- **Streamlined Package**: Prepared for public distribution with universal documentation
+
+### 🗑️ Removed
+- Internal architecture documentation (ARCHITECTURE.md)
+- Development-specific documentation (CODE_STATUS.md, CONTRIBUTING.md)
+- Redundant quick start guide
+- Internal services documentation
+
+### 🔄 Changed
+- **README.md**: Complete rewrite with international focus
+- **Documentation Language**: All user documentation now in English
+- **Project Focus**: Streamlined for end-user release distribution
+
+---
+
+## [2.1.0] - 2024-01-XX
 
 ### 🎯 Major Changes
 - **Environment Variables**: Migrated from JSON config to `.env` file for database configuration
@@ -40,7 +63,7 @@ All notable changes to PIPELINE_SQLSERVER will be documented in this file.
 
 ---
 
-## [2.0.0] - 2024-12-XX (Clean Architecture)
+## [2.0.0] - 2024-12-XX
 
 ### 🏗️ Architecture Overhaul
 - **Clean Architecture v2.0**: Complete restructure with Service-Oriented Architecture
@@ -89,14 +112,9 @@ All notable changes to PIPELINE_SQLSERVER will be documented in this file.
 - Complex backward compatibility systems
 - Redundant configuration mechanisms
 
-### 📚 Documentation
-- **ARCHITECTURE.md**: Comprehensive architecture documentation
-- **CODE_STATUS.md**: Current code status and guidelines
-- **Enhanced README.md**: Updated with new structure and usage
-
 ---
 
-## [1.5.0] - 2024-11-XX (Performance & Stability)
+## [1.5.0] - 2024-11-XX
 
 ### ✨ Added
 - **Performance Optimizations**:
@@ -111,7 +129,7 @@ All notable changes to PIPELINE_SQLSERVER will be documented in this file.
   - Status bars
   - File list management
 - **Backup System**: Automatic configuration backups
-- **Logging System**: Comprehensive logging with English support
+- **Logging System**: Comprehensive logging with multilingual support
 
 ### 🔄 Changed
 - **UI Framework**: Upgraded to CustomTkinter for modern interface
@@ -127,7 +145,7 @@ All notable changes to PIPELINE_SQLSERVER will be documented in this file.
 
 ---
 
-## [1.0.0] - 2024-10-XX (Initial Release)
+## [1.0.0] - 2024-10-XX
 
 ### ✨ Initial Features
 - **Core ETL Functionality**:
