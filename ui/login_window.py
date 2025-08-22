@@ -228,20 +228,28 @@ class LoginWindow(ctk.CTk):
             # ตรวจสอบผลลัพธ์
             result = final_result.get("res") or {}
             error = final_result.get("err")
+            
+            # ถ้า user ยกเลิก ให้ปิดเงียบๆ ไม่แสดง error
+            if loading_dialog.user_cancelled:
+                loading_dialog.release_and_close()
+                self.wait_window(loading_dialog)
+                return
+                
             if error:
                 loading_dialog.release_and_close()
                 self.wait_window(loading_dialog)
                 messagebox.showerror("Error", f"Error occurred: {str(error)}")
                 return
 
-            if loading_dialog.error:
+            if loading_dialog.error and not loading_dialog.user_cancelled:
                 messagebox.showerror("Error", f"Error occurred: {str(loading_dialog.error)}")
                 return
 
             if not result.get('connection_ok', False):
                 loading_dialog.release_and_close()
                 self.wait_window(loading_dialog)
-                messagebox.showerror("Error", "Unable to connect to SQL Server")
+                if not loading_dialog.user_cancelled:
+                    messagebox.showerror("Error", "Unable to connect to SQL Server")
                 return
 
             if not result.get('permissions_ok', False):
@@ -252,7 +260,8 @@ class LoginWindow(ctk.CTk):
                     detail_msg += "Recommendations:\n" + "\n".join(recommendations[:3])
                 loading_dialog.release_and_close()
                 self.wait_window(loading_dialog)
-                messagebox.showerror("Insufficient permissions", f"Connected, but permissions are insufficient\n\n{detail_msg}")
+                if not loading_dialog.user_cancelled:
+                    messagebox.showerror("Insufficient permissions", f"Connected, but permissions are insufficient\n\n{detail_msg}")
                 return
 
             # ส่งข้อมูลที่โหลดไว้ให้ MainWindow
@@ -279,6 +288,12 @@ class LoginWindow(ctk.CTk):
             self.preloaded_data = preloaded_data
             self.after(100, self._start_ui_creation)
         except Exception as e:
+            # ตรวจสอบว่า error เกิดจาก user cancel หรือไม่
+            try:
+                if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
+                    return  # ไม่แสดง error ถ้า user ยกเลิก
+            except:
+                pass
             messagebox.showerror("Error", f"An error occurred: {str(e)}")
             
     def _start_ui_creation(self):
@@ -288,7 +303,13 @@ class LoginWindow(ctk.CTk):
             self.ui_loading_dialog.update_message("Starting MainWindow creation...")
             self.after(50, self._create_main_window_step1)
         except Exception as e:
-            self.ui_loading_dialog.destroy()
+            try:
+                if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
+                    return  # ไม่แสดง error ถ้า user ยกเลิก
+            except:
+                pass
+            if hasattr(self, 'ui_loading_dialog'):
+                self.ui_loading_dialog.destroy()
             messagebox.showerror("Error", f"Error creating UI: {str(e)}")
     
     def _create_main_window_step1(self):
@@ -325,7 +346,13 @@ class LoginWindow(ctk.CTk):
             self.after(150, self._finish_ui_creation)
             
         except Exception as e:
-            self.ui_loading_dialog.destroy()
+            try:
+                if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
+                    return  # ไม่แสดง error ถ้า user ยกเลิก
+            except:
+                pass
+            if hasattr(self, 'ui_loading_dialog'):
+                self.ui_loading_dialog.destroy()
             messagebox.showerror("Error", f"Error creating UI: {str(e)}")
     
     def _finish_ui_creation(self):
@@ -344,7 +371,13 @@ class LoginWindow(ctk.CTk):
             self.main_window.protocol("WM_DELETE_WINDOW", lambda: self._on_main_window_close(self.main_window))
             
         except Exception as e:
-            self.ui_loading_dialog.destroy()
+            try:
+                if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
+                    return  # ไม่แสดง error ถ้า user ยกเลิก
+            except:
+                pass
+            if hasattr(self, 'ui_loading_dialog'):
+                self.ui_loading_dialog.destroy()
             messagebox.showerror("Error", f"Error creating UI: {str(e)}")
             
     def _on_main_window_close(self, main_window):

@@ -25,6 +25,7 @@ class LoadingDialog(ctk.CTkToplevel):
         self.result = None
         self.error = None
         self.task_thread = None
+        self.user_cancelled = False
         self._min_display_ms = int(min_display_ms)
         self._min_step_duration_ms = int(min_step_duration_ms)
         self._start_ts = None
@@ -57,6 +58,9 @@ class LoadingDialog(ctk.CTkToplevel):
         
         # จัดกึ่งกลางหน้าจอ
         self._center_window()
+        
+        # ตั้งค่าการจัดการเมื่อ user กด X
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         
         # สร้าง UI
         self._create_ui(message)
@@ -301,8 +305,14 @@ class LoadingDialog(ctk.CTkToplevel):
             except Exception:
                 pass
         
+    def _on_close(self):
+        """จัดการเมื่อ user กด X"""
+        self.user_cancelled = True
+        self._cancel_task()
+        
     def _cancel_task(self):
         """ยกเลิกงาน (ถ้าต้องการ)"""
+        self.user_cancelled = True
         self.error = "Cancelled by user"
         self._finish_task()
         
