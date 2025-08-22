@@ -32,6 +32,7 @@ class LoginWindow(ctk.CTk):
         
         # โหลดการตั้งค่าที่บันทึกไว้
         self._load_saved_settings()
+        
 
         
     def _create_ui(self):
@@ -123,6 +124,7 @@ class LoginWindow(ctk.CTk):
             database = os.getenv('DB_NAME', '')
             username = os.getenv('DB_USERNAME', '')
             password = os.getenv('DB_PASSWORD', '')
+            
             
             # Determine auth type based on username presence
             auth_type = "SQL Server" if username else "Windows"
@@ -360,9 +362,19 @@ class LoginWindow(ctk.CTk):
         if not connection_ok:
             return {"connection_ok": False}
 
-        # 2) ตรวจสิทธิ์
+        # 2) ตรวจสิทธิ์ - ใช้ config ที่ user พิมพ์ใหม่
         if progress_callback:
             progress_callback("Checking database permissions...")
+        
+        # อัปเดต connection service ให้ใช้ config ใหม่ก่อนตรวจสิทธิ์
+        self.db_service.update_config(
+            server=config["server"],
+            database=config["database"], 
+            auth_type=config["auth_type"],
+            username=config.get("username"),
+            password=config.get("password")
+        )
+        
         permission_results = self.db_service.check_permissions('bronze', log_callback=progress_callback)
         permissions_ok = permission_results.get('success', False)
         if not permissions_ok:
