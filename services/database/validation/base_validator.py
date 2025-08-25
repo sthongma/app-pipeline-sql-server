@@ -61,7 +61,7 @@ class BaseValidator(ABC):
     def get_cleaned_column_expression(self, col_name: str, cleaning_type: str = 'basic') -> str:
         """
         สร้าง SQL expression สำหรับทำความสะอาดข้อมูล
-        รวมการแปลงเครื่องหมาย '-' เดี่ยวๆ ให้เป็นค่าว่าง
+        แปลงเครื่องหมาย '-' เดี่ยวๆ ให้เป็นค่าว่างเฉพาะชนิดตัวเลขและวันที่
         
         Args:
             col_name: Column name
@@ -73,7 +73,7 @@ class BaseValidator(ABC):
         safe_col = self.safe_column_name(col_name)
         
         if cleaning_type == 'basic':
-            return f"NULLIF(LTRIM(RTRIM({safe_col})), '-')"
+            return f"LTRIM(RTRIM({safe_col}))"
         elif cleaning_type == 'numeric':
             return f"NULLIF(LTRIM(RTRIM(REPLACE(REPLACE({safe_col}, ',', ''), ' ', ''))), '-')"
         elif cleaning_type == 'date':
@@ -89,7 +89,7 @@ class BaseValidator(ABC):
                 )), '-')
             """
         else:
-            return f"NULLIF({safe_col}, '-')"
+            return safe_col
     
     def execute_query_safely(self, conn, query: str, error_message: str = "", log_func=None) -> Any:
         """
