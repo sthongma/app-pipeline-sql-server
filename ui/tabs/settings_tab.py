@@ -273,9 +273,14 @@ class SettingsTab:
     
     def _add_file_type(self):
         """เพิ่มประเภทไฟล์ใหม่โดยเลือกไฟล์ตัวอย่าง"""
-        # Popup ให้เลือกไฟล์ตัวอย่างทันที (รองรับทั้ง xlsx/csv)
+        # Popup ให้เลือกไฟล์ตัวอย่างทันที (รองรับทั้ง xlsx/xls/csv)
         file_path = filedialog.askopenfilename(
-            filetypes=[("Excel/CSV files", "*.xlsx;*.csv"), ("Excel files", "*.xlsx"), ("CSV files", "*.csv")]
+            filetypes=[
+                ("Excel/CSV files", "*.xlsx;*.xls;*.csv"), 
+                ("Excel XLSX files", "*.xlsx"), 
+                ("Excel XLS files", "*.xls"), 
+                ("CSV files", "*.csv")
+            ]
         )
         if not file_path:
             return
@@ -283,7 +288,11 @@ class SettingsTab:
         try:
             if file_path.lower().endswith('.csv'):
                 df = pd.read_csv(file_path, nrows=100, encoding='utf-8')
+            elif file_path.lower().endswith('.xls'):
+                # สำหรับไฟล์ .xls ใช้ xlrd engine
+                df = pd.read_excel(file_path, nrows=100, engine='xlrd')
             else:
+                # สำหรับไฟล์ .xlsx
                 df = pd.read_excel(file_path, nrows=100)
             
             columns = list(df.columns)
