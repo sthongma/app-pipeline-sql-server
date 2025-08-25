@@ -153,10 +153,10 @@ class MainValidator(BaseValidator):
                 
                 # Process phase results
                 for issue in phase_issues:
-                    if issue['percentage'] > 10:
+                    if issue['percentage'] > 50:
                         validation_results['is_valid'] = False
                         validation_results['issues'].append(issue)
-                    elif issue['percentage'] > 1:
+                    elif issue['percentage'] > 10:
                         validation_results['warnings'].append(issue)
             
             # Phase 9: Final summary
@@ -307,7 +307,7 @@ class MainValidator(BaseValidator):
                 
                 for issue in issues:
                     if log_func and issue['error_count'] > 0:
-                        status = "❌" if issue['percentage'] > 10 else "⚠️"
+                        status = "❌" if issue['percentage'] > 50 else "⚠️"
                         column_name = issue['column'] if isinstance(issue['column'], str) else str(issue['column'])
                         examples = issue['examples'][:100] if isinstance(issue['examples'], str) else str(issue['examples'])[:100]
                         log_func(f"      {status} {column_name}: {issue['error_count']:,} invalid rows ({issue['percentage']}%) Examples: {examples}")
