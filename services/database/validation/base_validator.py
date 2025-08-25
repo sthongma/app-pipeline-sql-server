@@ -61,6 +61,7 @@ class BaseValidator(ABC):
     def get_cleaned_column_expression(self, col_name: str, cleaning_type: str = 'basic') -> str:
         """
         สร้าง SQL expression สำหรับทำความสะอาดข้อมูล
+        รวมการแปลงเครื่องหมาย '-' เดี่ยวๆ ให้เป็นค่าว่าง
         
         Args:
             col_name: Column name
@@ -72,9 +73,9 @@ class BaseValidator(ABC):
         safe_col = self.safe_column_name(col_name)
         
         if cleaning_type == 'basic':
-            return f"LTRIM(RTRIM({safe_col}))"
+            return f"NULLIF(LTRIM(RTRIM({safe_col})), '-')"
         elif cleaning_type == 'numeric':
-            return f"LTRIM(RTRIM(REPLACE(REPLACE({safe_col}, ',', ''), ' ', '')))"
+            return f"NULLIF(LTRIM(RTRIM(REPLACE(REPLACE({safe_col}, ',', ''), ' ', ''))), '-')"
         elif cleaning_type == 'date':
             return f"""
                 NULLIF(LTRIM(RTRIM(
@@ -85,10 +86,10 @@ class BaseValidator(ABC):
                         ),
                         NCHAR(65279) + NCHAR(8203) + NCHAR(8288), ''
                     ), '  ', ' ')
-                )), '')
+                )), '-')
             """
         else:
-            return safe_col
+            return f"NULLIF({safe_col}, '-')"
     
     def execute_query_safely(self, conn, query: str, error_message: str = "", log_func=None) -> Any:
         """
