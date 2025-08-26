@@ -28,6 +28,7 @@ from sqlalchemy.types import (
 )
 
 from .data_validation_service import DataValidationService
+from utils.sql_utils import get_numeric_cleaning_expression
 
 
 class DataUploadService:
@@ -164,10 +165,9 @@ class DataUploadService:
                 staging_table, table_name, required_cols, schema_name, log_func, date_format
             )
             
-            with self.engine.begin() as conn:
-                conn.execute(text(f"DROP TABLE {schema_name}.{staging_table}"))
-                if log_func:
-                    log_func(f"🗑️ Dropped staging table {schema_name}.{staging_table}")
+            # Keep staging table for debugging - it will be cleaned up when new data comes
+            if log_func:
+                log_func(f"✅ Keeping staging table {schema_name}.{staging_table} for debugging")
 
             return True, f"Upload successful → {schema_name}.{table_name} (ingested NVARCHAR(MAX) then converted by dtype for {len(df):,} rows)"
         
@@ -450,13 +450,19 @@ class DataUploadService:
             base = f"NULLIF(LTRIM(RTRIM({col_ref})), '')"
             
             if isinstance(sa_type_obj, (SA_Integer, SA_SmallInteger)):
-                return f"TRY_CONVERT(INT, REPLACE({base}, ' ', ''))"
+                # Use shared numeric cleaning function for consistency
+                cleaned = get_numeric_cleaning_expression(col_name)
+                return f"TRY_CONVERT(INT, {cleaned})"
             if isinstance(sa_type_obj, SA_Float):
-                return f"TRY_CONVERT(FLOAT, REPLACE({base}, ' ', ''))"
+                # Use shared numeric cleaning function for consistency
+                cleaned = get_numeric_cleaning_expression(col_name)
+                return f"TRY_CONVERT(FLOAT, {cleaned})"
             if isinstance(sa_type_obj, SA_DECIMAL):
                 precision = getattr(sa_type_obj, 'precision', 18) or 18
                 scale = getattr(sa_type_obj, 'scale', 2) or 2
-                return f"TRY_CONVERT(DECIMAL({precision},{scale}), REPLACE({base}, ' ', ''))"
+                # Use shared numeric cleaning function for consistency
+                cleaned = get_numeric_cleaning_expression(col_name)
+                return f"TRY_CONVERT(DECIMAL({precision},{scale}), {cleaned})"
             if isinstance(sa_type_obj, (SA_DATE, SA_DateTime)):
                 # Enhanced date cleaning to handle tab characters and special characters
                 date_cleaned = f"NULLIF(LTRIM(RTRIM(REPLACE(REPLACE(REPLACE({col_ref}, CHAR(9), ''), CHAR(10), ''), CHAR(13), ''))), '')"

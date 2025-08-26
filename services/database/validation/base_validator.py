@@ -6,6 +6,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any
 from sqlalchemy import text
+from utils.sql_utils import get_cleaning_expression
 
 
 class BaseValidator(ABC):
@@ -70,26 +71,8 @@ class BaseValidator(ABC):
         Returns:
             str: SQL expression for cleaning
         """
-        safe_col = self.safe_column_name(col_name)
-        
-        if cleaning_type == 'basic':
-            return f"LTRIM(RTRIM({safe_col}))"
-        elif cleaning_type == 'numeric':
-            return f"NULLIF(LTRIM(RTRIM(REPLACE(REPLACE({safe_col}, ',', ''), ' ', ''))), '-')"
-        elif cleaning_type == 'date':
-            return f"""
-                NULLIF(LTRIM(RTRIM(
-                    REPLACE(REPLACE(
-                        TRANSLATE({safe_col}, 
-                            CHAR(9) + CHAR(10) + CHAR(13) + CHAR(160) + ',', 
-                            '     '
-                        ),
-                        NCHAR(65279) + NCHAR(8203) + NCHAR(8288), ''
-                    ), '  ', ' ')
-                )), '-')
-            """
-        else:
-            return safe_col
+        # Use shared utility function to ensure consistency
+        return get_cleaning_expression(col_name, cleaning_type)
     
     def execute_query_safely(self, conn, query: str, error_message: str = "", log_func=None) -> Any:
         """
