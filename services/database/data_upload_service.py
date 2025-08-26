@@ -80,6 +80,9 @@ class DataUploadService:
             clear_existing: Whether to clear existing data (default True for backwards compatibility)
         """
         
+        # โหลด dtype_settings ใหม่ทุกครั้งเพื่อให้ได้ค่าล่าสุดหลัง Save
+        self._load_dtype_settings()
+        
         if log_func:
             log_func("✅ Database access permissions are correct")
         
