@@ -399,10 +399,10 @@ class DataProcessorService:
         validation_result = self.validate_columns(df, logic_type)
         
         if not validation_result[0]:
-            self.log_callback(f"❌ ปัญหาคอลัมน์: {validation_result[1]}")
+            self.log_callback(f"❌ Column issues: {validation_result[1]}")
             return False
         else:
-            self.log_callback("✅ ตรวจสอบคอลัมน์เบื้องต้นผ่าน - รายละเอียดจะตรวจสอบใน staging table ด้วย SQL")
+            self.log_callback("✅ Basic column check passed - detailed checks will be performed in staging table using SQL")
             return True
 
     def check_invalid_numeric(self, df, logic_type):
@@ -440,8 +440,8 @@ class DataProcessorService:
                         'problem_rows': [r + 2 for r in problem_rows]  # +2 เพราะ header + 0-indexed
                     }
                     
-                    summary_msg = (f"❌ คอลัมน์ '{col}' ต้องการข้อมูลตัวเลข ({str(dtype)}) "
-                                 f"แต่พบข้อมูลที่ไม่ใช่ตัวเลข {invalid_count:,} แถว "
+                    summary_msg = (f"❌ Column '{col}' requires numeric data ({str(dtype)}) "
+                                 f"but found non-numeric data in {invalid_count:,} rows "
                                  f"({validation_report['invalid_data'][col]['percentage']}%)")
                     validation_report['summary'].append(summary_msg)
                         
@@ -459,28 +459,28 @@ class DataProcessorService:
             tuple: (success, message)
         """
         if not self.column_settings or logic_type not in self.column_settings:
-            return False, "ยังไม่ได้ตั้งค่าคอลัมน์สำหรับประเภทไฟล์นี้"
+            return False, "No column settings for this file type"
             
         required_cols = set(self.column_settings[logic_type].values())
         file_cols = set(column_list)
         missing_cols = required_cols - file_cols
         
         if missing_cols:
-            return False, f"คอลัมน์ไม่ครบ: {', '.join(sorted(missing_cols))}"
+            return False, f"Missing columns: {', '.join(sorted(missing_cols))}"
         
-        return True, f"พบคอลัมน์ครบถ้วนสำหรับ {logic_type}"
+        return True, f"All columns are present for {logic_type}"
 
     def validate_columns(self, df, logic_type):
         """Validate required columns (dynamic)"""
         if not self.column_settings or logic_type not in self.column_settings:
-            return False, "ยังไม่ได้ตั้งค่าคอลัมน์สำหรับประเภทไฟล์นี้"
+            return False, "No column settings for this file type"
             
         required_cols = set(self.column_settings[logic_type].values())
         df_cols = set(df.columns)
         missing_cols = required_cols - df_cols
         
         if missing_cols:
-            return False, f"คอลัมน์ไม่ครบ: {missing_cols}"
+            return False, f"Missing columns: {missing_cols}"
         return True, {}
 
     def _print_conversion_report(self, log):
@@ -488,22 +488,22 @@ class DataProcessorService:
         if log['successful_conversions']:
             # แสดงเฉพาะจำนวนคอลัมน์ที่แปลงสำเร็จ ไม่แสดงรายชื่อทั้งหมด
             success_count = len(log['successful_conversions'])
-            self.log_with_time(f"✅ แปลงข้อมูลสำเร็จ: {success_count} คอลัมน์")
+            self.log_with_time(f"✅ Successfully converted: {success_count} columns")
         
         if log['failed_conversions']:
-            self.log_with_time(f"\n❌ พบปัญหาการแปลงข้อมูล:")
+            self.log_with_time(f"\n❌ Found issues with data conversion:")
             for col, details in log['failed_conversions'].items():
-                self.log_callback(f"   🔸 คอลัมน์ '{col}':")
-                self.log_callback(f"      - ชนิดข้อมูลที่ต้องการ: {details['expected_type']}")
+                self.log_callback(f"   🔸 Column '{col}':")
+                self.log_callback(f"      - Expected data type: {details['expected_type']}")
                 if 'failed_count' in details:
-                    self.log_callback(f"      - จำนวนแถวที่แปลงไม่ได้: {details['failed_count']:,}")
+                    self.log_callback(f"      - Number of rows that failed conversion: {details['failed_count']:,}")
                 if 'examples' in details:
-                    self.log_callback(f"      - ตัวอย่างข้อมูลที่ผิด: {details['examples']}")
+                    self.log_callback(f"      - Example data that failed: {details['examples']}")
                 if 'error' in details:
-                    self.log_callback(f"      - ข้อผิดพลาด: {details['error']}")
+                    self.log_callback(f"      - Error: {details['error']}")
         
         if log['warnings']:
-            self.log_with_time(f"\n⚠️ คำเตือน: {', '.join(log['warnings'])}")
+            self.log_with_time(f"\n⚠️ Warning: {', '.join(log['warnings'])}")
 
     def _reset_log_flags(self):
         """Reset log flags to show new logs for next file"""
