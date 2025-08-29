@@ -159,7 +159,7 @@ class DataProcessorService:
             
         dtypes = {}
         for orig_col, new_col in self.column_settings[file_type].items():
-            dtype_str = self.dtype_settings.get(file_type, {}).get(orig_col, 'NVARCHAR(255)')
+            dtype_str = self.dtype_settings.get(file_type, {}).get(new_col, 'NVARCHAR(255)')
             dtype = self._convert_dtype_to_sqlalchemy(dtype_str)
             dtypes[new_col] = dtype
         # เก็บใน cache

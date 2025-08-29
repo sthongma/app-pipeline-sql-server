@@ -89,5 +89,7 @@ config/sql_config.json
 
 # Configuration JSON files (user-specific settings)
 config/*.json
+config/*.json.backup
 !config/example_*.json
 !config/template_*.json
+

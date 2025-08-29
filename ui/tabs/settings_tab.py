@@ -310,7 +310,8 @@ class SettingsTab:
                 return
             
             self.column_settings[file_type] = {col: col for col in columns}
-            self.dtype_settings[file_type] = inferred_dtypes
+            # แปลง inferred_dtypes ให้ใช้ target column เป็น key (ในกรณีนี้ source = target)
+            self.dtype_settings[file_type] = {col: inferred_dtypes[col] for col in columns}
             
             # บันทึกการตั้งค่า
             if self.callbacks.get('save_column_settings'):
@@ -426,9 +427,10 @@ class SettingsTab:
                 self.dtype_settings[current_file_type] = {"_date_format": self.date_format_menus[current_file_type].get()}
                 self.dtype_settings[current_file_type].update(temp_dict)
             
-            # จากนั้นค่อยบันทึกชนิดข้อมูลแต่ละคอลัมน์
-            for col, menu in self.dtype_menus[current_file_type].items():
-                self.dtype_settings[current_file_type][col] = menu.get()
+            # จากนั้นค่อยบันทึกชนิดข้อมูลแต่ละคอลัมน์ (ใช้ target column เป็น key)
+            for source_col, menu in self.dtype_menus[current_file_type].items():
+                target_col = self.column_settings[current_file_type][source_col]
+                self.dtype_settings[current_file_type][target_col] = menu.get()
             
             if self.callbacks.get('save_dtype_settings'):
                 self.callbacks['save_dtype_settings']()
@@ -555,7 +557,7 @@ class SettingsTab:
         
         column_menus = {}
         
-        for col in self.column_settings.get(file_type, {}):
+        for source_col, target_col in self.column_settings.get(file_type, {}).items():
             # เพิ่ม outer frame เพื่อครอบและเพิ่มระยะห่าง
             outer_frame = ctk.CTkFrame(parent, fg_color="transparent")
             outer_frame.pack(fill="x", pady=3, padx=8)
@@ -564,15 +566,15 @@ class SettingsTab:
             row_frame = ctk.CTkFrame(outer_frame, corner_radius=8)
             row_frame.pack(fill="x", pady=3, padx=3)
             
-            col_label = ctk.CTkLabel(row_frame, text=col, width=400, anchor="w")
+            col_label = ctk.CTkLabel(row_frame, text=source_col, width=400, anchor="w")
             col_label.pack(side="left", padx=(15, 10), pady=12, expand=True, fill="x")
             
             dtype_menu = ctk.CTkOptionMenu(row_frame, values=supported_dtypes, width=220)
-            dtype_menu.set(self.dtype_settings.get(file_type, {}).get(col, "NVARCHAR(255)"))
+            dtype_menu.set(self.dtype_settings.get(file_type, {}).get(target_col, "NVARCHAR(255)"))
             dtype_menu.pack(side="right", padx=(0, 15), pady=12)
             
-            self.dtype_menus[file_type][col] = dtype_menu
-            column_menus[col] = dtype_menu
+            self.dtype_menus[file_type][source_col] = dtype_menu
+            column_menus[source_col] = dtype_menu
             
         return column_menus
     
@@ -596,15 +598,15 @@ class SettingsTab:
             self.current_file_type = None
     
     def _sync_dtype_settings(self, file_type):
-        """ซิงค์ dtype_settings ให้ตรงกับ column_settings (เพิ่ม/ลบ key ตาม column) และเก็บ meta key เช่น _date_format"""
-        cols = set(self.column_settings.get(file_type, {}).keys())
+        """ซิงค์ dtype_settings ให้ตรงกับ column_settings (เพิ่ม/ลบ key ตาม target column) และเก็บ meta key เช่น _date_format"""
+        target_cols = set(self.column_settings.get(file_type, {}).values())
         dtypes = self.dtype_settings.get(file_type, {})
         # เก็บ meta key (ขึ้นต้นด้วย _)
         meta_keys = {k: v for k, v in dtypes.items() if k.startswith('_')}
-        # ลบ dtype ที่ไม่มีใน columns (ยกเว้น meta key)
-        dtypes = {col: dtypes[col] for col in cols if col in dtypes}
+        # ลบ dtype ที่ไม่มีใน target columns (ยกเว้น meta key)
+        dtypes = {col: dtypes[col] for col in target_cols if col in dtypes}
         # เพิ่ม dtype ที่ยังไม่มี
-        for col in cols:
+        for col in target_cols:
             if col not in dtypes:
                 dtypes[col] = "NVARCHAR(255)"
         # รวม meta key กลับเข้าไป
