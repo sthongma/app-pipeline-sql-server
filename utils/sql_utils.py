@@ -38,7 +38,9 @@ def get_date_cleaning_expression(col_name: str) -> str:
                     CHAR(9) + CHAR(10) + CHAR(13) + CHAR(160) + ',', 
                     '     '
                 ),
-                NCHAR(65279) + NCHAR(8203) + NCHAR(8288), ''
+                NCHAR(65279), ''
+            ), NCHAR(8203), ''
+            ), NCHAR(8288), ''
             )
         )), '-')
     """.strip()
