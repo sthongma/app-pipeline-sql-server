@@ -31,19 +31,7 @@ def get_date_cleaning_expression(col_name: str) -> str:
         str: SQL expression that cleans the column data for dates
     """
     safe_col = f"[{col_name}]"
-    return f"""
-        NULLIF(LTRIM(RTRIM(
-            REPLACE(REPLACE(
-                TRANSLATE({safe_col}, 
-                    CHAR(9) + CHAR(10) + CHAR(13) + CHAR(160) + ',', 
-                    '     '
-                ),
-                NCHAR(65279), ''
-            ), NCHAR(8203), ''
-            ), NCHAR(8288), ''
-            )
-        )), '-')
-    """.strip()
+    return f"""NULLIF(LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(TRANSLATE({safe_col}, CHAR(9) + CHAR(10) + CHAR(13) + CHAR(160) + ',', '     '), NCHAR(65279), ''), NCHAR(8203), ''), NCHAR(8288), ''))), '-')"""
 
 
 def get_basic_cleaning_expression(col_name: str) -> str:
