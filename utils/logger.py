@@ -1,6 +1,8 @@
 import logging
 import json
 import time
+import os
+from datetime import datetime
 from typing import Callable, Optional, Dict, Any
 
 from constants import AppConstants
@@ -69,5 +71,110 @@ def create_gui_log_handler(gui_callback: Callable[[str], None],
     if formatter and not structured:
         handler.setFormatter(formatter)
     return handler
+
+
+def setup_file_logging(base_path: str, enable_export: bool = True) -> Optional[str]:
+    """Set up file logging to export logs to log_pipeline folder
+    
+    Args:
+        base_path: Base directory path (typically last_search_path)
+        enable_export: Whether to enable file export logging
+        
+    Returns:
+        Log file path if successful, None if failed
+    """
+    if not enable_export or not base_path or not os.path.exists(base_path):
+        return None
+    
+    try:
+        # สร้างโฟลเดอร์ log_pipeline
+        log_dir = os.path.join(base_path, "log_pipeline")
+        os.makedirs(log_dir, exist_ok=True)
+        
+        # สร้างชื่อไฟล์ log ตามรูปแบบ log_pipeline_(วันที่และเวลา).log
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_filename = f"log_pipeline_{timestamp}.log"
+        log_file_path = os.path.join(log_dir, log_filename)
+        
+        # สร้าง FileHandler
+        file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(logging.Formatter(AppConstants.LOG_FORMAT))
+        
+        # เพิ่ม FileHandler ไปยัง root logger
+        root_logger = logging.getLogger()
+        root_logger.addHandler(file_handler)
+        
+        return log_file_path
+        
+    except Exception as e:
+        # ถ้าเกิดข้อผิดพลาด ใช้ logging แบบปกติไปก่อน (ไม่ให้ระบบล้ม)
+        try:
+            logging.error(f"Failed to setup file logging: {e}")
+        except:
+            pass
+        return None
+
+
+def export_current_logs_to_file(log_file_path: str, log_content: str) -> bool:
+    """Export current log content to specified file
+    
+    Args:
+        log_file_path: Path to the log file to write to
+        log_content: Log content to write
+        
+    Returns:
+        True if export successful, False otherwise
+    """
+    try:
+        with open(log_file_path, 'w', encoding='utf-8') as f:
+            f.write(log_content)
+        return True
+    except Exception:
+        return False
+
+
+def cleanup_old_log_files(base_path: str, retention_days: int = 30) -> int:
+    """Clean up old log files older than retention period
+    
+    Args:
+        base_path: Base directory path (typically last_search_path)
+        retention_days: Number of days to retain log files (default: 30)
+        
+    Returns:
+        Number of files deleted
+    """
+    if not base_path or not os.path.exists(base_path):
+        return 0
+    
+    try:
+        log_dir = os.path.join(base_path, "log_pipeline")
+        if not os.path.exists(log_dir):
+            return 0
+        
+        deleted_count = 0
+        cutoff_time = time.time() - (retention_days * 24 * 60 * 60)  # Convert days to seconds
+        
+        # ค้นหาไฟล์ log ที่เก่าเกิน retention period
+        for filename in os.listdir(log_dir):
+            if filename.startswith('log_pipeline_') and filename.endswith('.log'):
+                file_path = os.path.join(log_dir, filename)
+                try:
+                    # ตรวจสอบเวลาที่แก้ไขไฟล์ล่าสุด
+                    if os.path.getmtime(file_path) < cutoff_time:
+                        os.remove(file_path)
+                        deleted_count += 1
+                        logging.info(f"Deleted old log file: {filename}")
+                except (OSError, PermissionError) as e:
+                    logging.warning(f"Could not delete log file {filename}: {e}")
+        
+        if deleted_count > 0:
+            logging.info(f"Log cleanup completed: {deleted_count} old files deleted")
+        
+        return deleted_count
+        
+    except Exception as e:
+        logging.error(f"Error during log cleanup: {e}")
+        return 0
 
 

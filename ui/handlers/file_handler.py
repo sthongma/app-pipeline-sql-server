@@ -5,6 +5,8 @@ import time
 from datetime import datetime
 from tkinter import messagebox, filedialog
 import pandas as pd
+from utils.logger import setup_file_logging, cleanup_old_log_files
+from config.json_manager import json_manager
 
 
 class FileHandler:
@@ -359,6 +361,9 @@ class FileHandler:
         """แสดงรายงานสรุปการอัปโหลด"""
         self.log("========= Upload Summary Report ==========")
         
+        # เรียกใช้ระบบส่งออก log อัตโนมัติ
+        self._auto_export_logs()
+        
         # เวลารวม
         total_time = upload_stats.get('total_time', 0)
         hours = int(total_time // 3600)
@@ -374,8 +379,15 @@ class FileHandler:
         
         self.log(f"📊 Total Upload Time: {time_str}")
         self.log(f"📁 Total Files Processed: {total_files}")
-        self.log(f"✅ Successful: {upload_stats.get('successful_files', 0)}")
-        self.log(f"❌ Failed: {upload_stats.get('failed_files', 0)}")
+        
+        # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
+        successful_files = upload_stats.get('successful_files', 0)
+        failed_files = upload_stats.get('failed_files', 0)
+        
+        if successful_files > 0:
+            self.log(f"✅ Successful: {successful_files}")
+        if failed_files > 0:
+            self.log(f"❌ Failed: {failed_files}")
         
         # รายละเอียดแต่ละประเภทไฟล์
         if upload_stats.get('by_type'):
@@ -399,8 +411,15 @@ class FileHandler:
                 self.log(f"🏷️  {file_type}:")
                 self.log(f"   ⏱️  Processing Time: {type_time_str}")
                 self.log(f"   📂 Total Files: {stats.get('files_count', 0)}")
-                self.log(f"   ✅ Successful: {stats.get('successful_files', 0)}")
-                self.log(f"   ❌ Failed: {stats.get('failed_files', 0)}")
+                
+                # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
+                successful = stats.get('successful_files', 0)
+                failed = stats.get('failed_files', 0)
+                
+                if successful > 0:
+                    self.log(f"   ✅ Successful: {successful}")
+                if failed > 0:
+                    self.log(f"   ❌ Failed: {failed}")
                 
                 # แสดงข้อผิดพลาด (ถ้ามี)
                 errors = stats.get('errors', [])
@@ -431,6 +450,9 @@ class FileHandler:
         """แสดงรายงานสรุปการประมวลผลอัตโนมัติ"""
         self.log("======= Auto Process Summary Report =======")
         
+        # เรียกใช้ระบบส่งออก log อัตโนมัติ
+        self._auto_export_logs()
+        
         # เวลารวม
         total_time = process_stats.get('total_time', 0)
         hours = int(total_time // 3600)
@@ -446,8 +468,15 @@ class FileHandler:
         
         self.log(f"📊 Total Processing Time: {time_str}")
         self.log(f"📁 Total Files Processed: {total_files}")
-        self.log(f"✅ Successful: {process_stats.get('successful_files', 0)}")
-        self.log(f"❌ Failed: {process_stats.get('failed_files', 0)}")
+        
+        # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
+        successful_files = process_stats.get('successful_files', 0)
+        failed_files = process_stats.get('failed_files', 0)
+        
+        if successful_files > 0:
+            self.log(f"✅ Successful: {successful_files}")
+        if failed_files > 0:
+            self.log(f"❌ Failed: {failed_files}")
         
         # รายละเอียดแต่ละประเภทไฟล์
         if process_stats.get('by_type'):
@@ -471,8 +500,15 @@ class FileHandler:
                 self.log(f"🏷️  {file_type}:")
                 self.log(f"   ⏱️  Processing Time: {type_time_str}")
                 self.log(f"   📂 Total Files: {stats.get('files_count', 0)}")
-                self.log(f"   ✅ Successful: {stats.get('successful_files', 0)}")
-                self.log(f"   ❌ Failed: {stats.get('failed_files', 0)}")
+                
+                # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
+                successful = stats.get('successful_files', 0)
+                failed = stats.get('failed_files', 0)
+                
+                if successful > 0:
+                    self.log(f"   ✅ Successful: {successful}")
+                if failed > 0:
+                    self.log(f"   ❌ Failed: {failed}")
                 
                 # แสดงข้อผิดพลาด (ถ้ามี)
                 errors = stats.get('errors', [])
@@ -777,3 +813,38 @@ class FileHandler:
             
         except Exception as e:
             self.log(f"❌ An error occurred while processing files: {e}")
+    
+    def _auto_export_logs(self):
+        """ส่งออก log อัตโนมัติไปยังโฟลเดอร์ log_pipeline และจัดการไฟล์เก่า"""
+        try:
+            # โหลดการตั้งค่า
+            app_settings = json_manager.load('app_settings')
+            
+            # ตรวจสอบว่าเปิดใช้งานการส่งออกอัตโนมัติหรือไม่
+            auto_export = app_settings.get('auto_export_logs', True)
+            if not auto_export:
+                return
+            
+            # อ่าน last_search_path
+            last_search_path = app_settings.get('last_search_path', '')
+            if not last_search_path or not os.path.exists(last_search_path):
+                self.log("⚠️ Cannot export logs: No valid search path found")
+                return
+            
+            # ตั้งค่า file logging และส่งออก
+            log_file_path = setup_file_logging(last_search_path, enable_export=True)
+            if log_file_path:
+                self.log(f"📋 Log exported to: {log_file_path}")
+                
+                # จัดการไฟล์ log เก่า (ลบไฟล์ที่เก่าเกิน retention period)
+                retention_days = app_settings.get('log_retention_days', 30)
+                deleted_count = cleanup_old_log_files(last_search_path, retention_days)
+                
+                # แสดงผลการ cleanup เฉพาะเมื่อมีการลบไฟล์
+                if deleted_count > 0:
+                    self.log(f"🧹 Cleaned up {deleted_count} old log files (older than {retention_days} days)")
+            else:
+                self.log("⚠️ Failed to export log file")
+                
+        except Exception as e:
+            self.log(f"❌ Error during auto export logs: {e}")
