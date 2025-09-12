@@ -8,6 +8,7 @@ when file structures change or new file types are encountered.
 import json
 import os
 import re
+import logging
 from difflib import SequenceMatcher
 from typing import Dict, List, Tuple, Optional, Any
 import pandas as pd
@@ -45,6 +46,9 @@ class MLColumnMapper:
         """Initialize the ML Column Mapper"""
         self.log_callback = log_callback if log_callback else print
         
+        # Setup file logging
+        self.setup_logging()
+        
         # Load existing settings
         self.column_settings = self._load_column_settings()
         self.dtype_settings = self._load_dtype_settings()
@@ -59,13 +63,55 @@ class MLColumnMapper:
                 self.semantic_model = SentenceTransformer('all-MiniLM-L6-v2')
                 self.vectorizer = TfidfVectorizer()
                 self.ml_ready = True
-                self.log_callback("ML models loaded successfully")
+                self._log("ML models loaded successfully")
             except Exception as e:
-                self.log_callback(f"ML models not available: {str(e)}")
-                self.log_callback("Will use fallback string similarity methods")
+                self._log(f"ML models not available: {str(e)}", 'warning')
+                self._log("Will use fallback string similarity methods", 'warning')
         else:
-            self.log_callback("Installing ML dependencies...")
-            self.log_callback("Run: pip install sentence-transformers scikit-learn")
+            self._log("ML dependencies not installed", 'warning')
+            self._log("Run: pip install sentence-transformers scikit-learn", 'info')
+    
+    def setup_logging(self):
+        """Setup file logging for ML Column Mapper"""
+        # Create logger
+        self.file_logger = logging.getLogger('MLColumnMapper')
+        self.file_logger.setLevel(logging.INFO)
+        
+        # Clear existing handlers to avoid duplication
+        self.file_logger.handlers.clear()
+        
+        # File handler
+        log_file = PathConstants.TOOL_LOG_FILE
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        file_handler.setFormatter(formatter)
+        
+        self.file_logger.addHandler(file_handler)
+    
+    def _log(self, message: str, level: str = 'info'):
+        """Log to both callback and file"""
+        # Log to callback (console)
+        if self.log_callback:
+            self.log_callback(message)
+        
+        # Log to file
+        if hasattr(self, 'file_logger'):
+            if level.lower() == 'error':
+                self.file_logger.error(message)
+            elif level.lower() == 'warning':
+                self.file_logger.warning(message)
+            elif level.lower() == 'debug':
+                self.file_logger.debug(message)
+            else:
+                self.file_logger.info(message)
     
     def _load_column_settings(self) -> Dict[str, Dict[str, str]]:
         """Load column settings from JSON file"""
@@ -91,7 +137,7 @@ class MLColumnMapper:
                 json.dump(self.column_settings, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            self.log_callback(f"Error saving column settings: {str(e)}")
+            self._log(f"Error saving column settings: {str(e)}", 'error')
             return False
     
     def suggest_mappings_for_new_file(self, file_columns: List[str], file_type: str = None) -> Dict[str, List[Dict[str, Any]]]:
@@ -291,7 +337,7 @@ class MLColumnMapper:
                 best_suggestion = column_suggestions[0]  # Highest confidence
                 if best_suggestion['confidence'] >= confidence_threshold:
                     auto_mappings[source_column] = best_suggestion['target_column']
-                    self.log_callback(
+                    self._log(
                         f"Auto-mapped '{source_column}' -> '{best_suggestion['target_column']}' "
                         f"(confidence: {best_suggestion['confidence']}%)"
                     )
@@ -315,14 +361,14 @@ class MLColumnMapper:
             
             # Save updated settings
             if self._save_column_settings():
-                self.log_callback(f"Created new mapping for file type: {file_type}")
-                self.log_callback(f"Mapped {len(column_mappings)} columns")
+                self._log(f"Created new mapping for file type: {file_type}")
+                self._log(f"Mapped {len(column_mappings)} columns")
                 return True
             else:
                 return False
                 
         except Exception as e:
-            self.log_callback(f"Error creating new file type mapping: {str(e)}")
+            self._log(f"Error creating new file type mapping: {str(e)}", 'error')
             return False
     
     def suggest_file_type_from_columns(self, columns: List[str]) -> List[Dict[str, Any]]:
@@ -403,10 +449,10 @@ class MLColumnMapper:
             with open(learning_file, 'w', encoding='utf-8') as f:
                 json.dump(learning_data, f, ensure_ascii=False, indent=2)
             
-            self.log_callback(f"Learned from {len(user_mappings)} user mappings for {file_type}")
+            self._log(f"Learned from {len(user_mappings)} user mappings for {file_type}")
             
         except Exception as e:
-            self.log_callback(f"Could not save learning data: {str(e)}")
+            self._log(f"Could not save learning data: {str(e)}", 'error')
     
     def generate_mapping_report(self, suggestions: Dict[str, List[Dict[str, Any]]]) -> str:
         """

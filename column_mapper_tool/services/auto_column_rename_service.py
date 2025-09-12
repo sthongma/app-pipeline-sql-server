@@ -9,6 +9,7 @@ to provide seamless column transformation.
 import pandas as pd
 import json
 import os
+import logging
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
 
@@ -35,6 +36,10 @@ class AutoColumnRenameService:
     def __init__(self, log_callback: Optional[callable] = None):
         """Initialize the Auto Column Rename Service"""
         self.log_callback = log_callback if log_callback else print
+        
+        # Setup file logging
+        self.setup_logging()
+        
         self.ml_mapper = MLColumnMapper(log_callback)
         
         # Rename statistics
@@ -45,6 +50,48 @@ class AutoColumnRenameService:
             'manual_review_required': 0,
             'failed_renames': 0
         }
+    
+    def setup_logging(self):
+        """Setup file logging for Auto Column Rename Service"""
+        # Create logger
+        self.file_logger = logging.getLogger('AutoColumnRenameService')
+        self.file_logger.setLevel(logging.INFO)
+        
+        # Clear existing handlers to avoid duplication
+        self.file_logger.handlers.clear()
+        
+        # File handler
+        log_file = PathConstants.TOOL_LOG_FILE
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        file_handler.setFormatter(formatter)
+        
+        self.file_logger.addHandler(file_handler)
+    
+    def _log(self, message: str, level: str = 'info'):
+        """Log to both callback and file"""
+        # Log to callback (console)
+        if self.log_callback:
+            self.log_callback(message)
+        
+        # Log to file
+        if hasattr(self, 'file_logger'):
+            if level.lower() == 'error':
+                self.file_logger.error(message)
+            elif level.lower() == 'warning':
+                self.file_logger.warning(message)
+            elif level.lower() == 'debug':
+                self.file_logger.debug(message)
+            else:
+                self.file_logger.info(message)
     
     def auto_rename_dataframe_columns(self, 
                                     df: pd.DataFrame, 
@@ -78,27 +125,27 @@ class AutoColumnRenameService:
         }
         
         try:
-            self.log_callback(f"🔄 Starting auto-rename for file type: {file_type}")
+            self._log(f"🔄 Starting auto-rename for file type: {file_type}")
             
             # Check if file type already exists in settings
             if file_type in self.ml_mapper.column_settings:
                 return self._rename_with_existing_mapping(df, file_type, rename_report)
             
             # File type doesn't exist - use ML to suggest mappings
-            self.log_callback(f"🆕 New file type detected: {file_type}")
+            self._log(f"🆕 New file type detected: {file_type}")
             
             # Try to identify file type from columns
             file_type_suggestions = self.ml_mapper.suggest_file_type_from_columns(original_columns)
             
             if file_type_suggestions:
-                self.log_callback(f"🎯 Suggested similar file types:")
+                self._log(f"🎯 Suggested similar file types:")
                 for suggestion in file_type_suggestions:
-                    self.log_callback(f"   • {suggestion['file_type']} ({suggestion['confidence']}%)")
+                    self._log(f"   • {suggestion['file_type']} ({suggestion['confidence']}%)")
                 
                 # If there's a high confidence match, ask user if they want to use it
                 best_match = file_type_suggestions[0]
                 if best_match['confidence'] > 80:
-                    self.log_callback(f"🔥 High confidence match found: {best_match['file_type']}")
+                    self._log(f"🔥 High confidence match found: {best_match['file_type']}")
                     return self._rename_with_existing_mapping(df, best_match['file_type'], rename_report, 
                                                             original_file_type=file_type)
             
@@ -108,7 +155,7 @@ class AutoColumnRenameService:
             
             # Generate mapping report
             mapping_report = self.ml_mapper.generate_mapping_report(ml_suggestions)
-            self.log_callback(f"\\n{mapping_report}")
+            self._log(f"\\n{mapping_report}")
             
             # Auto-map columns with high confidence
             auto_mappings = {}
@@ -142,14 +189,14 @@ class AutoColumnRenameService:
             if auto_mappings:
                 df_renamed = df.rename(columns=auto_mappings)
                 rename_report['renamed_columns'] = auto_mappings
-                self.log_callback(f"✅ Auto-renamed {len(auto_mappings)} columns")
+                self._log(f"✅ Auto-renamed {len(auto_mappings)} columns")
                 
                 # Create new mapping if requested
                 if create_new_mapping and len(auto_mappings) > 0:
                     self._create_new_file_type_mapping(file_type, auto_mappings, ml_suggestions)
             else:
                 df_renamed = df.copy()
-                self.log_callback(f"⚠️ No columns met confidence threshold for auto-rename")
+                self._log(f"⚠️ No columns met confidence threshold for auto-rename", 'warning')
             
             rename_report['success'] = True
             self.rename_stats['total_files_processed'] += 1
@@ -160,7 +207,7 @@ class AutoColumnRenameService:
             
         except Exception as e:
             error_msg = f"❌ Error during auto-rename: {str(e)}"
-            self.log_callback(error_msg)
+            self._log(error_msg, 'error')
             rename_report['error'] = error_msg
             self.rename_stats['failed_renames'] += 1
             return df, rename_report
@@ -194,7 +241,7 @@ class AutoColumnRenameService:
                     suggested_source = suggestions[0]['target_column']
                     if suggested_source in existing_mappings:
                         direct_mappings[source_col] = existing_mappings[suggested_source]
-                        self.log_callback(f"🎯 Mapped '{source_col}' via similarity to '{suggested_source}'")
+                        self._log(f"🎯 Mapped '{source_col}' via similarity to '{suggested_source}'")
                 else:
                     missing_columns.append(source_col)
         
@@ -206,13 +253,13 @@ class AutoColumnRenameService:
                 {'source': k, 'target': v, 'confidence': 100} 
                 for k, v in direct_mappings.items()
             ]
-            self.log_callback(f"✅ Applied existing mapping for {file_type}: {len(direct_mappings)} columns")
+            self._log(f"✅ Applied existing mapping for {file_type}: {len(direct_mappings)} columns")
         else:
             df_renamed = df.copy()
         
         if missing_columns:
             rename_report['unmapped_columns'] = missing_columns
-            self.log_callback(f"⚠️ {len(missing_columns)} columns not found in existing mapping")
+            self._log(f"⚠️ {len(missing_columns)} columns not found in existing mapping", 'warning')
         
         # Update file type if it was suggested
         if original_file_type and original_file_type != file_type:
@@ -246,10 +293,10 @@ class AutoColumnRenameService:
             if success:
                 # Log the learning for future improvements
                 self.ml_mapper.learn_from_user_mapping(file_type, auto_mappings)
-                self.log_callback(f"📚 Created new mapping configuration for: {file_type}")
+                self._log(f"📚 Created new mapping configuration for: {file_type}")
             
         except Exception as e:
-            self.log_callback(f"⚠️ Could not create new mapping: {str(e)}")
+            self._log(f"⚠️ Could not create new mapping: {str(e)}", 'error')
     
     def batch_rename_files(self, file_data_list: List[Dict[str, Any]], 
                           confidence_threshold: float = 70.0) -> List[Dict[str, Any]]:
@@ -265,14 +312,14 @@ class AutoColumnRenameService:
         """
         results = []
         
-        self.log_callback(f"🔄 Starting batch rename for {len(file_data_list)} files...")
+        self._log(f"🔄 Starting batch rename for {len(file_data_list)} files...")
         
         for i, file_data in enumerate(file_data_list, 1):
             df = file_data['df']
             file_type = file_data['file_type']
             file_path = file_data.get('file_path', f'File_{i}')
             
-            self.log_callback(f"\\n📁 Processing file {i}/{len(file_data_list)}: {file_path}")
+            self._log(f"\\n📁 Processing file {i}/{len(file_data_list)}: {file_path}")
             
             df_renamed, report = self.auto_rename_dataframe_columns(
                 df, file_type, confidence_threshold
@@ -293,20 +340,20 @@ class AutoColumnRenameService:
     def _print_batch_summary(self):
         """Print summary of batch processing statistics"""
         stats = self.rename_stats
-        self.log_callback("\\n" + "=" * 60)
-        self.log_callback("📊 Batch Processing Summary")
-        self.log_callback("=" * 60)
-        self.log_callback(f"Files processed: {stats['total_files_processed']}")
-        self.log_callback(f"Columns auto-renamed: {stats['auto_renamed']}")
-        self.log_callback(f"Manual review needed: {stats['manual_review_required']}")
-        self.log_callback(f"Failed operations: {stats['failed_renames']}")
+        self._log("\\n" + "=" * 60)
+        self._log("📊 Batch Processing Summary")
+        self._log("=" * 60)
+        self._log(f"Files processed: {stats['total_files_processed']}")
+        self._log(f"Columns auto-renamed: {stats['auto_renamed']}")
+        self._log(f"Manual review needed: {stats['manual_review_required']}")
+        self._log(f"Failed operations: {stats['failed_renames']}")
         
         if stats['total_files_processed'] > 0:
             success_rate = ((stats['total_files_processed'] - stats['failed_renames']) / 
                           stats['total_files_processed']) * 100
-            self.log_callback(f"Success rate: {success_rate:.1f}%")
+            self._log(f"Success rate: {success_rate:.1f}%")
         
-        self.log_callback("=" * 60)
+        self._log("=" * 60)
     
     def validate_renamed_dataframe(self, df: pd.DataFrame, file_type: str) -> Dict[str, Any]:
         """
@@ -343,18 +390,18 @@ class AutoColumnRenameService:
                 validation_report['valid'] = len(validation_report['missing_columns']) == 0
                 
                 if validation_report['valid']:
-                    self.log_callback(f"✅ DataFrame validation passed for {file_type}")
+                    self._log(f"✅ DataFrame validation passed for {file_type}")
                 else:
-                    self.log_callback(f"⚠️ DataFrame validation issues found for {file_type}")
+                    self._log(f"⚠️ DataFrame validation issues found for {file_type}", 'warning')
                     if validation_report['missing_columns']:
-                        self.log_callback(f"   Missing: {validation_report['missing_columns']}")
+                        self._log(f"   Missing: {validation_report['missing_columns']}", 'warning')
                     if validation_report['extra_columns']:
-                        self.log_callback(f"   Extra: {validation_report['extra_columns']}")
+                        self._log(f"   Extra: {validation_report['extra_columns']}", 'warning')
             else:
-                self.log_callback(f"⚠️ No validation schema found for file type: {file_type}")
+                self._log(f"⚠️ No validation schema found for file type: {file_type}", 'warning')
                 
         except Exception as e:
-            self.log_callback(f"❌ Validation error: {str(e)}")
+            self._log(f"❌ Validation error: {str(e)}", 'error')
             validation_report['error'] = str(e)
         
         return validation_report
@@ -386,11 +433,11 @@ class AutoColumnRenameService:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(report_data, f, ensure_ascii=False, indent=2)
             
-            self.log_callback(f"📄 Rename report exported to: {output_path}")
+            self._log(f"📄 Rename report exported to: {output_path}")
             return output_path
             
         except Exception as e:
-            self.log_callback(f"❌ Error exporting report: {str(e)}")
+            self._log(f"❌ Error exporting report: {str(e)}", 'error')
             return None
     
     def reset_statistics(self):
@@ -402,7 +449,7 @@ class AutoColumnRenameService:
             'manual_review_required': 0,
             'failed_renames': 0
         }
-        self.log_callback("📊 Statistics reset")
+        self._log("📊 Statistics reset")
     
     def get_mapping_suggestions_interactive(self, df: pd.DataFrame, 
                                           file_type: str) -> Dict[str, str]:

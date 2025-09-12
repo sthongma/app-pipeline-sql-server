@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(copy \"services\\file\\ml_column_mapper.py\" \"column_mapper_tool\\services\\\")"
+      "Bash(copy \"services\\file\\ml_column_mapper.py\" \"column_mapper_tool\\services\\\")",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

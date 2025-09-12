@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import sys
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
@@ -46,12 +47,73 @@ class ColumnMapperCLI:
     """
     
     def __init__(self):
+        # Setup logging
+        self.setup_logging()
+        
         self.ml_mapper = MLColumnMapper(log_callback=self.log)
         self.file_reader = FileReaderService(log_callback=self.log)
         
-    def log(self, message: str):
-        """Simple logging function"""
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+    def setup_logging(self):
+        """Setup logging to both console and file"""
+        # Import constants for log file path
+        from .constants import PathConstants
+        
+        # Create logger
+        self.logger = logging.getLogger('ColumnMapperCLI')
+        self.logger.setLevel(logging.INFO)
+        
+        # Clear existing handlers to avoid duplication
+        self.logger.handlers.clear()
+        
+        # Create log directory if it doesn't exist
+        log_file = PathConstants.TOOL_LOG_FILE
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        
+        # File handler
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        file_handler.setFormatter(formatter)
+        
+        # Simple formatter for console
+        console_formatter = logging.Formatter(
+            '[%(asctime)s] %(message)s',
+            datefmt='%H:%M:%S'
+        )
+        console_handler.setFormatter(console_formatter)
+        
+        # Add handlers
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
+        
+        # Log startup message
+        self.logger.info("="*50)
+        self.logger.info("Column Mapper CLI Started")
+        self.logger.info("="*50)
+        
+    def log(self, message: str, level: str = 'info'):
+        """Enhanced logging function with file and console output"""
+        if hasattr(self, 'logger'):
+            if level.lower() == 'error':
+                self.logger.error(message)
+            elif level.lower() == 'warning':
+                self.logger.warning(message)
+            elif level.lower() == 'debug':
+                self.logger.debug(message)
+            else:
+                self.logger.info(message)
+        else:
+            # Fallback to simple print if logger not initialized
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
     def find_missing_columns(self, file_path: str, file_type: str) -> Dict[str, List[str]]:
         """
@@ -89,7 +151,7 @@ class ColumnMapperCLI:
             }
             
         except Exception as e:
-            self.log(f"Error analyzing file {file_path}: {str(e)}")
+            self.log(f"Error analyzing file {file_path}: {str(e)}", 'error')
             return {'missing': [], 'extra': [], 'actual': [], 'expected': []}
     
     def suggest_mappings_for_missing_columns(self, missing_columns: List[str], 
@@ -214,11 +276,11 @@ class ColumnMapperCLI:
                 self.log(f"Successfully updated {len(new_mappings)} mappings in column_settings.json")
                 return True
             else:
-                self.log(f"File type '{file_type}' not found in settings")
+                self.log(f"File type '{file_type}' not found in settings", 'warning')
                 return False
                 
         except Exception as e:
-            self.log(f"Error updating column settings: {str(e)}")
+            self.log(f"Error updating column settings: {str(e)}", 'error')
             return False
     
     def process_folder(self, folder_path: str):
@@ -251,7 +313,7 @@ class ColumnMapperCLI:
             file_type = self.file_reader.detect_file_type(file_path)
             
             if not file_type:
-                self.log(f"Could not detect file type for {os.path.basename(file_path)}")
+                self.log(f"Could not detect file type for {os.path.basename(file_path)}", 'warning')
                 continue
             
             self.log(f"Detected file type: {file_type}")
@@ -278,7 +340,7 @@ class ColumnMapperCLI:
             )
             
             if not suggestions:
-                self.log("No mapping suggestions available")
+                self.log("No mapping suggestions available", 'warning')
                 continue
             
             # Interactive selection
@@ -312,7 +374,7 @@ class ColumnMapperCLI:
                     return settings.get('last_search_path', '')
             return ''
         except Exception as e:
-            self.log(f"Error loading last search path: {e}")
+            self.log(f"Error loading last search path: {e}", 'error')
             return ''
 
     def save_last_search_path(self, path):
@@ -337,7 +399,7 @@ class ColumnMapperCLI:
                 
             return True
         except Exception as e:
-            self.log(f"Error saving last search path: {e}")
+            self.log(f"Error saving last search path: {e}", 'error')
             return False
     
     def run(self, args):
@@ -372,7 +434,10 @@ class ColumnMapperCLI:
         self.save_last_search_path(folder_path)
         
         self.process_folder(folder_path)
-        print("\nProcessing complete!")
+        self.log("Processing complete!")
+        self.log("="*50)
+        self.log("Column Mapper CLI Session Ended")
+        self.log("="*50)
 
 
 def main():
