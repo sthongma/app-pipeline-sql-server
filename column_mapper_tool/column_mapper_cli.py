@@ -11,10 +11,14 @@ import json
 import os
 import sys
 import logging
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 import pandas as pd
+
+# Suppress openpyxl warnings
+warnings.filterwarnings("ignore", "Workbook contains no default style", UserWarning)
 
 # Setup paths for imports
 import os
@@ -55,8 +59,10 @@ class ColumnMapperCLI:
         
     def setup_logging(self):
         """Setup logging to both console and file"""
-        # Import constants for log file path
-        from .constants import PathConstants
+        # Import constants for log file path - use direct path calculation
+        import os
+        tool_dir = os.path.dirname(os.path.abspath(__file__))
+        log_file = os.path.join(tool_dir, "column_mapper.log")
         
         # Create logger
         self.logger = logging.getLogger('ColumnMapperCLI')
@@ -66,7 +72,6 @@ class ColumnMapperCLI:
         self.logger.handlers.clear()
         
         # Create log directory if it doesn't exist
-        log_file = PathConstants.TOOL_LOG_FILE
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
         
         # File handler
@@ -343,8 +348,13 @@ class ColumnMapperCLI:
                 self.log("No mapping suggestions available", 'warning')
                 continue
             
-            # Interactive selection
-            selected_mappings = self.interactive_mapping_selection(suggestions)
+            # Interactive selection (if not in auto mode)
+            if hasattr(self, 'auto_mode') and self.auto_mode:
+                # Auto mode - just show suggestions but don't prompt for selection
+                self.log("Running in auto mode - suggestions shown above for review")
+                selected_mappings = {}
+            else:
+                selected_mappings = self.interactive_mapping_selection(suggestions)
             
             if selected_mappings:
                 # Confirm before updating
@@ -405,6 +415,7 @@ class ColumnMapperCLI:
     def run(self, args):
         """Main entry point"""
         folder_path = args.folder
+        self.auto_mode = args.auto
         
         # If no folder specified, try to use last folder from main program
         if not folder_path:
@@ -449,6 +460,11 @@ def main():
         'folder', 
         nargs='?', 
         help='Folder path containing Excel/CSV files to process (if not specified, uses last folder from main program)'
+    )
+    parser.add_argument(
+        '--auto', 
+        action='store_true', 
+        help='Run in non-interactive mode with auto-mapping only (no user prompts)'
     )
     
     args = parser.parse_args()

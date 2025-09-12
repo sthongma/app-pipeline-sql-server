@@ -80,8 +80,9 @@ class MLColumnMapper:
         # Clear existing handlers to avoid duplication
         self.file_logger.handlers.clear()
         
-        # File handler
-        log_file = PathConstants.TOOL_LOG_FILE
+        # File handler - use direct path calculation
+        tool_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        log_file = os.path.join(tool_dir, "column_mapper.log")
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
         
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
