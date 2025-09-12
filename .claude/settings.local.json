@@ -1,17 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python:*)",
-      "Bash(chcp:*)",
-      "Bash(mkdir:*)",
-      "Bash(cp:*)",
-      "Bash(rm:*)",
-      "Bash(del configfile_management_settings.json)",
-      "Bash(del test_realtime_json.py)",
-      "Bash(move:*)",
-      "Bash(mv:*)",
-      "Bash(del \"C:\\Users\\shins\\OneDrive\\Desktop\\GitHub\\PIPELINE_SQLSERVER\\test_dash_conversion.py\")",
-      "Bash(del convert_dtype_settings.py)"
+      "Bash(copy \"services\\file\\ml_column_mapper.py\" \"column_mapper_tool\\services\\\")"
     ],
     "deny": [],
     "ask": []
