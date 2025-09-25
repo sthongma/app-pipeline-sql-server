@@ -132,6 +132,9 @@ class DateValidator(BaseValidator):
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NOT NULL THEN 1  -- DD/MM/YYYY
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104) IS NOT NULL THEN 1  -- DD.MM.YYYY
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105) IS NOT NULL THEN 1  -- DD-MM-YYYY
+                    WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 5) IS NOT NULL THEN 1   -- DD-MM-YY
+                    WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 3) IS NOT NULL THEN 1   -- DD/MM/YY
+                    WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 4) IS NOT NULL THEN 1   -- DD.MM.YY
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1  -- YYYY-MM-DD HH:MI:SS
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NOT NULL THEN 1  -- MM/DD/YYYY (fallback)
                     ELSE 0
@@ -172,6 +175,9 @@ class DateValidator(BaseValidator):
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NOT NULL THEN 1
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104) IS NOT NULL THEN 1
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105) IS NOT NULL THEN 1
+                    WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 5) IS NOT NULL THEN 1
+                    WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 3) IS NOT NULL THEN 1
+                    WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 4) IS NOT NULL THEN 1
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1
                     WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NOT NULL THEN 1
                     ELSE 0
@@ -212,6 +218,9 @@ class DateValidator(BaseValidator):
                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) as uk_103,
                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104) as uk_104,
                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105) as uk_105,
+                           TRY_CONVERT(DATETIME, {cleaned_col_expression}, 5) as uk_5,
+                           TRY_CONVERT(DATETIME, {cleaned_col_expression}, 3) as uk_3,
+                           TRY_CONVERT(DATETIME, {cleaned_col_expression}, 4) as uk_4,
                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) as iso_121,
                            TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) as us_101
             FROM {schema_name}.{staging_table}
@@ -220,6 +229,9 @@ class DateValidator(BaseValidator):
                 WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 103) IS NOT NULL THEN 1
                 WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 104) IS NOT NULL THEN 1
                 WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 105) IS NOT NULL THEN 1
+                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 5) IS NOT NULL THEN 1
+                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 3) IS NOT NULL THEN 1
+                WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 4) IS NOT NULL THEN 1
                 WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 121) IS NOT NULL THEN 1
                 WHEN TRY_CONVERT(DATETIME, {cleaned_col_expression}, 101) IS NOT NULL THEN 1
                 ELSE 0
