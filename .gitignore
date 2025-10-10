@@ -45,6 +45,9 @@ temp/
 processed/
 *.tmp
 
+# Column mapper specific
+column_mapper_tool/*.log
+
 # Database backups and dumps
 backups/
 *.bak

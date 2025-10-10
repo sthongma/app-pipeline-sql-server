@@ -5,7 +5,15 @@
       "Bash(python:*)",
       "Bash(./run_column_mapper.bat)",
       "Bash(\"venv\\Scripts\\pip.exe\" install sentence-transformers scikit-learn --timeout=300)",
-      "Bash(\"venv\\Scripts\\python.exe\" -c \"import sentence_transformers, sklearn; print(''ML dependencies OK in venv!'')\")"
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"import sentence_transformers, sklearn; print(''ML dependencies OK in venv!'')\")",
+      "Bash(mkdir:*)",
+      "Bash(tree:*)",
+      "Bash(dir:*)",
+      "Bash(find:*)",
+      "Bash(mv:*)",
+      "Bash(xargs:*)",
+      "Bash(test:*)",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\handlers\\file_handler.py\")"
     ],
     "deny": [],
     "ask": []

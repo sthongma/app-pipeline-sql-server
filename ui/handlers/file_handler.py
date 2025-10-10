@@ -13,7 +13,7 @@ class FileHandler:
     def __init__(self, file_service, db_service, file_mgmt_service, log_callback):
         """
         Initialize File Handler
-        
+
         Args:
             file_service: File service instance
             db_service: Database service instance
@@ -24,6 +24,7 @@ class FileHandler:
         self.db_service = db_service
         self.file_mgmt_service = file_mgmt_service
         self.log = log_callback
+        self.is_checking = False  # Flag to prevent multiple check operations
     
     def browse_excel_path(self, save_callback):
         """Select folder for file search"""
@@ -35,46 +36,58 @@ class FileHandler:
     
     def run_check_thread(self, ui_callbacks):
         """Start file checking in separate thread"""
+        # ป้องกันการกดซ้ำขณะกำลัง check อยู่
+        if self.is_checking:
+            self.log("⚠️ File scan is already in progress, please wait...")
+            messagebox.showwarning("In Progress", "File scan is already in progress.\nPlease wait for it to complete.")
+            return
+
         thread = threading.Thread(target=self._check_files, args=(ui_callbacks,))
         thread.start()
     
     def _check_files(self, ui_callbacks):
         """Check files in specified path"""
+        # ตั้งค่า flag ว่ากำลัง check อยู่
+        self.is_checking = True
+
         try:
             # รีเซ็ต UI
             ui_callbacks['reset_progress']()
             ui_callbacks['set_progress_status']("Starting file scan", "Scanning folders...")
-            
+
+            # ปิดปุ่ม check ระหว่างการทำงาน
+            ui_callbacks['disable_controls']()
+
             # โหลดการตั้งค่าใหม่
             self.file_service.load_settings()
             ui_callbacks['clear_file_list']()
             ui_callbacks['reset_select_all']()
-            
+
             # ค้นหาไฟล์ Excel/CSV
             ui_callbacks['update_progress'](0.2, "Searching for files", "Scanning .xlsx and .csv files...")
             data_files = self.file_service.find_data_files()
-            
+
             if not data_files:
                 ui_callbacks['update_progress'](1.0, "Scan completed", "No .xlsx or .csv files found")
                 ui_callbacks['update_status']("No .xlsx or .csv files found in the specified folder", True)
                 self.log("🤷 No .xlsx or .csv files found in the specified folder")
                 self.log("--- 🏁 File scan completed ---")
                 return
-            
+
             found_files_count = 0
             total_files = len(data_files)
-            
+
             for i, file in enumerate(data_files):
                 # คำนวณ progress ที่ถูกต้อง (0.2 - 0.8)
                 progress = 0.2 + (0.6 * (i / total_files))  # 20% - 80%
                 ui_callbacks['update_progress'](progress, f"Checking file: {os.path.basename(file)}", f"File {i+1} of {total_files}")
-                
+
                 logic_type = self.file_service.detect_file_type(file)
                 if logic_type:
                     found_files_count += 1
                     self.log(f"✅ Found matching file: {os.path.basename(file)} [{logic_type}]")
                     ui_callbacks['add_file_to_list'](file, logic_type)
-            
+
             if found_files_count > 0:
                 ui_callbacks['update_progress'](1.0, "Scan completed", f"Found {found_files_count} matching files")
                 ui_callbacks['update_status'](f"Found {found_files_count} matching files", False)
@@ -83,11 +96,16 @@ class FileHandler:
                 ui_callbacks['update_progress'](1.0, "Scan completed", "No matching files found")
                 ui_callbacks['update_status']("No matching files found", True)
                 ui_callbacks['reset_select_all']()
-            
+
             self.log("--- 🏁 File scan completed ---")
-            
+
         except Exception as e:
             self.log(f"❌ An error occurred while scanning files: {e}")
+        finally:
+            # เปิดปุ่มกลับมาเมื่อเสร็จสิ้น
+            ui_callbacks['enable_controls']()
+            # ปล่อย flag
+            self.is_checking = False
     
     def confirm_upload(self, get_selected_files_callback, ui_callbacks):
         """ยืนยันการอัปโหลดไฟล์ที่เลือก"""
@@ -95,12 +113,16 @@ class FileHandler:
         if not selected:
             messagebox.showwarning("No files", "Please select files to upload")
             return
-        
+
+        # โหลดการตั้งค่าใหม่ก่อนอัปโหลด เพื่อให้แน่ใจว่าใช้การตั้งค่าล่าสุด
+        self.log("📥 Loading latest settings before upload...")
+        self.file_service.load_settings()
+
         # ตรวจสอบการเชื่อมต่อฐานข้อมูล
         success, message = self.db_service.check_connection()
         if not success:
             messagebox.showerror(
-                "Error", 
+                "Error",
                 f"Cannot connect to database:\n{message}\n\nPlease check database settings first"
             )
             return
@@ -541,16 +563,19 @@ class FileHandler:
         last_path = load_last_path_callback()
         if not last_path or not os.path.isdir(last_path):
             messagebox.showerror(
-                "Error", 
+                "Error",
                 f"Invalid source folder: {last_path}\n\nPlease select a source folder first"
             )
             return
-        
+
+        # โหลดการตั้งค่าใหม่ก่อนประมวลผล เพื่อให้แน่ใจว่าใช้การตั้งค่าล่าสุด
+        self.file_service.load_settings()
+
         # ตรวจสอบการเชื่อมต่อฐานข้อมูล
         success, message = self.db_service.check_connection()
         if not success:
             messagebox.showerror(
-                "Error", 
+                "Error",
                 f"Cannot connect to database:\n{message}\n\nPlease check database settings first"
             )
             return
