@@ -1,17 +1,29 @@
 {
   "permissions": {
     "allow": [
+      "Bash(copy \"services\\file\\ml_column_mapper.py\" \"column_mapper_tool\\services\\\")",
       "Bash(python:*)",
-      "Bash(chcp:*)",
+      "Bash(./run_column_mapper.bat)",
+      "Bash(\"venv\\Scripts\\pip.exe\" install sentence-transformers scikit-learn --timeout=300)",
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"import sentence_transformers, sklearn; print(''ML dependencies OK in venv!'')\")",
       "Bash(mkdir:*)",
-      "Bash(cp:*)",
-      "Bash(rm:*)",
-      "Bash(del configfile_management_settings.json)",
-      "Bash(del test_realtime_json.py)",
-      "Bash(move:*)",
+      "Bash(tree:*)",
+      "Bash(dir:*)",
+      "Bash(find:*)",
       "Bash(mv:*)",
-      "Bash(del \"C:\\Users\\shins\\OneDrive\\Desktop\\GitHub\\PIPELINE_SQLSERVER\\test_dash_conversion.py\")",
-      "Bash(del convert_dtype_settings.py)"
+      "Bash(xargs:*)",
+      "Bash(test:*)",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\handlers\\file_handler.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\loading_dialog.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\tabs\\settings_tab.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''Syntax check passed'')\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\file\\file_reader_service.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\file\\data_processor_service.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\database\\data_upload_service.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\database\\validation\\schema_validator.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\tabs\\log_tab.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\main_window.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''✅ Syntax OK!'')\")"
     ],
     "deny": [],
     "ask": []

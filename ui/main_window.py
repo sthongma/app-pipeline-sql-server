@@ -298,15 +298,70 @@ class MainWindow(ctk.CTkToplevel):
         self.after(0, self._update_textbox, formatted_message)
         self.after(0, self._update_log_textbox, formatted_message)
         
+    def _insert_colored_message(self, text_widget, message, emoji_colors):
+        """ฟังก์ชันกลางสำหรับแทรกข้อความพร้อมสี emoji (DRY principle)"""
+        for char in message:
+            if char in emoji_colors:
+                text_widget.insert("end", char, emoji_colors[char])
+            else:
+                text_widget.insert("end", char)
+
+    def _setup_emoji_colors(self, text_widget):
+        """กำหนดสีสำหรับ emoji (ใช้ร่วมกันได้ทั้ง Main และ Log tab)"""
+        text_widget.tag_config("emoji_success", foreground="#00FF00")    # เขียว
+        text_widget.tag_config("emoji_error", foreground="#FF4444")      # แดง
+        text_widget.tag_config("emoji_warning", foreground="#FFA500")    # ส้ม
+        text_widget.tag_config("emoji_info", foreground="#00BFFF")       # ฟ้า
+        text_widget.tag_config("emoji_search", foreground="#888888")     # เทา
+        text_widget.tag_config("emoji_highlight", foreground="#FFD700")  # ทอง
+        text_widget.tag_config("emoji_phase", foreground="#FF69B4")      # ชมพู
+        text_widget.tag_config("emoji_file", foreground="#00CED1")       # ฟ้าเข้ม
+        text_widget.tag_config("emoji_time", foreground="#9370DB")       # ม่วง
+
+    def _get_emoji_color_map(self):
+        """แมป emoji กับสี (ใช้ร่วมกันได้)"""
+        return {
+            '✅': 'emoji_success',
+            '❌': 'emoji_error',
+            '⚠️': 'emoji_warning',
+            '📊': 'emoji_info',
+            '📁': 'emoji_info',
+            'ℹ️': 'emoji_info',
+            '🔍': 'emoji_search',
+            '🎉': 'emoji_highlight',
+            '📋': 'emoji_phase',
+            '⏳': 'emoji_phase',
+            '📦': 'emoji_file',
+            '📤': 'emoji_file',
+            '⏱️': 'emoji_time',
+            '🔄': 'emoji_phase',
+            '🚀': 'emoji_highlight',
+            '💾': 'emoji_info',
+            '🧹': 'emoji_search',
+            '🏷️': 'emoji_phase',
+        }
+
     def _update_textbox(self, message):
-        """Update textbox in main tab"""
+        """Update textbox in main tab with colored emoji"""
         if hasattr(self, 'textbox') and self.textbox:
-            self.textbox.insert("end", message)
+            text_widget = self.textbox._textbox
+
+            # Setup colors ครั้งแรก
+            if not hasattr(self, '_emoji_colors_setup_main'):
+                self._setup_emoji_colors(text_widget)
+                self._emoji_colors_setup_main = True
+
+            # แทรกข้อความพร้อมสี
+            self._insert_colored_message(text_widget, message, self._get_emoji_color_map())
             self.textbox.see("end")
         
     def _update_log_textbox(self, message):
         """Update textbox in Log tab"""
-        if hasattr(self, 'log_textbox') and self.log_textbox:
+        if hasattr(self, 'log_tab_ui') and self.log_tab_ui:
+            # ใช้ add_log() ของ LogTab เพื่อให้มีสี
+            self.log_tab_ui.add_log(message)
+        elif hasattr(self, 'log_textbox') and self.log_textbox:
+            # Fallback: ถ้ายังไม่มี log_tab_ui
             self.log_textbox.insert("end", message)
             self.log_textbox.see("end")
 

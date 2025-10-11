@@ -43,42 +43,61 @@ class FileReaderService:
         
         # ตั้งค่า log callback
         self.log_callback = log_callback if log_callback else print
-        
-        # Cache สำหรับการตั้งค่า
+
+        # Cache สำหรับการตั้งค่า (เก็บ timestamp เพื่อตรวจสอบการเปลี่ยนแปลง)
         self._settings_cache: Dict[str, Any] = {}
         self._cache_lock = threading.Lock()
-        self._settings_loaded = False
-        
+        self._file_timestamps: Dict[str, float] = {}
+
         self.load_settings()
-    
-    def load_settings(self) -> None:
-        """โหลดการตั้งค่าคอลัมน์และประเภทข้อมูล"""
-        if self._settings_loaded:
-            return
-            
-        try:
-            # โหลดการตั้งค่าคอลัมน์
-            settings_file = PathConstants.COLUMN_SETTINGS_FILE
-            if os.path.exists(settings_file):
-                with open(settings_file, 'r', encoding='utf-8') as f:
-                    self.column_settings = json.load(f)
-            else:
+
+    def load_settings(self, force_reload: bool = False) -> None:
+        """
+        โหลดการตั้งค่าคอลัมน์และประเภทข้อมูล
+
+        Args:
+            force_reload: บังคับโหลดใหม่แม้ว่าไฟล์ไม่เปลี่ยน (default: False)
+        """
+        with self._cache_lock:
+            try:
+                # ตรวจสอบ timestamp ของไฟล์ column_settings
+                settings_file = PathConstants.COLUMN_SETTINGS_FILE
+                need_reload_column = force_reload
+
+                if os.path.exists(settings_file):
+                    current_mtime = os.path.getmtime(settings_file)
+                    cached_mtime = self._file_timestamps.get('column_settings', 0)
+
+                    if current_mtime > cached_mtime or force_reload:
+                        need_reload_column = True
+                        with open(settings_file, 'r', encoding='utf-8') as f:
+                            self.column_settings = json.load(f)
+                        self._file_timestamps['column_settings'] = current_mtime
+                else:
+                    self.column_settings = {}
+                    self._file_timestamps['column_settings'] = 0
+
+                # ตรวจสอบ timestamp ของไฟล์ dtype_settings
+                dtype_file = PathConstants.DTYPE_SETTINGS_FILE
+                need_reload_dtype = force_reload
+
+                if os.path.exists(dtype_file):
+                    current_mtime = os.path.getmtime(dtype_file)
+                    cached_mtime = self._file_timestamps.get('dtype_settings', 0)
+
+                    if current_mtime > cached_mtime or force_reload:
+                        need_reload_dtype = True
+                        with open(dtype_file, 'r', encoding='utf-8') as f:
+                            self.dtype_settings = json.load(f)
+                        self._file_timestamps['dtype_settings'] = current_mtime
+                else:
+                    self.dtype_settings = {}
+                    self._file_timestamps['dtype_settings'] = 0
+
+            except Exception:
                 self.column_settings = {}
-            
-            # โหลดการตั้งค่าประเภทข้อมูล
-            dtype_file = PathConstants.DTYPE_SETTINGS_FILE
-            if os.path.exists(dtype_file):
-                with open(dtype_file, 'r', encoding='utf-8') as f:
-                    self.dtype_settings = json.load(f)
-            else:
                 self.dtype_settings = {}
-                
-            self._settings_loaded = True
-            
-        except Exception:
-            self.column_settings = {}
-            self.dtype_settings = {}
-            self._settings_loaded = True
+                self._file_timestamps = {}
 
     def set_search_path(self, path):
         """ตั้งค่า path สำหรับค้นหาไฟล์ Excel"""
@@ -117,6 +136,9 @@ class FileReaderService:
 
     def get_column_name_mapping(self, file_type):
         """รับ mapping ชื่อคอลัมน์ {original: new} ตามประเภทไฟล์"""
+        # โหลด settings ล่าสุดก่อนใช้งาน
+        self.load_settings()
+
         if not file_type or file_type not in self.column_settings:
             return {}
         return self.column_settings[file_type]
@@ -146,6 +168,9 @@ class FileReaderService:
     def detect_file_type(self, file_path):
         """ตรวจสอบประเภทของไฟล์ (แบบ dynamic, normalize header) รองรับทั้ง xlsx/xls/csv และ identity mapping"""
         try:
+            # โหลด settings ล่าสุดก่อนใช้งาน
+            self.load_settings()
+
             if not self.column_settings:
                 return None
 
@@ -642,6 +667,9 @@ class FileReaderService:
 
     def list_available_file_types(self):
         """แสดงรายการประเภทไฟล์ที่สามารถประมวลผลได้"""
+        # โหลด settings ล่าสุดก่อนใช้งาน
+        self.load_settings()
+
         if not self.column_settings:
             return []
         
