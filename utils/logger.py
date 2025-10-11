@@ -87,13 +87,13 @@ def setup_file_logging(base_path: str, enable_export: bool = True) -> Optional[s
         return None
 
     try:
-        # สร้างชื่อไฟล์ log ตามรูปแบบ log_pipeline_(วันที่และเวลา).log
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"log_pipeline_{timestamp}.log"
+        # สร้างชื่อไฟล์ log ตามรูปแบบ log_pipeline_{วันที่}.log (ไม่มีเวลา เพื่อให้บันทึกต่อท้ายในวันเดียวกัน)
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        log_filename = f"log_pipeline_{date_str}.log"
         log_file_path = os.path.join(base_path, log_filename)
 
-        # สร้าง FileHandler
-        file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+        # สร้าง FileHandler (mode='a' เพื่อ append ต่อท้ายไฟล์เดิม)
+        file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(logging.Formatter(AppConstants.LOG_FORMAT))
 
@@ -132,30 +132,31 @@ def export_current_logs_to_file(log_file_path: str, log_content: str) -> bool:
 
 def cleanup_old_log_files(base_path: str, retention_days: int = 30) -> int:
     """Clean up old log files older than retention period
-    
+
     Args:
-        base_path: Base directory path (typically last_search_path)
+        base_path: Directory path where log files are stored (user-selected log folder)
         retention_days: Number of days to retain log files (default: 30)
-        
+
     Returns:
         Number of files deleted
     """
     if not base_path or not os.path.exists(base_path):
         return 0
-    
+
     try:
-        log_dir = os.path.join(base_path, "log_pipeline")
-        if not os.path.exists(log_dir):
-            return 0
-        
         deleted_count = 0
         cutoff_time = time.time() - (retention_days * 24 * 60 * 60)  # Convert days to seconds
-        
+
         # ค้นหาไฟล์ log ที่เก่าเกิน retention period
-        for filename in os.listdir(log_dir):
+        for filename in os.listdir(base_path):
+            # ตรวจสอบว่าเป็นไฟล์ log ของระบบเท่านั้น (ป้องกันการลบไฟล์อื่น)
             if filename.startswith('log_pipeline_') and filename.endswith('.log'):
-                file_path = os.path.join(log_dir, filename)
+                file_path = os.path.join(base_path, filename)
                 try:
+                    # ตรวจสอบว่าเป็นไฟล์จริง (ไม่ใช่โฟลเดอร์)
+                    if not os.path.isfile(file_path):
+                        continue
+
                     # ตรวจสอบเวลาที่แก้ไขไฟล์ล่าสุด
                     if os.path.getmtime(file_path) < cutoff_time:
                         os.remove(file_path)
@@ -163,12 +164,12 @@ def cleanup_old_log_files(base_path: str, retention_days: int = 30) -> int:
                         logging.info(f"Deleted old log file: {filename}")
                 except (OSError, PermissionError) as e:
                     logging.warning(f"Could not delete log file {filename}: {e}")
-        
+
         if deleted_count > 0:
             logging.info(f"Log cleanup completed: {deleted_count} old files deleted")
-        
+
         return deleted_count
-        
+
     except Exception as e:
         logging.error(f"Error during log cleanup: {e}")
         return 0

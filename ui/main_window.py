@@ -93,6 +93,9 @@ class MainWindow(ctk.CTkToplevel):
         # โหลดและเริ่มการบันทึก log ไฟล์ถ้ามีการตั้งค่าไว้
         self.after(50, self._initialize_log_file_if_needed)
 
+        # โหลด output folder ถ้ามีการตั้งค่าไว้
+        self.after(60, self._initialize_output_folder_if_needed)
+
         # ตรวจสอบการเชื่อมต่อ SQL Server หลังสร้าง UI เสร็จ (ทำแบบ async เพื่อลดการค้าง)
         if ui_progress_callback:
             ui_progress_callback("Checking SQL Server connection...")
@@ -141,12 +144,12 @@ class MainWindow(ctk.CTkToplevel):
             'run_check_thread': self._run_check_thread,
             'confirm_upload': self._confirm_upload
         }
-        
-        self.main_tab_ui = MainTab(parent, callbacks)
-        
+
+        self.main_tab_ui = MainTab(parent, callbacks, output_folder_callback=self._on_output_folder_changed)
+
         # ส่ง reference ของ tabview เพื่อให้ควบคุม tabs ได้
         self.main_tab_ui.parent_tabview = self.tabview
-        
+
         # เก็บ reference ไปยัง components สำคัญ
         self.status_bar = self.main_tab_ui.status_bar
         self.file_list = self.main_tab_ui.file_list
@@ -462,3 +465,24 @@ class MainWindow(ctk.CTkToplevel):
                     self.log("⚠️ Failed to setup log file")
         except Exception as e:
             self.log(f"❌ Error setting up log file: {e}")
+
+    def _initialize_output_folder_if_needed(self) -> None:
+        """Initialize output folder if user has previously set it"""
+        try:
+            if hasattr(self, 'main_tab_ui') and self.main_tab_ui:
+                output_folder_path = self.main_tab_ui.get_output_folder_path()
+                if output_folder_path and os.path.exists(output_folder_path):
+                    self._on_output_folder_changed(output_folder_path)
+        except Exception:
+            pass
+
+    def _on_output_folder_changed(self, output_folder_path: str) -> None:
+        """Called when user changes output folder setting"""
+        try:
+            if output_folder_path and os.path.exists(output_folder_path):
+                # Update file management service to use new output folder
+                if hasattr(self, 'file_mgmt_service'):
+                    self.file_mgmt_service.set_output_folder(output_folder_path)
+                self.log(f"📂 Output folder updated: {output_folder_path}")
+        except Exception as e:
+            self.log(f"❌ Error updating output folder: {e}")

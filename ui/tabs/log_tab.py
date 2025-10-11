@@ -152,7 +152,7 @@ class LogTab:
 
     def _load_log_folder_setting(self):
         """Load saved log folder setting from config file"""
-        config_file = "log_folder_config.json"
+        config_file = os.path.join("config", "log_folder_config.json")
         if os.path.exists(config_file):
             try:
                 with open(config_file, 'r', encoding='utf-8') as f:
@@ -163,8 +163,10 @@ class LogTab:
 
     def _save_log_folder_setting(self):
         """Save log folder setting to config file"""
-        config_file = "log_folder_config.json"
+        config_file = os.path.join("config", "log_folder_config.json")
         try:
+            # Ensure config directory exists
+            os.makedirs("config", exist_ok=True)
             config = {'log_folder_path': self.log_folder_path}
             with open(config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)

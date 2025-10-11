@@ -1,25 +1,34 @@
 """Main Tab UI Component"""
 import customtkinter as ctk
+from tkinter import filedialog, messagebox
+import os
+import json
 from ui.components.file_list import FileList
 from ui.components.progress_bar import ProgressBar
 from ui.components.status_bar import StatusBar
 
 
 class MainTab:
-    def __init__(self, parent, callbacks):
+    def __init__(self, parent, callbacks, output_folder_callback=None):
         """
         Initialize Main Tab
-        
+
         Args:
             parent: Parent widget
             callbacks: Dictionary of callback functions
+            output_folder_callback: Callback function when output folder is changed
         """
         self.parent = parent
         self.callbacks = callbacks
-        
+        self.output_folder_callback = output_folder_callback
+        self.output_folder_path = None
+
         # UI variables
         self.select_all_var = ctk.BooleanVar(value=False)
-        
+
+        # Load saved output folder setting
+        self._load_output_folder_setting()
+
         # Create UI components
         self._create_ui()
     
@@ -48,7 +57,7 @@ class MainTab:
         """Create control buttons and folder management buttons in the same row"""
         button_frame = ctk.CTkFrame(self.parent)
         button_frame.pack(pady=4)
-        
+
         # ปุ่มเลือก/ยกเลิกการเลือกทั้งหมด
         self.select_all_button = ctk.CTkButton(
             button_frame,
@@ -59,10 +68,10 @@ class MainTab:
         )
         self.select_all_button.pack(side="left", padx=4)
 
-        # ปุ่มเลือกโฟลเดอร์
+        # ปุ่มเลือกโฟลเดอร์ input
         self.folder_btn = ctk.CTkButton(
             button_frame,
-            text="📁 Choose folder",
+            text="📁 Choose input folder",
             command=self.callbacks.get('browse_excel_path'),
             width=160,
         )
@@ -77,7 +86,16 @@ class MainTab:
         )
         self.check_btn.pack(side="left", padx=4)
 
-        # ปุ่มอัปโหลดไฟล์
+        # ปุ่มเลือกโฟลเดอร์ output (มาก่อน upload)
+        self.output_folder_btn = ctk.CTkButton(
+            button_frame,
+            text="📂 Choose output folder",
+            command=self._choose_output_folder,
+            width=170,
+        )
+        self.output_folder_btn.pack(side="left", padx=4)
+
+        # ปุ่มอัปโหลดไฟล์ (มาหลัง output folder)
         self.upload_button = ctk.CTkButton(
             button_frame,
             text="📤 Upload selected files",
@@ -136,3 +154,53 @@ class MainTab:
         self.select_all_var.set(True)
         self.file_list.select_all()
         self.select_all_button.configure(text="Deselect all")
+
+    def _load_output_folder_setting(self):
+        """Load saved output folder setting from config file"""
+        config_file = os.path.join("config", "output_folder_config.json")
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self.output_folder_path = config.get('output_folder_path')
+            except Exception:
+                self.output_folder_path = None
+
+    def _save_output_folder_setting(self):
+        """Save output folder setting to config file"""
+        config_file = os.path.join("config", "output_folder_config.json")
+        try:
+            # Ensure config directory exists
+            os.makedirs("config", exist_ok=True)
+            config = {'output_folder_path': self.output_folder_path}
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save output folder setting:\n{str(e)}")
+
+    def _get_output_folder_display_text(self):
+        """Get display text for output folder label"""
+        if self.output_folder_path and os.path.exists(self.output_folder_path):
+            return f"Output folder: {self.output_folder_path}"
+        return "Output folder: Not set (will use default location)"
+
+    def _choose_output_folder(self):
+        """Open folder dialog to choose output folder"""
+        folder_path = filedialog.askdirectory(
+            title="Select output folder for uploaded files",
+            initialdir=self.output_folder_path if self.output_folder_path else os.getcwd()
+        )
+
+        if folder_path:
+            self.output_folder_path = folder_path
+            self._save_output_folder_setting()
+
+            # Call callback if provided
+            if self.output_folder_callback:
+                self.output_folder_callback(folder_path)
+
+            messagebox.showinfo("Success", f"Output folder set to:\n{folder_path}\n\nUploaded files will be moved to this location.")
+
+    def get_output_folder_path(self):
+        """Get current output folder path"""
+        return self.output_folder_path
