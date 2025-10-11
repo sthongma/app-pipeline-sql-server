@@ -582,6 +582,8 @@ class SettingsTab:
         """อัปเดต dropdown ของประเภทไฟล์"""
         file_types = list(self.column_settings.keys()) if self.column_settings else []
         if file_types:
+            # เรียงตัวอักษร (alphabetically)
+            file_types = sorted(file_types)
             values = ["Select a file type..."] + file_types
             self.file_type_selector.configure(values=values)
             # ถ้ามีเพียงประเภทเดียว ให้เลือกอัตโนมัติ
