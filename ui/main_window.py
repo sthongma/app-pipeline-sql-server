@@ -93,6 +93,9 @@ class MainWindow(ctk.CTkToplevel):
         # โหลดและเริ่มการบันทึก log ไฟล์ถ้ามีการตั้งค่าไว้
         self.after(50, self._initialize_log_file_if_needed)
 
+        # โหลด input folder ถ้ามีการตั้งค่าไว้
+        self.after(55, lambda: self._initialize_input_folder_if_needed(last_path))
+
         # โหลด output folder ถ้ามีการตั้งค่าไว้
         self.after(60, self._initialize_output_folder_if_needed)
 
@@ -468,6 +471,14 @@ class MainWindow(ctk.CTkToplevel):
                     self.log("⚠️ Failed to setup log file")
         except Exception as e:
             self.log(f"❌ Error setting up log file: {e}")
+
+    def _initialize_input_folder_if_needed(self, input_folder_path: str) -> None:
+        """Initialize input folder if user has previously set it"""
+        try:
+            if input_folder_path and os.path.exists(input_folder_path):
+                self.log(f"📂 Input folder updated: {input_folder_path}")
+        except Exception:
+            pass
 
     def _initialize_output_folder_if_needed(self) -> None:
         """Initialize output folder if user has previously set it"""

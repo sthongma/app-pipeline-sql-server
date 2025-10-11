@@ -38,6 +38,7 @@ class FileHandler:
         if folder:
             self.file_service.set_search_path(folder)
             save_callback(folder)
+            self.log(f"📂 Input folder updated: {folder}")
             messagebox.showinfo("Success", f"Set search path for Excel files to\n{folder}")
     
     def run_check_thread(self, ui_callbacks):

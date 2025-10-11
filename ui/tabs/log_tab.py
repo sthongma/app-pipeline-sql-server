@@ -41,14 +41,6 @@ class LogTab:
         log_folder_btn = ctk.CTkButton(toolbar, text="Choose log folder", command=self._choose_log_folder, width=140)
         log_folder_btn.pack(side="left", padx=5)
 
-        # Label to display current log folder
-        self.log_folder_label = ctk.CTkLabel(
-            toolbar,
-            text=self._get_log_folder_display_text(),
-            anchor="w"
-        )
-        self.log_folder_label.pack(side="left", padx=10, fill="x", expand=True)
-
         # กล่องข้อความสำหรับแสดง Log
         self.log_textbox = ctk.CTkTextbox(self.parent)
         self.log_textbox.pack(pady=8, padx=10, fill="both", expand=True)
@@ -173,12 +165,6 @@ class LogTab:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save log folder setting:\n{str(e)}")
 
-    def _get_log_folder_display_text(self):
-        """Get display text for log folder label"""
-        if self.log_folder_path and os.path.exists(self.log_folder_path):
-            return f"Log folder: {self.log_folder_path}"
-        return "Log folder: Not set"
-
     def _choose_log_folder(self):
         """Open folder dialog to choose log folder"""
         folder_path = filedialog.askdirectory(
@@ -189,7 +175,6 @@ class LogTab:
         if folder_path:
             self.log_folder_path = folder_path
             self._save_log_folder_setting()
-            self.log_folder_label.configure(text=self._get_log_folder_display_text())
 
             # Call callback if provided
             if self.log_folder_callback:
