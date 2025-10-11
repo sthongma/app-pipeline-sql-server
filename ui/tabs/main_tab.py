@@ -68,15 +68,6 @@ class MainTab:
         )
         self.select_all_button.pack(side="left", padx=4)
 
-        # ปุ่มเลือกโฟลเดอร์ input
-        self.folder_btn = ctk.CTkButton(
-            button_frame,
-            text="📁 Choose input folder",
-            command=self.callbacks.get('browse_excel_path'),
-            width=160,
-        )
-        self.folder_btn.pack(side="left", padx=4)
-
         # ปุ่มตรวจสอบไฟล์ในโฟลเดอร์
         self.check_btn = ctk.CTkButton(
             button_frame,
@@ -86,16 +77,7 @@ class MainTab:
         )
         self.check_btn.pack(side="left", padx=4)
 
-        # ปุ่มเลือกโฟลเดอร์ output (มาก่อน upload)
-        self.output_folder_btn = ctk.CTkButton(
-            button_frame,
-            text="📂 Choose output folder",
-            command=self._choose_output_folder,
-            width=170,
-        )
-        self.output_folder_btn.pack(side="left", padx=4)
-
-        # ปุ่มอัปโหลดไฟล์ (มาหลัง output folder)
+        # ปุ่มอัปโหลดไฟล์ 
         self.upload_button = ctk.CTkButton(
             button_frame,
             text="📤 Upload selected files",
@@ -103,6 +85,24 @@ class MainTab:
             width=160,
         )
         self.upload_button.pack(side="left", padx=4)
+
+        # ปุ่มเลือกโฟลเดอร์ input
+        self.folder_btn = ctk.CTkButton(
+            button_frame,
+            text="📂 Choose input folder",
+            command=self.callbacks.get('browse_excel_path'),
+            width=160,
+        )
+        self.folder_btn.pack(side="left", padx=4)
+
+        # ปุ่มเลือกโฟลเดอร์ output 
+        self.output_folder_btn = ctk.CTkButton(
+            button_frame,
+            text="📂 Choose output folder",
+            command=self._choose_output_folder,
+            width=170,
+        )
+        self.output_folder_btn.pack(side="left", padx=4)
 
 
     

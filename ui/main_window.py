@@ -106,9 +106,12 @@ class MainWindow(ctk.CTkToplevel):
         if ui_progress_callback:
             ui_progress_callback("Building Tab View...")
         
-        # สร้าง Tab View
-        self.tabview = ctk.CTkTabview(self)
+        # สร้าง Tab View พร้อมกำหนดความกว้างขั้นต่ำของปุ่ม tab
+        self.tabview = ctk.CTkTabview(self, segmented_button_fg_color=None, segmented_button_unselected_color=None)
         self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
+
+        # กำหนดความกว้างขั้นต่ำให้ปุ่ม tab ไม่ยุบ
+        self.tabview._segmented_button.configure(width=300)
         
         # สร้าง Tab
         main_tab_frame = self.tabview.add("Main")
@@ -314,7 +317,7 @@ class MainWindow(ctk.CTkToplevel):
 
     def _setup_emoji_colors(self, text_widget):
         """กำหนดสีสำหรับ emoji (ใช้ร่วมกันได้ทั้ง Main และ Log tab)"""
-        text_widget.tag_config("emoji_success", foreground="#00FF00")    # เขียว
+        text_widget.tag_config("emoji_success", foreground="#41AA41")    # เขียว
         text_widget.tag_config("emoji_error", foreground="#FF4444")      # แดง
         text_widget.tag_config("emoji_warning", foreground="#FFA500")    # ส้ม
         text_widget.tag_config("emoji_info", foreground="#00BFFF")       # ฟ้า
