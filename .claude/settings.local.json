@@ -13,7 +13,10 @@
       "Bash(mv:*)",
       "Bash(xargs:*)",
       "Bash(test:*)",
-      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\handlers\\file_handler.py\")"
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\handlers\\file_handler.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\loading_dialog.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\tabs\\settings_tab.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''Syntax check passed'')\")"
     ],
     "deny": [],
     "ask": []
