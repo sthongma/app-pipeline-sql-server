@@ -23,7 +23,16 @@
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\database\\validation\\schema_validator.py\")",
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\tabs\\log_tab.py\")",
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\main_window.py\")",
-      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''✅ Syntax OK!'')\")"
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''✅ Syntax OK!'')\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"utils\\logger.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\tabs\\main_tab.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\file\\file_management_service.py\")",
+      "Bash(if not exist config mkdir config)",
+      "Bash(if exist log_folder_config.json move log_folder_config.json config )",
+      "Bash(if exist output_folder_config.json move output_folder_config.json config )",
+      "Bash(\"venv\\Scripts\\pip.exe\" show customtkinter)",
+      "Bash(venv\\Scripts\\pip.exe show:*)",
+      "Bash(.\\venv\\Scripts\\pip.exe show:*)"
     ],
     "deny": [],
     "ask": []

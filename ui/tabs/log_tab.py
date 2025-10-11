@@ -2,18 +2,26 @@
 import customtkinter as ctk
 from tkinter import messagebox, filedialog
 import datetime
+import os
+import json
 
 
 class LogTab:
-    def __init__(self, parent):
+    def __init__(self, parent, log_folder_callback=None):
         """
         Initialize Log Tab
-        
+
         Args:
             parent: Parent widget
+            log_folder_callback: Callback function when log folder is changed
         """
         self.parent = parent
-        
+        self.log_folder_callback = log_folder_callback
+        self.log_folder_path = None
+
+        # Load saved log folder setting
+        self._load_log_folder_setting()
+
         # Create UI components
         self._create_ui()
     
@@ -28,6 +36,18 @@ class LogTab:
 
         export_btn = ctk.CTkButton(toolbar, text="Export log", command=self._export_log, width=120)
         export_btn.pack(side="left", padx=5)
+
+        # Log folder setting button
+        log_folder_btn = ctk.CTkButton(toolbar, text="Choose log folder", command=self._choose_log_folder, width=140)
+        log_folder_btn.pack(side="left", padx=5)
+
+        # Label to display current log folder
+        self.log_folder_label = ctk.CTkLabel(
+            toolbar,
+            text=self._get_log_folder_display_text(),
+            anchor="w"
+        )
+        self.log_folder_label.pack(side="left", padx=10, fill="x", expand=True)
 
         # กล่องข้อความสำหรับแสดง Log
         self.log_textbox = ctk.CTkTextbox(self.parent)
@@ -129,3 +149,54 @@ class LogTab:
 
         # เลื่อนไปท้ายสุด
         self.log_textbox.see("end")
+
+    def _load_log_folder_setting(self):
+        """Load saved log folder setting from config file"""
+        config_file = os.path.join("config", "log_folder_config.json")
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    self.log_folder_path = config.get('log_folder_path')
+            except Exception:
+                self.log_folder_path = None
+
+    def _save_log_folder_setting(self):
+        """Save log folder setting to config file"""
+        config_file = os.path.join("config", "log_folder_config.json")
+        try:
+            # Ensure config directory exists
+            os.makedirs("config", exist_ok=True)
+            config = {'log_folder_path': self.log_folder_path}
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save log folder setting:\n{str(e)}")
+
+    def _get_log_folder_display_text(self):
+        """Get display text for log folder label"""
+        if self.log_folder_path and os.path.exists(self.log_folder_path):
+            return f"Log folder: {self.log_folder_path}"
+        return "Log folder: Not set"
+
+    def _choose_log_folder(self):
+        """Open folder dialog to choose log folder"""
+        folder_path = filedialog.askdirectory(
+            title="Select log folder",
+            initialdir=self.log_folder_path if self.log_folder_path else os.getcwd()
+        )
+
+        if folder_path:
+            self.log_folder_path = folder_path
+            self._save_log_folder_setting()
+            self.log_folder_label.configure(text=self._get_log_folder_display_text())
+
+            # Call callback if provided
+            if self.log_folder_callback:
+                self.log_folder_callback(folder_path)
+
+            messagebox.showinfo("Success", f"Log folder set to:\n{folder_path}")
+
+    def get_log_folder_path(self):
+        """Get current log folder path"""
+        return self.log_folder_path

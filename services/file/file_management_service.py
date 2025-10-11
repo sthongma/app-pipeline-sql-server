@@ -31,13 +31,20 @@ class FileManagementService:
     def __init__(self, base_path: Optional[str] = None):
         """
         Initialize File Management Service
-        
+
         Args:
             base_path: Base path for operations (default: current directory)
         """
         self.base_path = base_path or os.getcwd()
         self.settings_file = os.path.join(self.base_path, 'config', 'file_management_settings.json')
+        self.output_folder = None  # Custom output folder for uploaded files
         self._ensure_config_dir()
+
+    def set_output_folder(self, folder_path: str):
+        """Set custom output folder for uploaded files"""
+        if folder_path and os.path.exists(folder_path):
+            self.output_folder = folder_path
+            # Log message is handled by main_window._on_output_folder_changed()
     
     def _ensure_config_dir(self):
         """Create config folder if it doesn't exist"""
@@ -49,37 +56,41 @@ class FileManagementService:
     # ========================
     
     def move_uploaded_files(self, file_paths, logic_types=None, search_path=None):
-        """Move uploaded files to Uploaded_Files folder"""
+        """Move uploaded files directly to output folder with new naming format"""
         try:
-            if not search_path:
-                search_path = self.base_path
-                
+            # Use custom output folder if set, otherwise use search_path
+            base_folder = self.output_folder if self.output_folder else (search_path or self.base_path)
+
             moved_files = []
             current_date = datetime.now().strftime("%Y-%m-%d")
-            
+
             # ใช้ ThreadPoolExecutor สำหรับการย้ายไฟล์หลายไฟล์
             def move_single_file(args):
                 idx, file_path = args
                 try:
                     logic_type = logic_types[idx] if logic_types else "Unknown"
-                    
-                    # สร้างโฟลเดอร์
-                    uploaded_folder = os.path.join(search_path, "Uploaded_Files", logic_type, current_date)
-                    os.makedirs(uploaded_folder, exist_ok=True)
-                    
-                    # สร้างชื่อไฟล์ใหม่
+
+                    # สร้างโฟลเดอร์ถ้ายังไม่มี
+                    os.makedirs(base_folder, exist_ok=True)
+
+                    # สร้างชื่อไฟล์ใหม่ในรูปแบบ {logic_type}_{date}_{original_filename}
                     file_name = os.path.basename(file_path)
-                    name, ext = os.path.splitext(file_name)
-                    timestamp = datetime.now().strftime("%H%M%S")
-                    new_name = f"{name}_{timestamp}{ext}"
-                    destination = os.path.join(uploaded_folder, new_name)
-                    
+                    new_name = f"{logic_type}_{current_date}_{file_name}"
+                    destination = os.path.join(base_folder, new_name)
+
+                    # ถ้าไฟล์มีชื่อซ้ำ ให้เพิ่ม timestamp
+                    if os.path.exists(destination):
+                        name, ext = os.path.splitext(file_name)
+                        timestamp = datetime.now().strftime("%H%M%S")
+                        new_name = f"{logic_type}_{current_date}_{name}_{timestamp}{ext}"
+                        destination = os.path.join(base_folder, new_name)
+
                     shutil.move(file_path, destination)
                     return (file_path, destination)
                 except Exception as e:
                     logging.error(f"ไม่สามารถย้ายไฟล์ {file_path}: {str(e)}")
                     return None
-            
+
             # ถ้ามีไฟล์น้อยกว่า 5 ไฟล์ ทำทีละไฟล์
             if len(file_paths) < 5:
                 for idx, file_path in enumerate(file_paths):
@@ -91,9 +102,9 @@ class FileManagementService:
                 with ThreadPoolExecutor(max_workers=3) as executor:
                     results = executor.map(move_single_file, enumerate(file_paths))
                     moved_files = [r for r in results if r is not None]
-            
+
             return True, moved_files
-            
+
         except Exception as e:
             return False, str(e)
     

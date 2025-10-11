@@ -44,6 +44,8 @@ class LoadingDialog(ctk.CTkToplevel):
         self._closing_started = False
         self._last_message_update = 0  # Track last message update time for debouncing
         self._pending_message = None  # Store pending message for debounced update
+        self._ui_update_interval = 150  # UI update interval in ms (increased to reduce flickering)
+        self._elapsed_update_interval = 500  # Elapsed time update interval in ms
         self._min_total_duration_ms = (
             int(min_total_duration_ms)
             if min_total_duration_ms is not None
@@ -150,8 +152,8 @@ class LoadingDialog(ctk.CTkToplevel):
         """อัพเดทข้อความด้วย debouncing เพื่อลด UI updates"""
         try:
             current_time = time.perf_counter()
-            # Debounce: อัพเดท UI ไม่เกินทุก 100ms
-            if current_time - self._last_message_update < 0.1:
+            # Debounce: อัพเดท UI ไม่เกินทุก 150ms (เพิ่มจาก 100ms)
+            if current_time - self._last_message_update < 0.15:
                 # เก็บข้อความไว้สำหรับอัพเดทภายหลัง
                 self._pending_message = message
                 return
@@ -171,12 +173,14 @@ class LoadingDialog(ctk.CTkToplevel):
         # ล้างของเดิมและสร้างใหม่หากต้องการ (ขอข้ามเพื่อความเรียบง่าย)
         
     def mark_step_running(self, index: int):
+        """อัพเดทสถานะขั้นตอนเป็น running โดยไม่ update_idletasks() ทันที"""
         if 0 <= index < len(self._step_labels):
             self._current_step_index = index
             icon, _ = self._step_labels[index]
             icon.configure(text="●")
 
     def mark_step_done(self, index: int):
+        """อัพเดทสถานะขั้นตอนเป็น done โดยไม่ update_idletasks() ทันที"""
         if 0 <= index < len(self._step_labels):
             icon, _ = self._step_labels[index]
             icon.configure(text="✓")
@@ -184,6 +188,7 @@ class LoadingDialog(ctk.CTkToplevel):
                 self._step_done_flags[index] = True
 
     def mark_step_error(self, index: int):
+        """อัพเดทสถานะขั้นตอนเป็น error โดยไม่ update_idletasks() ทันที"""
         if 0 <= index < len(self._step_labels):
             icon, _ = self._step_labels[index]
             icon.configure(text="✗")
@@ -331,9 +336,20 @@ class LoadingDialog(ctk.CTkToplevel):
         """กำหนดการอัพเดท UI เป็นระยะ เพื่อให้ progress bar วิ่งได้"""
         try:
             if self.winfo_exists():
+                # ใช้ update_idletasks() แทน update() เพื่อลดการ redraw
                 self.update_idletasks()
-                # เพิ่ม interval จาก 50ms เป็น 100ms เพื่อลด CPU load
-                self.after(100, self._schedule_ui_update)
+                # ถ้ามี pending message ให้อัพเดทตอนนี้
+                if self._pending_message is not None:
+                    try:
+                        if hasattr(self, 'message_label') and self.message_label:
+                            self.message_label.configure(text=self._pending_message)
+                            self._infer_step_from_message(str(self._pending_message))
+                            self._pending_message = None
+                            self._last_message_update = time.perf_counter()
+                    except Exception:
+                        pass
+                # เพิ่ม interval เป็น 150ms เพื่อลดการกระตุก
+                self.after(self._ui_update_interval, self._schedule_ui_update)
         except Exception:
             pass
 
@@ -343,8 +359,8 @@ class LoadingDialog(ctk.CTkToplevel):
                 elapsed = time.perf_counter() - self._start_ts
                 if hasattr(self, 'elapsed_label') and self.elapsed_label:
                     self.elapsed_label.configure(text=f"Time: {elapsed:.1f} seconds")
-                # เพิ่ม interval จาก 200ms เป็น 500ms เพื่อลด CPU load
-                self.after(500, self._schedule_elapsed_update)
+                # เพิ่ม interval เป็น 500ms เพื่อลดการกระตุก
+                self.after(self._elapsed_update_interval, self._schedule_elapsed_update)
         except Exception:
             pass
 
