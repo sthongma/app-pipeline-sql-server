@@ -24,7 +24,7 @@ from services.orchestrators.database_orchestrator import DatabaseOrchestrator
 from services.file import FileManagementService
 from config.database import DatabaseConfig
 from constants import AppConstants, DatabaseConstants
-from utils.logger import create_gui_log_handler
+from utils.logger import create_gui_log_handler, setup_file_logging
 
 
 class MainWindow(ctk.CTkToplevel):
@@ -90,6 +90,9 @@ class MainWindow(ctk.CTkToplevel):
         self._create_ui(ui_progress_callback, on_ready_callback)
         
 
+        # โหลดและเริ่มการบันทึก log ไฟล์ถ้ามีการตั้งค่าไว้
+        self.after(50, self._initialize_log_file_if_needed)
+
         # ตรวจสอบการเชื่อมต่อ SQL Server หลังสร้าง UI เสร็จ (ทำแบบ async เพื่อลดการค้าง)
         if ui_progress_callback:
             ui_progress_callback("Checking SQL Server connection...")
@@ -152,8 +155,8 @@ class MainWindow(ctk.CTkToplevel):
     
     def _create_log_tab(self, parent):
         """Create components in Log Tab"""
-        self.log_tab_ui = LogTab(parent)
-        
+        self.log_tab_ui = LogTab(parent, log_folder_callback=self._on_log_folder_changed)
+
         # เก็บ reference ไปยัง log textbox
         self.log_textbox = self.log_tab_ui.log_textbox
     
@@ -370,9 +373,9 @@ class MainWindow(ctk.CTkToplevel):
         """Attach logging handler to send system logs to GUI"""
         # Check if structured logging is enabled via environment variable
         structured_logging = os.getenv('STRUCTURED_LOGGING', 'false').lower() == 'true'
-        
+
         gui_handler = create_gui_log_handler(
-            self._append_log_message, 
+            self._append_log_message,
             level=logging.INFO,
             structured=structured_logging
         )
@@ -380,6 +383,9 @@ class MainWindow(ctk.CTkToplevel):
         # ป้องกันซ้ำด้วยการตรวจสอบ class ของ handler
         if not any(h.__class__ is gui_handler.__class__ for h in root_logger.handlers):
             root_logger.addHandler(gui_handler)
+
+        # Store reference to file handler for later updates
+        self.current_file_handler = None
     
     def _log_environment_status(self) -> None:
         """Log current environment variables status for debugging"""
@@ -419,3 +425,40 @@ class MainWindow(ctk.CTkToplevel):
                 f"Unable to connect to SQL Server:\n{message}\n\nPlease check your connection and try again"
             )
             self.after(2000, self.destroy)
+
+    def _initialize_log_file_if_needed(self) -> None:
+        """Initialize log file if user has previously set log folder"""
+        try:
+            if hasattr(self, 'log_tab_ui') and self.log_tab_ui:
+                log_folder_path = self.log_tab_ui.get_log_folder_path()
+                if log_folder_path and os.path.exists(log_folder_path):
+                    self._on_log_folder_changed(log_folder_path)
+        except Exception:
+            pass
+
+    def _on_log_folder_changed(self, log_folder_path: str) -> None:
+        """Called when user changes log folder setting"""
+        try:
+            # Remove old file handler if exists
+            if self.current_file_handler:
+                root_logger = logging.getLogger()
+                root_logger.removeHandler(self.current_file_handler)
+                self.current_file_handler.close()
+                self.current_file_handler = None
+
+            # Setup new file logging with the selected folder
+            if log_folder_path and os.path.exists(log_folder_path):
+                log_file_path = setup_file_logging(log_folder_path, enable_export=True)
+                if log_file_path:
+                    # Store reference to the new file handler
+                    root_logger = logging.getLogger()
+                    for handler in root_logger.handlers:
+                        if isinstance(handler, logging.FileHandler):
+                            self.current_file_handler = handler
+                            break
+
+                    self.log(f"📁 Log file will be saved to: {log_file_path}")
+                else:
+                    self.log("⚠️ Failed to setup log file")
+        except Exception as e:
+            self.log(f"❌ Error setting up log file: {e}")

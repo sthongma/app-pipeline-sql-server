@@ -74,39 +74,35 @@ def create_gui_log_handler(gui_callback: Callable[[str], None],
 
 
 def setup_file_logging(base_path: str, enable_export: bool = True) -> Optional[str]:
-    """Set up file logging to export logs to log_pipeline folder
-    
+    """Set up file logging to export logs directly to selected folder
+
     Args:
-        base_path: Base directory path (typically last_search_path)
+        base_path: Directory path where log file will be saved
         enable_export: Whether to enable file export logging
-        
+
     Returns:
         Log file path if successful, None if failed
     """
     if not enable_export or not base_path or not os.path.exists(base_path):
         return None
-    
+
     try:
-        # สร้างโฟลเดอร์ log_pipeline
-        log_dir = os.path.join(base_path, "log_pipeline")
-        os.makedirs(log_dir, exist_ok=True)
-        
         # สร้างชื่อไฟล์ log ตามรูปแบบ log_pipeline_(วันที่และเวลา).log
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         log_filename = f"log_pipeline_{timestamp}.log"
-        log_file_path = os.path.join(log_dir, log_filename)
-        
+        log_file_path = os.path.join(base_path, log_filename)
+
         # สร้าง FileHandler
         file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(logging.Formatter(AppConstants.LOG_FORMAT))
-        
+
         # เพิ่ม FileHandler ไปยัง root logger
         root_logger = logging.getLogger()
         root_logger.addHandler(file_handler)
-        
+
         return log_file_path
-        
+
     except Exception as e:
         # ถ้าเกิดข้อผิดพลาด ใช้ logging แบบปกติไปก่อน (ไม่ให้ระบบล้ม)
         try:

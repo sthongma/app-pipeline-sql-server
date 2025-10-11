@@ -23,7 +23,8 @@
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\database\\validation\\schema_validator.py\")",
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\tabs\\log_tab.py\")",
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\main_window.py\")",
-      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''✅ Syntax OK!'')\")"
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''✅ Syntax OK!'')\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"utils\\logger.py\")"
     ],
     "deny": [],
     "ask": []
