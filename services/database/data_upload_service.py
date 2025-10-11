@@ -501,20 +501,36 @@ class DataUploadService:
         with self.engine.begin() as conn:
             insert_sql = (
                 f"INSERT INTO {schema_name}.{table_name} (" + ", ".join([f"[{c}]" for c in required_cols.keys()]) + ") "
-                f"SELECT {select_sql} FROM {schema_name}.{staging_table}"
+                f"SELECT DISTINCT {select_sql} FROM {schema_name}.{staging_table}"
             )
             if log_func:
-                log_func(f"📝 Executing data transfer with type conversion...")
+                log_func(f"📝 Executing data transfer with type conversion and deduplication...")
                 log_func(f"⏳ This may take a while for large datasets, please wait...")
-            
+
             # Execute with timeout monitoring
             import time
             start_time = time.time()
             try:
                 result = conn.execute(text(insert_sql))
                 execution_time = time.time() - start_time
+
+                # Count inserted rows and report deduplication
+                count_result = conn.execute(text(f"SELECT COUNT(*) FROM {schema_name}.{table_name}"))
+                inserted_rows = count_result.scalar()
+
                 if log_func:
                     log_func(f"✅ Data transfer completed successfully in {execution_time:.1f} seconds")
+
+                    # Report deduplication results
+                    if isinstance(total_rows, int):
+                        duplicates_removed = total_rows - inserted_rows
+                        if duplicates_removed > 0:
+                            log_func(f"🧹 Removed {duplicates_removed:,} duplicate rows (kept {inserted_rows:,} unique rows)")
+                        else:
+                            log_func(f"✅ No duplicate rows found ({inserted_rows:,} unique rows)")
+                    else:
+                        log_func(f"📊 Inserted {inserted_rows:,} unique rows")
+
             except Exception as e:
                 execution_time = time.time() - start_time
                 if log_func:
