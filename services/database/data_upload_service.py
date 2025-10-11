@@ -156,7 +156,12 @@ class DataUploadService:
             if not validation_results['is_valid']:
                 with self.engine.begin() as conn:
                     conn.execute(text(f"DROP TABLE {schema_name}.{staging_table}"))
-                return False, validation_results['summary']
+                # ส่ง validation details กลับมาด้วยในรูปแบบ dict
+                return False, {
+                    'summary': validation_results['summary'],
+                    'issues': validation_results.get('issues', []),
+                    'warnings': validation_results.get('warnings', [])
+                }
             
             self._create_or_recreate_final_table(
                 table_name, required_cols, schema_name, needs_recreate, log_func, df, clear_existing

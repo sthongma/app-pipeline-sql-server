@@ -40,18 +40,18 @@ class DataProcessorService:
             log_callback (Optional[callable]): Function for displaying logs
         """
         self.log_callback = log_callback if log_callback else print
-        
-        # Settings cache
+
+        # Settings cache (เก็บ dtype conversion และ timestamp)
         self._settings_cache: Dict[str, Any] = {}
         self._cache_lock = threading.Lock()
-        self._settings_loaded = False
-        
+        self._file_timestamps: Dict[str, float] = {}
+
         self.load_settings()
-    
+
     def log_with_time(self, message: str, show_time: bool = True) -> None:
         """
         แสดง log พร้อมเวลา
-        
+
         Args:
             message (str): ข้อความที่ต้องการแสดง
             show_time (bool): แสดงเวลาหรือไม่ (default: True)
@@ -61,37 +61,60 @@ class DataProcessorService:
             formatted_message = f"[{timestamp}] {message}"
         else:
             formatted_message = message
-            
+
         self.log_callback(formatted_message)
-    
-    def load_settings(self) -> None:
-        """Load column and data type settings"""
-        if self._settings_loaded:
-            return
-            
-        try:
-            # Load column settings
-            settings_file = PathConstants.COLUMN_SETTINGS_FILE
-            if os.path.exists(settings_file):
-                with open(settings_file, 'r', encoding='utf-8') as f:
-                    self.column_settings = json.load(f)
-            else:
+
+    def load_settings(self, force_reload: bool = False) -> None:
+        """
+        Load column and data type settings
+
+        Args:
+            force_reload: บังคับโหลดใหม่แม้ว่าไฟล์ไม่เปลี่ยน (default: False)
+        """
+        with self._cache_lock:
+            try:
+                # ตรวจสอบ timestamp ของไฟล์ column_settings
+                settings_file = PathConstants.COLUMN_SETTINGS_FILE
+                need_reload_column = force_reload
+
+                if os.path.exists(settings_file):
+                    current_mtime = os.path.getmtime(settings_file)
+                    cached_mtime = self._file_timestamps.get('column_settings', 0)
+
+                    if current_mtime > cached_mtime or force_reload:
+                        need_reload_column = True
+                        with open(settings_file, 'r', encoding='utf-8') as f:
+                            self.column_settings = json.load(f)
+                        self._file_timestamps['column_settings'] = current_mtime
+                        # Clear dtype cache เมื่อ column settings เปลี่ยน
+                        self._settings_cache = {k: v for k, v in self._settings_cache.items() if not k.startswith('dtypes_')}
+                else:
+                    self.column_settings = {}
+                    self._file_timestamps['column_settings'] = 0
+
+                # ตรวจสอบ timestamp ของไฟล์ dtype_settings
+                dtype_file = PathConstants.DTYPE_SETTINGS_FILE
+                need_reload_dtype = force_reload
+
+                if os.path.exists(dtype_file):
+                    current_mtime = os.path.getmtime(dtype_file)
+                    cached_mtime = self._file_timestamps.get('dtype_settings', 0)
+
+                    if current_mtime > cached_mtime or force_reload:
+                        need_reload_dtype = True
+                        with open(dtype_file, 'r', encoding='utf-8') as f:
+                            self.dtype_settings = json.load(f)
+                        self._file_timestamps['dtype_settings'] = current_mtime
+                        # Clear dtype cache เมื่อ dtype settings เปลี่ยน
+                        self._settings_cache = {k: v for k, v in self._settings_cache.items() if not k.startswith('dtypes_')}
+                else:
+                    self.dtype_settings = {}
+                    self._file_timestamps['dtype_settings'] = 0
+
+            except Exception:
                 self.column_settings = {}
-            
-            # Load data type settings
-            dtype_file = PathConstants.DTYPE_SETTINGS_FILE
-            if os.path.exists(dtype_file):
-                with open(dtype_file, 'r', encoding='utf-8') as f:
-                    self.dtype_settings = json.load(f)
-            else:
                 self.dtype_settings = {}
-                
-            self._settings_loaded = True
-            
-        except Exception:
-            self.column_settings = {}
-            self.dtype_settings = {}
-            self._settings_loaded = True
+                self._file_timestamps = {}
 
     def _convert_dtype_to_sqlalchemy(self, dtype_str):
         """Convert string dtype to SQLAlchemy type object (cached)"""
@@ -150,9 +173,12 @@ class DataProcessorService:
 
     def get_required_dtypes(self, file_type):
         """Get column dtypes {new_col: dtype} by file type (cached)"""
+        # โหลด settings ล่าสุดก่อนใช้งาน
+        self.load_settings()
+
         if not file_type or file_type not in self.column_settings:
             return {}
-            
+
         cache_key = f"dtypes_{file_type}"
         if cache_key in self._settings_cache:
             return self._settings_cache[cache_key]

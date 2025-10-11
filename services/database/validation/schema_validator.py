@@ -67,18 +67,24 @@ class SchemaValidator(BaseValidator):
                         log_func(f"   ℹ️  Final table {final_table} not found - skipping schema validation")
                     return schema_issues
                 
-                # ตรวจสอบแต่ละคอลัมน์
+                # ตรวจสอบแต่ละคอลัมน์ (ข้ามคอลัมน์ระบบ)
+                system_columns = ['updated_at', 'created_at', 'id']  # คอลัมน์ที่ระบบจัดการเอง
+
                 for col_name, expected_dtype in required_cols.items():
+                    # ข้ามคอลัมน์ระบบ
+                    if col_name in system_columns:
+                        continue
+
                     if col_name in db_columns:
                         db_info = db_columns[col_name]
-                        
+
                         # ตรวจสอบ Text fields ที่อาจมีปัญหา
                         issue = self._check_text_field_compatibility(
                             col_name, expected_dtype, db_info, log_func
                         )
                         if issue:
                             schema_issues.append(issue)
-                        
+
                         # ตรวจสอบ data type compatibility อื่นๆ
                         other_issues = self._check_data_type_compatibility(
                             col_name, expected_dtype, db_info, log_func
@@ -96,7 +102,7 @@ class SchemaValidator(BaseValidator):
                             'severity': 'warning'
                         }
                         schema_issues.append(issue)
-                        
+
                         if log_func:
                             log_func(f"   ⚠️  {col_name}: Column not found in final table")
         

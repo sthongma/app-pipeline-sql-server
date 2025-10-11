@@ -240,7 +240,8 @@ class FileHandler:
             'by_type': {},
             'errors': [],
             'successful_files': 0,
-            'failed_files': 0
+            'failed_files': 0,
+            'processed_file_list': []  # เก็บรายชื่อไฟล์ที่ประมวลผลทั้งหมด
         }
 
         # แสดงสถานะเริ่มต้น
@@ -261,7 +262,9 @@ class FileHandler:
                     'successful_files': 0,
                     'failed_files': 0,
                     'errors': [],
-                    'individual_processing_time': 0  # เก็บเวลารวมของประเภทนี้
+                    'individual_processing_time': 0,  # เก็บเวลารวมของประเภทนี้
+                    'successful_file_list': [],  # เก็บชื่อไฟล์ที่สำเร็จ
+                    'failed_file_list': []  # เก็บชื่อไฟล์ที่ล้มเหลว
                 }
 
                 self.log(f"📖 Validating files of type {logic_type} ({len(files)} files)")
@@ -302,6 +305,7 @@ class FileHandler:
                                 all_dfs.append(df)
                                 valid_files_info.append((file_path, file_chks[file_path]))
                                 upload_stats['by_type'][logic_type]['successful_files'] += 1
+                                upload_stats['by_type'][logic_type]['successful_file_list'].append(os.path.basename(file_path))
 
                                 # Update UI
                                 ui_callbacks['update_progress'](
@@ -313,6 +317,7 @@ class FileHandler:
                                 error = validation_result['error']
                                 self.log(f"❌ Validation failed for {os.path.basename(file_path)}: {error}")
                                 upload_stats['by_type'][logic_type]['failed_files'] += 1
+                                upload_stats['by_type'][logic_type]['failed_file_list'].append(os.path.basename(file_path))
                                 upload_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error}")
                                 upload_stats['failed_files'] += 1
 
@@ -411,9 +416,35 @@ class FileHandler:
                                 self.log(f"❌ An error occurred while moving file: {move_error}")
                     else:
                         # แสดงเฉพาะข้อความสรุปจากบริการฐานข้อมูล ไม่พิมพ์รายการคอลัมน์ทั้งหมด
-                        self.log(f"❌ {message}")
-                        upload_stats['by_type'][logic_type]['errors'].append(f"Database upload failed: {message}")
+                        # ตรวจสอบว่า message เป็น dict หรือ string
+                        if isinstance(message, dict):
+                            summary = message.get('summary', 'Upload failed')
+                            validation_issues = message.get('issues', [])
+                            validation_warnings = message.get('warnings', [])
+
+                            self.log(f"❌ {summary}")
+                            upload_stats['by_type'][logic_type]['errors'].append(f"Database upload failed: {summary}")
+                            upload_stats['by_type'][logic_type]['validation_details'] = {
+                                'issues': validation_issues,
+                                'warnings': validation_warnings
+                            }
+                        else:
+                            self.log(f"❌ {message}")
+                            upload_stats['by_type'][logic_type]['errors'].append(f"Database upload failed: {message}")
+
                         upload_stats['failed_files'] += len(valid_files_info)
+
+                        # ย้ายไฟล์จาก successful_file_list ไปยัง failed_file_list
+                        for file_path, chk in valid_files_info:
+                            filename = os.path.basename(file_path)
+                            # ลบออกจาก successful_file_list ถ้ามี
+                            if filename in upload_stats['by_type'][logic_type]['successful_file_list']:
+                                upload_stats['by_type'][logic_type]['successful_file_list'].remove(filename)
+                                upload_stats['by_type'][logic_type]['successful_files'] -= 1
+                            # เพิ่มเข้าไปใน failed_file_list
+                            if filename not in upload_stats['by_type'][logic_type]['failed_file_list']:
+                                upload_stats['by_type'][logic_type]['failed_file_list'].append(filename)
+                                upload_stats['by_type'][logic_type]['failed_files'] += 1
                         
                     upload_count += 1
                     
@@ -453,77 +484,121 @@ class FileHandler:
     def _display_upload_summary(self, upload_stats, total_files):
         """แสดงรายงานสรุปการอัปโหลด"""
         self.log("========= Upload Summary Report ==========")
-        
+
         # เรียกใช้ระบบส่งออก log อัตโนมัติ
         self._auto_export_logs()
-        
+
         # เวลารวม
         total_time = upload_stats.get('total_time', 0)
         hours = int(total_time // 3600)
         minutes = int((total_time % 3600) // 60)
         seconds = int(total_time % 60)
-        
+
         if hours > 0:
             time_str = f"{hours}h {minutes}m {seconds}s"
         elif minutes > 0:
             time_str = f"{minutes}m {seconds}s"
         else:
             time_str = f"{seconds}s"
-        
+
         self.log(f"📊 Total Upload Time: {time_str}")
         self.log(f"📁 Total Files Processed: {total_files}")
-        
+
         # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
         successful_files = upload_stats.get('successful_files', 0)
         failed_files = upload_stats.get('failed_files', 0)
-        
+
         if successful_files > 0:
             self.log(f"✅ Successful: {successful_files}")
         if failed_files > 0:
             self.log(f"❌ Failed: {failed_files}")
-        
+
         # รายละเอียดแต่ละประเภทไฟล์
         if upload_stats.get('by_type'):
             self.log("")
-            self.log("📋 Details by File Type:")
+            self.log("📋 Details by File Type (Occupation):")
             self.log("-" * 50)
-            
+
             for file_type, stats in upload_stats['by_type'].items():
                 type_time = stats.get('processing_time', 0)
                 type_hours = int(type_time // 3600)
                 type_minutes = int((type_time % 3600) // 60)
                 type_seconds = int(type_time % 60)
-                
+
                 if type_hours > 0:
                     type_time_str = f"{type_hours}h {type_minutes}m {type_seconds}s"
                 elif type_minutes > 0:
                     type_time_str = f"{type_minutes}m {type_seconds}s"
                 else:
                     type_time_str = f"{type_seconds}s"
-                
-                self.log(f"🏷️  {file_type}:")
+
+                self.log(f"🏷️  Occupation: {file_type}")
                 self.log(f"   ⏱️  Processing Time: {type_time_str}")
                 self.log(f"   📂 Total Files: {stats.get('files_count', 0)}")
-                
+
                 # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
                 successful = stats.get('successful_files', 0)
                 failed = stats.get('failed_files', 0)
-                
+
                 if successful > 0:
                     self.log(f"   ✅ Successful: {successful}")
+                    # แสดงรายชื่อไฟล์ที่สำเร็จ
+                    successful_file_list = stats.get('successful_file_list', [])
+                    if successful_file_list:
+                        self.log(f"      Files:")
+                        for filename in successful_file_list:
+                            self.log(f"         • {filename}")
+
                 if failed > 0:
                     self.log(f"   ❌ Failed: {failed}")
-                
-                # แสดงข้อผิดพลาด (ถ้ามี)
-                errors = stats.get('errors', [])
-                if errors:
-                    self.log(f"   🚨 Errors ({len(errors)}):")
-                    for i, error in enumerate(errors[:3], 1):  # แสดงแค่ 3 ข้อผิดพลาดแรก
-                        self.log(f"      {i}. {error}")
-                    if len(errors) > 3:
-                        self.log(f"      ... และอีก {len(errors) - 3} ข้อผิดพลาด")
+                    # แสดงรายชื่อไฟล์ที่ล้มเหลวพร้อมรายละเอียด error
+                    failed_file_list = stats.get('failed_file_list', [])
+                    errors = stats.get('errors', [])
+                    validation_details = stats.get('validation_details', {})
+
+                    if failed_file_list:
+                        self.log(f"      Files with error details:")
+                        # แสดงไฟล์แต่ละไฟล์พร้อมกับ error message
+                        for filename in failed_file_list:
+                            self.log(f"         • {filename}")
+                            # หา error ที่ตรงกับไฟล์นี้
+                            matching_errors = [err for err in errors if filename in err or 'Database upload failed' in err]
+                            if matching_errors:
+                                for err in matching_errors:
+                                    # แยก error message ออกจากชื่อไฟล์
+                                    if ': ' in err:
+                                        error_detail = err.split(': ', 1)[-1]
+                                    else:
+                                        error_detail = err
+                                    self.log(f"           ↳ {error_detail}")
+                            else:
+                                self.log(f"           ↳ Unknown error")
+
+                    # แสดงรายละเอียด validation issues
+                    if validation_details:
+                        issues = validation_details.get('issues', [])
+                        warnings = validation_details.get('warnings', [])
+
+                        if issues:
+                            self.log(f"      Validation Issues (Serious):")
+                            for issue in issues:
+                                column = issue.get('column', 'Unknown')
+                                error_count = issue.get('error_count', 0)
+                                percentage = issue.get('percentage', 0)
+                                examples = issue.get('examples', '')
+                                self.log(f"         ❌ {column}: {error_count:,} invalid rows ({percentage}%) Examples: {examples}")
+
+                        if warnings:
+                            self.log(f"      Validation Warnings:")
+                            for warning in warnings:
+                                column = warning.get('column', 'Unknown')
+                                error_count = warning.get('error_count', 0)
+                                percentage = warning.get('percentage', 0)
+                                examples = warning.get('examples', '')
+                                self.log(f"         ⚠️  {column}: {error_count:,} invalid rows ({percentage}%) Examples: {examples}")
+
                 self.log("")
-        
+
         # สรุปสำคัญ
         success_rate = 0
         if total_files > 0:
@@ -542,82 +617,126 @@ class FileHandler:
     def _display_auto_process_summary(self, process_stats, total_files):
         """แสดงรายงานสรุปการประมวลผลอัตโนมัติ"""
         self.log("======= Auto Process Summary Report =======")
-        
+
         # เรียกใช้ระบบส่งออก log อัตโนมัติ
         self._auto_export_logs()
-        
+
         # เวลารวม
         total_time = process_stats.get('total_time', 0)
         hours = int(total_time // 3600)
         minutes = int((total_time % 3600) // 60)
         seconds = int(total_time % 60)
-        
+
         if hours > 0:
             time_str = f"{hours}h {minutes}m {seconds}s"
         elif minutes > 0:
             time_str = f"{minutes}m {seconds}s"
         else:
             time_str = f"{seconds}s"
-        
+
         self.log(f"📊 Total Processing Time: {time_str}")
         self.log(f"📁 Total Files Processed: {total_files}")
-        
+
         # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
         successful_files = process_stats.get('successful_files', 0)
         failed_files = process_stats.get('failed_files', 0)
-        
+
         if successful_files > 0:
             self.log(f"✅ Successful: {successful_files}")
         if failed_files > 0:
             self.log(f"❌ Failed: {failed_files}")
-        
+
         # รายละเอียดแต่ละประเภทไฟล์
         if process_stats.get('by_type'):
             self.log("")
-            self.log("📋 Details by File Type:")
+            self.log("📋 Details by File Type (Occupation):")
             self.log("-" * 50)
-            
+
             for file_type, stats in process_stats['by_type'].items():
                 type_time = stats.get('processing_time', 0)
                 type_hours = int(type_time // 3600)
                 type_minutes = int((type_time % 3600) // 60)
                 type_seconds = int(type_time % 60)
-                
+
                 if type_hours > 0:
                     type_time_str = f"{type_hours}h {type_minutes}m {type_seconds}s"
                 elif type_minutes > 0:
                     type_time_str = f"{type_minutes}m {type_seconds}s"
                 else:
                     type_time_str = f"{type_seconds}s"
-                
-                self.log(f"🏷️  {file_type}:")
+
+                self.log(f"🏷️  Occupation: {file_type}")
                 self.log(f"   ⏱️  Processing Time: {type_time_str}")
                 self.log(f"   📂 Total Files: {stats.get('files_count', 0)}")
-                
+
                 # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
                 successful = stats.get('successful_files', 0)
                 failed = stats.get('failed_files', 0)
-                
+
                 if successful > 0:
                     self.log(f"   ✅ Successful: {successful}")
+                    # แสดงรายชื่อไฟล์ที่สำเร็จ
+                    successful_file_list = stats.get('successful_file_list', [])
+                    if successful_file_list:
+                        self.log(f"      Files:")
+                        for filename in successful_file_list:
+                            self.log(f"         • {filename}")
+
                 if failed > 0:
                     self.log(f"   ❌ Failed: {failed}")
-                
-                # แสดงข้อผิดพลาด (ถ้ามี)
-                errors = stats.get('errors', [])
-                if errors:
-                    self.log(f"   🚨 Errors ({len(errors)}):")
-                    for i, error in enumerate(errors[:3], 1):  # แสดงแค่ 3 ข้อผิดพลาดแรก
-                        self.log(f"      {i}. {error}")
-                    if len(errors) > 3:
-                        self.log(f"      ... และอีก {len(errors) - 3} ข้อผิดพลาด")
+                    # แสดงรายชื่อไฟล์ที่ล้มเหลวพร้อมรายละเอียด error
+                    failed_file_list = stats.get('failed_file_list', [])
+                    errors = stats.get('errors', [])
+                    validation_details = stats.get('validation_details', {})
+
+                    if failed_file_list:
+                        self.log(f"      Files with error details:")
+                        # แสดงไฟล์แต่ละไฟล์พร้อมกับ error message
+                        for filename in failed_file_list:
+                            self.log(f"         • {filename}")
+                            # หา error ที่ตรงกับไฟล์นี้
+                            matching_errors = [err for err in errors if filename in err or 'Upload failed' in err]
+                            if matching_errors:
+                                for err in matching_errors:
+                                    # แยก error message ออกจากชื่อไฟล์
+                                    if ': ' in err:
+                                        error_detail = err.split(': ', 1)[-1]
+                                    else:
+                                        error_detail = err
+                                    self.log(f"           ↳ {error_detail}")
+                            else:
+                                self.log(f"           ↳ Unknown error")
+
+                    # แสดงรายละเอียด validation issues
+                    if validation_details:
+                        issues = validation_details.get('issues', [])
+                        warnings = validation_details.get('warnings', [])
+
+                        if issues:
+                            self.log(f"      Validation Issues (Serious):")
+                            for issue in issues:
+                                column = issue.get('column', 'Unknown')
+                                error_count = issue.get('error_count', 0)
+                                percentage = issue.get('percentage', 0)
+                                examples = issue.get('examples', '')
+                                self.log(f"         ❌ {column}: {error_count:,} invalid rows ({percentage}%) Examples: {examples}")
+
+                        if warnings:
+                            self.log(f"      Validation Warnings:")
+                            for warning in warnings:
+                                column = warning.get('column', 'Unknown')
+                                error_count = warning.get('error_count', 0)
+                                percentage = warning.get('percentage', 0)
+                                examples = warning.get('examples', '')
+                                self.log(f"         ⚠️  {column}: {error_count:,} invalid rows ({percentage}%) Examples: {examples}")
+
                 self.log("")
-        
+
         # สรุปสำคัญ
         success_rate = 0
         if total_files > 0:
             success_rate = (process_stats.get('successful_files', 0) / total_files) * 100
-        
+
         self.log("📈 Summary:")
         self.log(f"   Success Rate: {success_rate:.1f}%")
         
@@ -731,7 +850,8 @@ class FileHandler:
                 'by_type': {},
                 'errors': [],
                 'successful_files': 0,
-                'failed_files': 0
+                'failed_files': 0,
+                'processed_file_list': []  # เก็บรายชื่อไฟล์ที่ประมวลผลทั้งหมด
             }
             
             for file_path in data_files:
@@ -770,7 +890,9 @@ class FileHandler:
                             'successful_files': 0,
                             'failed_files': 0,
                             'errors': [],
-                            'individual_processing_time': 0  # เก็บเวลารวมของประเภทนี้
+                            'individual_processing_time': 0,  # เก็บเวลารวมของประเภทนี้
+                            'successful_file_list': [],  # เก็บชื่อไฟล์ที่สำเร็จ
+                            'failed_file_list': []  # เก็บชื่อไฟล์ที่ล้มเหลว
                         }
                     
                     # จับเวลาสำหรับไฟล์นี้เฉพาะ
@@ -786,6 +908,7 @@ class FileHandler:
                         error_msg = f"Column check failed: {result}"
                         self.log(f"❌ {error_msg}")
                         process_stats['by_type'][logic_type]['failed_files'] += 1
+                        process_stats['by_type'][logic_type]['failed_file_list'].append(os.path.basename(file_path))
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
                         
@@ -800,6 +923,7 @@ class FileHandler:
                         error_msg = f"Could not read file: {result}"
                         self.log(f"❌ {error_msg}")
                         process_stats['by_type'][logic_type]['failed_files'] += 1
+                        process_stats['by_type'][logic_type]['failed_file_list'].append(os.path.basename(file_path))
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
                         
@@ -820,6 +944,7 @@ class FileHandler:
                         error_msg = f"No data type configuration found for {logic_type}"
                         self.log(f"❌ {error_msg}")
                         process_stats['by_type'][logic_type]['failed_files'] += 1
+                        process_stats['by_type'][logic_type]['failed_file_list'].append(os.path.basename(file_path))
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
                         
@@ -833,6 +958,7 @@ class FileHandler:
                         error_msg = f"File {os.path.basename(file_path)} has no data"
                         self.log(f"❌ {error_msg}")
                         process_stats['by_type'][logic_type]['failed_files'] += 1
+                        process_stats['by_type'][logic_type]['failed_file_list'].append(os.path.basename(file_path))
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
                         
@@ -849,8 +975,9 @@ class FileHandler:
                         self.log(f"✅ Upload successful: {message}")
                         successful_uploads += 1
                         process_stats['by_type'][logic_type]['successful_files'] += 1
+                        process_stats['by_type'][logic_type]['successful_file_list'].append(os.path.basename(file_path))
                         process_stats['successful_files'] += 1
-                        
+
                         # คำนวณเวลาที่ใช้สำหรับไฟล์นี้และเพิ่มเข้าไปในเวลารวม
                         file_processing_time = time.time() - file_start_time
                         process_stats['by_type'][logic_type]['individual_processing_time'] += file_processing_time
@@ -867,9 +994,24 @@ class FileHandler:
                             self.log(f"❌ An error occurred while moving file: {move_error}")
                     else:
                         # แสดงเฉพาะข้อความสรุปจากบริการฐานข้อมูล ไม่พิมพ์รายการคอลัมน์ทั้งหมด
-                        error_msg = f"Upload failed: {message}"
-                        self.log(f"❌ {error_msg}")
+                        # ตรวจสอบว่า message เป็น dict หรือ string
+                        if isinstance(message, dict):
+                            summary = message.get('summary', 'Upload failed')
+                            validation_issues = message.get('issues', [])
+                            validation_warnings = message.get('warnings', [])
+
+                            error_msg = f"Upload failed: {summary}"
+                            self.log(f"❌ {error_msg}")
+                            process_stats['by_type'][logic_type]['validation_details'] = {
+                                'issues': validation_issues,
+                                'warnings': validation_warnings
+                            }
+                        else:
+                            error_msg = f"Upload failed: {message}"
+                            self.log(f"❌ {error_msg}")
+
                         process_stats['by_type'][logic_type]['failed_files'] += 1
+                        process_stats['by_type'][logic_type]['failed_file_list'].append(os.path.basename(file_path))
                         process_stats['by_type'][logic_type]['errors'].append(f"{os.path.basename(file_path)}: {error_msg}")
                         process_stats['failed_files'] += 1
                         

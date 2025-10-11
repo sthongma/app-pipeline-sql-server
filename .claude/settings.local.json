@@ -16,7 +16,14 @@
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\handlers\\file_handler.py\")",
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\loading_dialog.py\")",
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\tabs\\settings_tab.py\")",
-      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''Syntax check passed'')\")"
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''Syntax check passed'')\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\file\\file_reader_service.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\file\\data_processor_service.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\database\\data_upload_service.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"services\\database\\validation\\schema_validator.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\tabs\\log_tab.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\main_window.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''✅ Syntax OK!'')\")"
     ],
     "deny": [],
     "ask": []

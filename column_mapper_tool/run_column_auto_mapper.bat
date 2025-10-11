@@ -100,7 +100,7 @@ REM Run Column Mapper CLI
 if "%~1"=="" (
     echo Running with last folder from main program...
     echo.
-    %PYTHON_EXE% column_mapper_tool\column_mapper_cli.py --auto
+    %PYTHON_EXE% column_mapper_cli.py --auto
 ) else (
     echo Running with folder: %~1
     echo.
