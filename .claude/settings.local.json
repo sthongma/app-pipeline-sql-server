@@ -36,7 +36,8 @@
       "Bash(.\\venv\\Scripts\\python.exe:*)",
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\login_window.py\")",
       "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"config\\database.py\")",
-      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''✅ Syntax check passed!'')\")"
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''✅ Syntax check passed!'')\")",
+      "Bash(if exist configapp_settings.json type configapp_settings.json)"
     ],
     "deny": [],
     "ask": []

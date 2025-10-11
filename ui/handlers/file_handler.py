@@ -401,6 +401,10 @@ class FileHandler:
                     
                     if success:
                         self.log(f"✅ {message}")
+
+                        # เก็บ summary message ไว้แสดงใน report
+                        upload_stats['by_type'][logic_type]['summary_message'] = message
+
                         upload_stats['successful_files'] += len(valid_files_info)
                         for file_path, chk in valid_files_info:
                             ui_callbacks['disable_checkbox'](chk)
@@ -543,6 +547,13 @@ class FileHandler:
 
                 if successful > 0:
                     self.log(f"   ✅ Successful: {successful}")
+
+                    # แสดง summary message ที่มีข้อมูล deduplication
+                    summary_message = stats.get('summary_message', '')
+                    if summary_message:
+                        self.log(f"   📋 Upload Summary:")
+                        self.log(f"      {summary_message}")
+
                     # แสดงรายชื่อไฟล์ที่สำเร็จ
                     successful_file_list = stats.get('successful_file_list', [])
                     if successful_file_list:
