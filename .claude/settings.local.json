@@ -33,7 +33,10 @@
       "Bash(\"venv\\Scripts\\pip.exe\" show customtkinter)",
       "Bash(venv\\Scripts\\pip.exe show:*)",
       "Bash(.\\venv\\Scripts\\pip.exe show:*)",
-      "Bash(.\\venv\\Scripts\\python.exe:*)"
+      "Bash(.\\venv\\Scripts\\python.exe:*)",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"ui\\login_window.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -m py_compile \"config\\database.py\")",
+      "Bash(\"venv\\Scripts\\python.exe\" -c \"print(''✅ Syntax check passed!'')\")"
     ],
     "deny": [],
     "ask": []

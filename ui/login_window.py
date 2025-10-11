@@ -70,16 +70,22 @@ class LoginWindow(ctk.CTk):
         self.db_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="Database name")
         self.db_entry.grid(row=3, column=1, sticky="w", padx=6, pady=4)
 
+        # Schema
+        schema_label = ctk.CTkLabel(main_frame, text="Schema", width=label_width, anchor="w")
+        schema_label.grid(row=4, column=0, sticky="e", padx=6, pady=4)
+        self.schema_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="Schema name (default: bronze)")
+        self.schema_entry.grid(row=4, column=1, sticky="w", padx=6, pady=4)
+
         # Authentication
         auth_label = ctk.CTkLabel(main_frame, text="Authentication", width=label_width, anchor="w")
-        auth_label.grid(row=4, column=0, sticky="e", padx=6, pady=4)
+        auth_label.grid(row=5, column=0, sticky="e", padx=6, pady=4)
         self.auth_menu = ctk.CTkOptionMenu(main_frame, values=["Windows", "SQL Server"], command=self._on_auth_change, width=240)
-        self.auth_menu.grid(row=4, column=1, sticky="w", padx=6, pady=4)
+        self.auth_menu.grid(row=5, column=1, sticky="w", padx=6, pady=4)
 
-        # Username (row 5)
+        # Username (row 6)
         self.username_label = ctk.CTkLabel(main_frame, text="Username", width=label_width, anchor="w")
         self.username_entry = ctk.CTkEntry(main_frame, width=240, placeholder_text="Username")
-        # Password (row 6)
+        # Password (row 7)
         self.password_label = ctk.CTkLabel(main_frame, text="Password", width=label_width, anchor="w")
         self.password_entry = ctk.CTkEntry(main_frame, width=240, show="*", placeholder_text="Password")
 
@@ -95,12 +101,12 @@ class LoginWindow(ctk.CTk):
             checkbox_height=18   # ขนาดปุ่มติ๊กถูก
         )
         # เพิ่มระยะห่างด้านบนโดยจะไปกำหนดใน grid ด้วย pady
-        # จะวางไว้ที่ row 6, column 1 (ใต้ password entry, ชิดซ้าย)
-        remember_check.grid(row=7, column=1, sticky="w", padx=(0, 0), pady=(0, 2))
+        # จะวางไว้ที่ row 8, column 1 (ใต้ password entry, ชิดซ้าย)
+        remember_check.grid(row=8, column=1, sticky="w", padx=(0, 0), pady=(0, 2))
 
         # Connect button
         connect_button = ctk.CTkButton(main_frame, text="Connect", command=self._connect, width=300)
-        connect_button.grid(row=8, column=0, columnspan=2, pady=12, sticky="", ipadx=30)
+        connect_button.grid(row=9, column=0, columnspan=2, pady=12, sticky="", ipadx=30)
 
         self._on_auth_change("Windows")
 
@@ -111,10 +117,10 @@ class LoginWindow(ctk.CTk):
             self.password_label.grid_remove()
             self.password_entry.grid_remove()
         else:
-            self.username_label.grid(row=5, column=0, sticky="e", padx=5, pady=5)
-            self.username_entry.grid(row=5, column=1, sticky="w", padx=5, pady=5)
-            self.password_label.grid(row=6, column=0, sticky="e", padx=5, pady=5)
-            self.password_entry.grid(row=6, column=1, sticky="w", padx=5, pady=5)
+            self.username_label.grid(row=6, column=0, sticky="e", padx=5, pady=5)
+            self.username_entry.grid(row=6, column=1, sticky="w", padx=5, pady=5)
+            self.password_label.grid(row=7, column=0, sticky="e", padx=5, pady=5)
+            self.password_entry.grid(row=7, column=1, sticky="w", padx=5, pady=5)
 
     def _load_saved_settings(self):
         """Load settings from environment variables only"""
@@ -122,19 +128,21 @@ class LoginWindow(ctk.CTk):
             # Load from environment variables only
             server = os.getenv('DB_SERVER', '')
             database = os.getenv('DB_NAME', '')
+            schema = os.getenv('DB_SCHEMA', 'bronze')
             username = os.getenv('DB_USERNAME', '')
             password = os.getenv('DB_PASSWORD', '')
-            
-            
+
+
             # Determine auth type based on username presence
             auth_type = "SQL Server" if username else "Windows"
-                    
+
             self.server_entry.insert(0, server)
             self.db_entry.insert(0, database)
+            self.schema_entry.insert(0, schema)
             self.auth_menu.set(auth_type)
             self.username_entry.insert(0, username)
             self.password_entry.insert(0, password)
-            
+
             # เรียกใช้ _on_auth_change เพื่อซ่อน/แสดง username/password
             self._on_auth_change(auth_type)
         except Exception as e:
@@ -144,9 +152,13 @@ class LoginWindow(ctk.CTk):
         """Save settings to .env file"""
         if self.remember_var.get():
             try:
+                # Get schema value, default to 'bronze' if empty
+                schema_value = self.schema_entry.get().strip() or 'bronze'
+
                 success = self.db_config.save_to_env_file(
                     server=self.server_entry.get(),
                     database=self.db_entry.get(),
+                    schema=schema_value,
                     auth_type=self.auth_menu.get(),
                     username=self.username_entry.get(),
                     password=self.password_entry.get()
@@ -160,19 +172,23 @@ class LoginWindow(ctk.CTk):
                 
     def _connect(self):
         """Connect to SQL Server"""
+        # Get schema value, default to 'bronze' if empty
+        schema_value = self.schema_entry.get().strip() or 'bronze'
+
         config = {
             "server": self.server_entry.get(),
             "database": self.db_entry.get(),
+            "schema": schema_value,
             "auth_type": self.auth_menu.get(),
             "username": self.username_entry.get(),
             "password": self.password_entry.get()
         }
-        
+
         # ตรวจสอบข้อมูลที่จำเป็น
         if not config["server"] or not config["database"]:
             messagebox.showerror("Error", "Please fill in Server and Database")
             return
-            
+
         if config["auth_type"] == "SQL Server" and (not config["username"] or not config["password"]):
             messagebox.showerror("Error", "Please fill in Username and Password")
             return
@@ -408,7 +424,7 @@ class LoginWindow(ctk.CTk):
             password=config.get("password")
         )
         
-        permission_results = self.db_service.check_permissions('bronze', log_callback=progress_callback)
+        permission_results = self.db_service.check_permissions(config.get('schema', 'bronze'), log_callback=progress_callback)
         permissions_ok = permission_results.get('success', False)
         if not permissions_ok:
             return {

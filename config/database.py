@@ -55,11 +55,12 @@ class DatabaseConfig:
         """
         # Load .env file first
         load_env_file()
-        
+
         # Load configuration from environment variables
         self.config = {
             "server": os.getenv('DB_SERVER', ''),
             "database": os.getenv('DB_NAME', ''),
+            "schema": os.getenv('DB_SCHEMA', 'bronze'),
             "auth_type": "SQL Server" if os.getenv('DB_USERNAME') else DatabaseConstants.AUTH_WINDOWS,
             "username": os.getenv('DB_USERNAME', ''),
             "password": os.getenv('DB_PASSWORD', '')
@@ -159,40 +160,44 @@ class DatabaseConfig:
                 f"PWD={self.config['password']}"
             )
     
-    def update_config(self, 
-                     server: Optional[str] = None, 
-                     database: Optional[str] = None, 
-                     auth_type: Optional[str] = None, 
-                     username: Optional[str] = None, 
+    def update_config(self,
+                     server: Optional[str] = None,
+                     database: Optional[str] = None,
+                     schema: Optional[str] = None,
+                     auth_type: Optional[str] = None,
+                     username: Optional[str] = None,
                      password: Optional[str] = None) -> bool:
         """
         อัปเดตการตั้งค่า
-        
+
         Args:
             server: ชื่อ server
             database: ชื่อ database
+            schema: ชื่อ schema
             auth_type: ประเภทการยืนยันตัวตน (Windows หรือ SQL)
             username: username สำหรับ SQL Authentication
             password: password สำหรับ SQL Authentication
-            
+
         Returns:
             bool: สำเร็จหรือไม่
         """
         if self.config is None:
             return False
-            
+
         # อัปเดตเฉพาะค่าที่ระบุ
         if server is not None:
             self.config["server"] = server
         if database is not None:
             self.config["database"] = database
+        if schema is not None:
+            self.config["schema"] = schema
         if auth_type is not None:
             self.config["auth_type"] = auth_type
         if username is not None:
             self.config["username"] = username
         if password is not None:
             self.config["password"] = password
-        
+
         # บันทึกและอัปเดต engine
         success = self.save_config()
         if success:
@@ -203,28 +208,30 @@ class DatabaseConfig:
                 return False
         return False
     
-    def save_to_env_file(self, server: str, database: str, auth_type: str, 
-                         username: str = "", password: str = "") -> bool:
+    def save_to_env_file(self, server: str, database: str, auth_type: str,
+                         schema: str = "bronze", username: str = "", password: str = "") -> bool:
         """
         Save database configuration to .env file.
-        
+
         Args:
             server: Database server
             database: Database name
             auth_type: Authentication type
+            schema: Schema name (default: bronze)
             username: Username (for SQL Server auth)
             password: Password (for SQL Server auth)
-            
+
         Returns:
             bool: Success status
         """
         try:
             env_file_path = ".env"
-            
+
             # Prepare new values
             new_values = {
                 'DB_SERVER': server,
                 'DB_NAME': database,
+                'DB_SCHEMA': schema,
                 'DB_USERNAME': username if auth_type == "SQL Server" else '',
                 'DB_PASSWORD': password if auth_type == "SQL Server" else ''
             }
@@ -260,6 +267,7 @@ class DatabaseConfig:
                     "# Database Configuration for PIPELINE_SQLSERVER\n",
                     f"DB_SERVER={new_values['DB_SERVER']}\n",
                     f"DB_NAME={new_values['DB_NAME']}\n",
+                    f"DB_SCHEMA={new_values['DB_SCHEMA']}\n",
                     f"DB_USERNAME={new_values['DB_USERNAME']}\n",
                     f"DB_PASSWORD={new_values['DB_PASSWORD']}\n",
                     "\n",

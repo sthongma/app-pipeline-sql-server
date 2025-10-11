@@ -58,7 +58,7 @@ exit /b 1
 echo Python found: %PYTHON_EXE%
 
 REM Check if column_mapper_cli.py exists
-if not exist "column_mapper_tool\column_mapper_cli.py" (
+if not exist "column_mapper_cli.py" (
     echo ERROR: column_mapper_cli.py not found in column_mapper_tool folder
     pause
     exit /b 1
