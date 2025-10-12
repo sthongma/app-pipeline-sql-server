@@ -414,7 +414,7 @@ class FileHandler:
                                 move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
                                 if move_success:
                                     for original_path, new_path in move_result:
-                                        self.log(f"📦 Moved file to: {os.path.basename(new_path)}")
+                                        self.log(f"📦 Moved file to: {new_path}")
                                 else:
                                     self.log(f"❌ Could not move file: {move_result}")
                             except Exception as move_error:
@@ -999,7 +999,7 @@ class FileHandler:
                             move_success, move_result = self.file_service.move_uploaded_files([file_path], [logic_type])
                             if move_success:
                                 for original_path, new_path in move_result:
-                                    self.log(f"📦 Moved file to: {os.path.basename(new_path)}")
+                                    self.log(f"📦 Moved file to: {new_path}")
                             else:
                                 self.log(f"❌ Could not move file: {move_result}")
                         except Exception as move_error:

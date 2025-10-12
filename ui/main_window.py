@@ -399,7 +399,7 @@ class MainWindow(ctk.CTkToplevel):
     def _log_environment_status(self) -> None:
         """Log current environment variables status for debugging"""
         env_vars = ['DB_SERVER', 'DB_NAME', 'DB_USERNAME', 'DB_PASSWORD', 'STRUCTURED_LOGGING']
-        logging.info("🔧 Environment Variables Status:")
+        logging.info("Environment Variables Status:")
         
         for var in env_vars:
             value = os.getenv(var)
@@ -497,6 +497,11 @@ class MainWindow(ctk.CTkToplevel):
                 # Update file management service to use new output folder
                 if hasattr(self, 'file_mgmt_service'):
                     self.file_mgmt_service.set_output_folder(output_folder_path)
+
+                # Also update file_service's file_manager (they need to use the same output folder)
+                if hasattr(self, 'file_service') and hasattr(self.file_service, 'file_manager'):
+                    self.file_service.file_manager.set_output_folder(output_folder_path)
+
                 self.log(f"📂 Output folder updated: {output_folder_path}")
         except Exception as e:
             self.log(f"❌ Error updating output folder: {e}")

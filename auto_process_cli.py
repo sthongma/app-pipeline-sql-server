@@ -129,7 +129,10 @@ class AutoProcessCLI:
         self.db_service = DatabaseOrchestrator()
         self.file_mgmt_service = FileManagementService()
         self.preload_service = PreloadService()
-        
+
+        # Load output folder from config if exists
+        self._load_output_folder_from_config()
+
         # Create file handler (same as GUI)
         self.file_handler = FileHandler(
             self.file_service,
@@ -138,6 +141,23 @@ class AutoProcessCLI:
             self.log
         )
     
+    def _load_output_folder_from_config(self):
+        """Load output folder setting from config file"""
+        try:
+            config_file = os.path.join("config", "output_folder_config.json")
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    output_folder_path = config.get('output_folder_path')
+                    if output_folder_path and os.path.exists(output_folder_path):
+                        # Set output folder in both file management services
+                        self.file_mgmt_service.set_output_folder(output_folder_path)
+                        if hasattr(self.file_service, 'file_manager'):
+                            self.file_service.file_manager.set_output_folder(output_folder_path)
+                        self.log(f"Output folder loaded: {output_folder_path}")
+        except Exception as e:
+            self.log(f"WARNING: Could not load output folder setting: {e}")
+
     def log(self, message):
         """Log message to console in English"""
         try:
