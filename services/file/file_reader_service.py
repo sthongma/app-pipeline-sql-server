@@ -443,16 +443,12 @@ class FileReaderService:
             if df.empty:
                 return False, "File is empty"
 
-            # แสดง log แบบกระชับและชัดเจน
-            filename = os.path.basename(file_path)
-            self.log_callback(f"📂 Read file: {filename}")
-            self.log_callback(f"   └─ Rows: {len(df):,} | Columns: {len(df.columns)}")
+            self.log_callback(f"✅ Read File Success: {os.path.basename(file_path)} ({len(df):,} rows, {len(df.columns)} columns)")
 
             return True, df
 
         except Exception as e:
-            filename = os.path.basename(file_path)
-            error_msg = f"Cannot read file {filename}: {str(e)}"
+            error_msg = f"Cannot read file {os.path.basename(file_path)}: {str(e)}"
             self.log_callback(f"❌ {error_msg}")
             return False, error_msg
 
@@ -478,20 +474,13 @@ class FileReaderService:
             # Apply column mapping (เลือกทิศทางอัตโนมัติให้ตรงกับ header)
             col_map = self.build_rename_mapping_for_dataframe(df.columns, logic_type)
             if col_map:
-                self.log_callback(f"🔄 Rename columns: {len(col_map)} columns")
+                self.log_callback(f"🔄 Apply column mapping ({len(col_map)} columns)")
                 df.rename(columns=col_map, inplace=True)
-                # แสดงตัวอย่างการเปลี่ยนชื่อ (แค่ 3 คอลัมน์แรก)
-                sample_mappings = list(col_map.items())[:3]
-                for old_name, new_name in sample_mappings:
-                    self.log_callback(f"   • {old_name} → {new_name}")
-                if len(col_map) > 3:
-                    self.log_callback(f"   ... and {len(col_map) - 3} more")
 
             return True, df
 
         except Exception as e:
-            filename = os.path.basename(file_path)
-            error_msg = f"Cannot process mapping for {filename}: {str(e)}"
+            error_msg = f"Cannot process mapping for {os.path.basename(file_path)}: {str(e)}"
             self.log_callback(f"❌ {error_msg}")
             return False, error_msg
 
