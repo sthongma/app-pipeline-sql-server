@@ -46,24 +46,26 @@ class FileHandler:
         # ป้องกันการกดซ้ำขณะกำลัง check อยู่
         if self.is_checking:
             self.log("⚠️ File scan is already in progress, please wait...")
-            messagebox.showwarning("In Progress", "File scan is already in progress.\nPlease wait for it to complete.")
             return
+
+        # ตั้งค่า flag ทันที
+        self.is_checking = True
+
+        # ปิดปุ่มทันทีเพื่อป้องกันการกดซ้ำ (ทำใน main thread ก่อน start thread)
+        try:
+            ui_callbacks['disable_controls']()
+        except Exception:
+            pass
 
         thread = threading.Thread(target=self._check_files, args=(ui_callbacks,))
         thread.start()
     
     def _check_files(self, ui_callbacks):
         """Check files in specified path"""
-        # ตั้งค่า flag ว่ากำลัง check อยู่
-        self.is_checking = True
-
         try:
             # รีเซ็ต UI
             ui_callbacks['reset_progress']()
             ui_callbacks['set_progress_status']("Starting file scan", "Scanning folders...")
-
-            # ปิดปุ่ม check ระหว่างการทำงาน
-            ui_callbacks['disable_controls']()
 
             # โหลดการตั้งค่าใหม่
             self.file_service.load_settings()

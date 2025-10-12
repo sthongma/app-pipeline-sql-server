@@ -113,8 +113,10 @@ class MainWindow(ctk.CTkToplevel):
         self.tabview = ctk.CTkTabview(self, segmented_button_fg_color=None, segmented_button_unselected_color=None)
         self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
 
-        # กำหนดความกว้างขั้นต่ำให้ปุ่ม tab ไม่ยุบ
-        self.tabview._segmented_button.configure(width=300)
+        # กำหนดความกว้างและความสูงขั้นต่ำให้ปุ่ม tab ไม่ยุบเมื่อ disable
+        # ใช้ grid_propagate(False) เพื่อป้องกันการ resize อัตโนมัติ
+        self.tabview._segmented_button.configure(width=150, height=20)
+        self.tabview._segmented_button.grid_propagate(False)
         
         # สร้าง Tab
         main_tab_frame = self.tabview.add("Main")
