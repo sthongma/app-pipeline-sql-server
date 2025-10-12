@@ -125,12 +125,18 @@ class MainTab:
         self.folder_btn.configure(state="disabled")
         self.check_btn.configure(state="disabled")
         self.file_list.disable_all_checkboxes()
-        
+
         # ปิด Settings tab ระหว่างอัปโหลด เพื่อป้องกันการเปลี่ยนแปลงการตั้งค่า
         if hasattr(self, 'parent_tabview'):
-            # บังคับให้อยู่ที่ Main tab และปิดการเปลี่ยน tab
-            self.parent_tabview.set("Main")
-            self.parent_tabview.configure(state="disabled")
+            try:
+                # บังคับให้อยู่ที่ Main tab และปิดการเปลี่ยน tab
+                current_tab = self.parent_tabview.get()
+                if current_tab != "Main":
+                    self.parent_tabview.set("Main")
+                self.parent_tabview.configure(state="disabled")
+            except Exception:
+                # ถ้าเกิด error ให้ข้ามไป (widget อาจถูก destroy แล้ว)
+                pass
     
     def toggle_select_all(self):
         """สลับระหว่างเลือกทั้งหมดและยกเลิกการเลือกทั้งหมด"""
