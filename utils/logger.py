@@ -2,6 +2,7 @@ import logging
 import json
 import time
 import os
+import warnings
 from datetime import datetime
 from typing import Callable, Optional, Dict, Any
 
@@ -51,6 +52,9 @@ def setup_logging(level: int = logging.INFO, force: bool = False) -> None:
         return
 
     logging.basicConfig(level=level, format=AppConstants.LOG_FORMAT)
+
+    # ซ่อน warning ที่ไม่สำคัญจาก openpyxl และ libraries อื่นๆ
+    configure_warning_filters()
 
 
 def create_gui_log_handler(gui_callback: Callable[[str], None],
@@ -128,6 +132,97 @@ def export_current_logs_to_file(log_file_path: str, log_content: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def configure_warning_filters() -> None:
+    """กำหนดการกรอง warning จาก libraries ต่างๆ ให้แสดงเฉพาะที่สำคัญ"""
+
+    # ซ่อน UserWarning จาก openpyxl เกี่ยวกับ default style
+    warnings.filterwarnings(
+        'ignore',
+        category=UserWarning,
+        module='openpyxl.styles.stylesheet',
+        message='.*Workbook contains no default style.*'
+    )
+
+    # ซ่อน warning อื่นๆ จาก openpyxl ที่ไม่สำคัญ
+    warnings.filterwarnings(
+        'ignore',
+        category=UserWarning,
+        module='openpyxl.*',
+        message='.*Data Validation.*'
+    )
+
+    # ปรับ logging level ของ openpyxl ให้แสดงเฉพาะ ERROR
+    logging.getLogger('openpyxl').setLevel(logging.ERROR)
+
+    # ปรับ logging level ของ xlrd ให้แสดงเฉพาะ ERROR
+    logging.getLogger('xlrd').setLevel(logging.ERROR)
+
+
+class FriendlyLogFormatter(logging.Formatter):
+    """
+    Custom log formatter ที่แสดงข้อความให้เป็นมิตรและอ่านง่ายขึ้น
+
+    Features:
+    - ใช้สัญลักษณ์ที่เข้าใจง่าย (✓, ✗, ⚠, ℹ)
+    - แปลข้อความภาษาอังกฤษเป็นภาษาไทย (ถ้าต้องการ)
+    - จัดกลุ่มข้อมูลให้อ่านง่าย
+    """
+
+    # สัญลักษณ์สำหรับแต่ละ log level
+    LEVEL_ICONS = {
+        'DEBUG': '🔍',
+        'INFO': 'ℹ️',
+        'WARNING': '⚠️',
+        'ERROR': '❌',
+        'CRITICAL': '🚨'
+    }
+
+    # รูปแบบข้อความที่สั้นและกระชับ
+    FRIENDLY_FORMAT = '%(asctime)s | %(levelicon)s %(message)s'
+    DATE_FORMAT = '%H:%M:%S'
+
+    def __init__(self, use_icons: bool = True, date_format: str = None):
+        """
+        Initialize formatter
+
+        Args:
+            use_icons: แสดงไอคอนหรือไม่ (default: True)
+            date_format: รูปแบบวันที่/เวลา (default: HH:MM:SS)
+        """
+        super().__init__(
+            fmt=self.FRIENDLY_FORMAT,
+            datefmt=date_format or self.DATE_FORMAT
+        )
+        self.use_icons = use_icons
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format log record ให้เป็นมิตรกับผู้ใช้"""
+
+        # เพิ่ม icon ตาม level
+        if self.use_icons:
+            record.levelicon = self.LEVEL_ICONS.get(record.levelname, '•')
+        else:
+            record.levelicon = f'[{record.levelname}]'
+
+        # ทำการ format ตามปกติ
+        formatted = super().format(record)
+
+        return formatted
+
+
+def create_friendly_formatter(use_icons: bool = True) -> FriendlyLogFormatter:
+    """
+    สร้าง formatter ที่เป็นมิตรกับผู้ใช้
+
+    Args:
+        use_icons: ใช้ icon แทน level text (default: True)
+
+    Returns:
+        FriendlyLogFormatter instance
+    """
+    return FriendlyLogFormatter(use_icons=use_icons)
 
 
 def cleanup_old_log_files(base_path: str, retention_days: int = 30) -> int:

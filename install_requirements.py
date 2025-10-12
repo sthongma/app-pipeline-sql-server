@@ -47,12 +47,14 @@ def get_json_file_templates() -> Dict[str, Dict[str, Any]]:
     """Return templates for all required JSON files (sql_config.json no longer needed - using env vars)."""
     return {
         "config/app_settings.json": {
-            "last_search_path": "",
             "window_size": [900, 780],
             "theme": "system",
             "auto_move_files": True,
             "backup_enabled": True,
             "log_level": "INFO"
+        },
+        "config/input_folder_config.json": {
+            "folder_path": ""
         },
         "config/column_settings.json": {},
         "config/dtype_settings.json": {}

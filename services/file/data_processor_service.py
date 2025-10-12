@@ -204,34 +204,34 @@ class DataProcessorService:
             return df
         
         # Return original DataFrame as conversion will be done in SQL
-        self.log_with_time(f"🔄 Conversion will be performed in the staging table using SQL")
+        self.log_with_time(f"🔄 Data type conversion will be done in staging table using SQL", show_time=False)
         return df
 
     def clean_and_validate_datetime_columns(self, df, file_type):
         """Clean and validate date columns (SQL-based validation)"""
         if not file_type or file_type not in self.dtype_settings:
             return df
-        
+
         # คืนค่า DataFrame เดิม เนื่องจากการ validation จะทำใน SQL แล้ว
-        self.log_with_time(f"🔍 Date validation will be performed in the staging table using SQL")
+        self.log_with_time(f"🔍 Date validation will be done in staging table using SQL", show_time=False)
         return df
 
     def clean_numeric_columns(self, df, file_type):
         """Clean numeric column data (SQL-based cleaning)"""
         if not file_type or file_type not in self.dtype_settings:
             return df
-        
+
         # คืนค่า DataFrame เดิม เนื่องจากการ cleaning จะทำใน SQL แล้ว
-        self.log_with_time(f"🧹 Numeric cleaning will be performed in the staging table using SQL")
+        self.log_with_time(f"🧹 Numeric cleaning will be done in staging table using SQL", show_time=False)
         return df
 
     def truncate_long_strings(self, df, logic_type):
         """Truncate oversized strings and show report (SQL-based truncation)"""
         if not logic_type or logic_type not in self.dtype_settings:
             return df
-        
+
         # คืนค่า DataFrame เดิม เนื่องจากการตัดข้อมูลจะทำใน SQL แล้ว
-        self.log_with_time(f"✂️ String truncation will be performed in the staging table using SQL")
+        self.log_with_time(f"✂️ String truncation will be done in staging table using SQL", show_time=False)
         return df
 
     def comprehensive_data_validation(self, df, logic_type):
