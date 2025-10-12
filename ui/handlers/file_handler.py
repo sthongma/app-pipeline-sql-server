@@ -1066,11 +1066,22 @@ class FileHandler:
         except Exception as e:
             self.log(f"❌ An error occurred while processing files: {e}")
     
+    def _load_log_folder_from_config(self):
+        """Load log folder path from log_folder_config.json"""
+        try:
+            import json
+            config_file = os.path.join("config", "log_folder_config.json")
+            if os.path.exists(config_file):
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    return config.get('log_folder_path')
+        except Exception:
+            pass
+        return None
+
     def _auto_export_logs(self):
         """ส่งออก log อัตโนมัติไปยังโฟลเดอร์ log_pipeline และจัดการไฟล์เก่า"""
         try:
-            from config.json_manager import get_input_folder
-
             # โหลดการตั้งค่า
             app_settings = json_manager.load('app_settings')
 
@@ -1079,20 +1090,20 @@ class FileHandler:
             if not auto_export:
                 return
 
-            # อ่าน input folder path
-            input_folder_path = get_input_folder()
-            if not input_folder_path or not os.path.exists(input_folder_path):
-                self.log("⚠️ Cannot export logs: No valid input folder found")
+            # อ่าน log folder path จาก log_folder_config.json
+            log_folder_path = self._load_log_folder_from_config()
+            if not log_folder_path or not os.path.exists(log_folder_path):
+                self.log("⚠️ Cannot export logs: No valid log folder configured")
                 return
 
             # ตั้งค่า file logging และส่งออก
-            log_file_path = setup_file_logging(input_folder_path, enable_export=True)
+            log_file_path = setup_file_logging(log_folder_path, enable_export=True)
             if log_file_path:
                 self.log(f"📋 Log exported to: {log_file_path}")
 
                 # จัดการไฟล์ log เก่า (ลบไฟล์ที่เก่าเกิน retention period)
                 retention_days = app_settings.get('log_retention_days', 30)
-                deleted_count = cleanup_old_log_files(input_folder_path, retention_days)
+                deleted_count = cleanup_old_log_files(log_folder_path, retention_days)
 
                 # แสดงผลการ cleanup เฉพาะเมื่อมีการลบไฟล์
                 if deleted_count > 0:
