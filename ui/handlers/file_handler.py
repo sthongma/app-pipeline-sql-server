@@ -48,9 +48,14 @@ class FileHandler:
             self.log("⚠️ File scan is already in progress, please wait...")
             return
 
-        # ตั้งค่า flag และปิดปุ่มทันทีเพื่อป้องกันการกดซ้ำ
+        # ตั้งค่า flag ทันที
         self.is_checking = True
-        ui_callbacks['disable_controls']()
+
+        # ปิดปุ่มทันทีเพื่อป้องกันการกดซ้ำ (ทำใน main thread ก่อน start thread)
+        try:
+            ui_callbacks['disable_controls']()
+        except Exception:
+            pass
 
         thread = threading.Thread(target=self._check_files, args=(ui_callbacks,))
         thread.start()
