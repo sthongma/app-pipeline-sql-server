@@ -436,40 +436,19 @@ class ColumnMapperCLI:
                         print("Settings not updated.")
     
     def get_last_search_path(self):
-        """Get last search path from main program settings"""
+        """Get last search path from main program settings (uses input_folder_config)"""
         try:
-            # Load app_settings.json directly
-            app_settings_file = os.path.join(os.path.dirname(current_dir), 'config', 'app_settings.json')
-            if os.path.exists(app_settings_file):
-                with open(app_settings_file, 'r', encoding='utf-8') as f:
-                    settings = json.load(f)
-                    return settings.get('last_search_path', '')
-            return ''
+            from config.json_manager import get_input_folder
+            return get_input_folder()
         except Exception as e:
             self.log(f"Error loading last search path: {e}", 'error')
             return ''
 
     def save_last_search_path(self, path):
-        """Save last search path to main program settings"""
+        """Save last search path to main program settings (uses input_folder_config)"""
         try:
-            # Save to app_settings.json directly
-            app_settings_file = os.path.join(os.path.dirname(current_dir), 'config', 'app_settings.json')
-            settings = {}
-            
-            # Load existing settings if file exists
-            if os.path.exists(app_settings_file):
-                with open(app_settings_file, 'r', encoding='utf-8') as f:
-                    settings = json.load(f)
-            
-            # Update last_search_path
-            settings['last_search_path'] = path
-            
-            # Save back to file
-            os.makedirs(os.path.dirname(app_settings_file), exist_ok=True)
-            with open(app_settings_file, 'w', encoding='utf-8') as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False)
-                
-            return True
+            from config.json_manager import set_input_folder
+            return set_input_folder(path)
         except Exception as e:
             self.log(f"Error saving last search path: {e}", 'error')
             return False

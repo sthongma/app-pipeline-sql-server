@@ -2,6 +2,7 @@ import logging
 import json
 import time
 import os
+import warnings
 from datetime import datetime
 from typing import Callable, Optional, Dict, Any
 
@@ -51,6 +52,9 @@ def setup_logging(level: int = logging.INFO, force: bool = False) -> None:
         return
 
     logging.basicConfig(level=level, format=AppConstants.LOG_FORMAT)
+
+    # ซ่อน warning ที่ไม่สำคัญจาก openpyxl และ libraries อื่นๆ
+    configure_warning_filters()
 
 
 def create_gui_log_handler(gui_callback: Callable[[str], None],
@@ -128,6 +132,32 @@ def export_current_logs_to_file(log_file_path: str, log_content: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def configure_warning_filters() -> None:
+    """กำหนดการกรอง warning จาก libraries ต่างๆ ให้แสดงเฉพาะที่สำคัญ"""
+
+    # ซ่อน UserWarning จาก openpyxl เกี่ยวกับ default style
+    warnings.filterwarnings(
+        'ignore',
+        category=UserWarning,
+        module='openpyxl.styles.stylesheet',
+        message='.*Workbook contains no default style.*'
+    )
+
+    # ซ่อน warning อื่นๆ จาก openpyxl ที่ไม่สำคัญ
+    warnings.filterwarnings(
+        'ignore',
+        category=UserWarning,
+        module='openpyxl.*',
+        message='.*Data Validation.*'
+    )
+
+    # ปรับ logging level ของ openpyxl ให้แสดงเฉพาะ ERROR
+    logging.getLogger('openpyxl').setLevel(logging.ERROR)
+
+    # ปรับ logging level ของ xlrd ให้แสดงเฉพาะ ERROR
+    logging.getLogger('xlrd').setLevel(logging.ERROR)
 
 
 def cleanup_old_log_files(base_path: str, retention_days: int = 30) -> int:

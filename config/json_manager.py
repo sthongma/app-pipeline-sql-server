@@ -60,15 +60,20 @@ class JSONManager:
             'app_settings': JSONFileConfig(
                 filename='app_settings.json',
                 default_content={
-                    "last_search_path": "",
                     "window_size": [900, 780],
                     "theme": "system",
                     "auto_move_files": True,
                     "backup_enabled": True,
                     "log_level": "INFO"
                 },
-                required_keys=['last_search_path'],
+                required_keys=[],
                 validation_func=self._validate_app_settings
+            ),
+            'input_folder_config': JSONFileConfig(
+                filename='input_folder_config.json',
+                default_content={"folder_path": ""},
+                required_keys=['folder_path'],
+                validation_func=self._validate_folder_config
             ),
             'column_settings': JSONFileConfig(
                 filename='column_settings.json',
@@ -194,6 +199,14 @@ class JSONManager:
     def _validate_file_management_settings(self, content: Dict[str, Any]) -> bool:
         """Validate file management settings."""
         return isinstance(content, dict)
+
+    def _validate_folder_config(self, content: Dict[str, Any]) -> bool:
+        """Validate folder configuration."""
+        if not isinstance(content, dict):
+            return False
+        if 'folder_path' not in content:
+            return False
+        return isinstance(content['folder_path'], str)
     
     # Public interface
     def load(self, config_name: str) -> Dict[str, Any]:
@@ -392,12 +405,12 @@ def save_app_settings(settings: Dict[str, Any]) -> bool:
     return json_manager.save('app_settings', settings)
 
 def get_last_path() -> str:
-    """Get last search path."""
-    return json_manager.get('app_settings', 'last_search_path', '')
+    """Get last search path (uses input_folder_config)."""
+    return get_input_folder()
 
 def set_last_path(path: str) -> bool:
-    """Set last search path."""
-    return json_manager.set('app_settings', 'last_search_path', path)
+    """Set last search path (uses input_folder_config)."""
+    return set_input_folder(path)
 
 def load_column_settings() -> Dict[str, Any]:
     """Load column settings."""
@@ -422,3 +435,11 @@ def load_file_management_settings() -> Dict[str, Any]:
 def save_file_management_settings(settings: Dict[str, Any]) -> bool:
     """Save file management settings."""
     return json_manager.save('file_management_settings', settings)
+
+def get_input_folder() -> str:
+    """Get input folder path from input_folder_config.json"""
+    return json_manager.get('input_folder_config', 'folder_path', '')
+
+def set_input_folder(path: str) -> bool:
+    """Set input folder path to input_folder_config.json"""
+    return json_manager.set('input_folder_config', 'folder_path', path)

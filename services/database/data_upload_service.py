@@ -169,15 +169,29 @@ class DataUploadService:
             
             if log_func:
                 log_func(f"🔄 Transferring data from staging to main table {schema_name}.{table_name}")
-            self._transfer_data_from_staging(
+            dedup_stats = self._transfer_data_from_staging(
                 staging_table, table_name, required_cols, schema_name, log_func, date_format
             )
-            
+
             # Keep staging table for debugging - it will be cleaned up when new data comes
             if log_func:
                 log_func(f"✅ Keeping staging table {schema_name}.{staging_table} for debugging")
 
-            return True, f"Upload successful → {schema_name}.{table_name} (ingested NVARCHAR(MAX) then converted by dtype for {len(df):,} rows)"
+            # Build summary message with deduplication info
+            summary_parts = [
+                f"Upload successful → {schema_name}.{table_name}",
+                f"(ingested NVARCHAR(MAX) then converted by dtype for {len(df):,} rows)"
+            ]
+
+            if dedup_stats and dedup_stats.get('duplicates_removed', 0) > 0:
+                summary_parts.append(
+                    f"| Deduplication: removed {dedup_stats['duplicates_removed']:,} duplicate rows, "
+                    f"kept {dedup_stats['inserted_rows']:,} unique rows"
+                )
+            elif dedup_stats:
+                summary_parts.append(f"| No duplicates found ({dedup_stats['inserted_rows']:,} unique rows)")
+
+            return True, " ".join(summary_parts)
         
         except Exception as e:
             short_msg = self._short_exception_message(e)
@@ -437,10 +451,14 @@ class DataUploadService:
                 if log_func:
                     log_func(f"📋 Appending to existing table {schema_name}.{table_name}")
 
-    def _transfer_data_from_staging(self, staging_table: str, table_name: str, required_cols: Dict, 
+    def _transfer_data_from_staging(self, staging_table: str, table_name: str, required_cols: Dict,
                                   schema_name: str, log_func=None, date_format: str = 'UK'):
-        """Transfer data from staging to final table with type conversion"""
-        
+        """Transfer data from staging to final table with type conversion
+
+        Returns:
+            dict: Deduplication statistics with keys 'total_rows', 'inserted_rows', 'duplicates_removed'
+        """
+
         # Get row count for progress monitoring
         try:
             with self.engine.connect() as conn:
@@ -501,20 +519,45 @@ class DataUploadService:
         with self.engine.begin() as conn:
             insert_sql = (
                 f"INSERT INTO {schema_name}.{table_name} (" + ", ".join([f"[{c}]" for c in required_cols.keys()]) + ") "
-                f"SELECT {select_sql} FROM {schema_name}.{staging_table}"
+                f"SELECT DISTINCT {select_sql} FROM {schema_name}.{staging_table}"
             )
             if log_func:
-                log_func(f"📝 Executing data transfer with type conversion...")
+                log_func(f"📝 Executing data transfer with type conversion and deduplication...")
                 log_func(f"⏳ This may take a while for large datasets, please wait...")
-            
+
             # Execute with timeout monitoring
             import time
             start_time = time.time()
             try:
                 result = conn.execute(text(insert_sql))
                 execution_time = time.time() - start_time
+
+                # Count inserted rows and report deduplication
+                count_result = conn.execute(text(f"SELECT COUNT(*) FROM {schema_name}.{table_name}"))
+                inserted_rows = count_result.scalar()
+
+                # Prepare deduplication statistics to return
+                dedup_stats = {
+                    'total_rows': total_rows if isinstance(total_rows, int) else inserted_rows,
+                    'inserted_rows': inserted_rows,
+                    'duplicates_removed': (total_rows - inserted_rows) if isinstance(total_rows, int) else 0
+                }
+
                 if log_func:
                     log_func(f"✅ Data transfer completed successfully in {execution_time:.1f} seconds")
+
+                    # Report deduplication results
+                    if isinstance(total_rows, int):
+                        duplicates_removed = total_rows - inserted_rows
+                        if duplicates_removed > 0:
+                            log_func(f"🧹 Removed {duplicates_removed:,} duplicate rows (kept {inserted_rows:,} unique rows)")
+                        else:
+                            log_func(f"✅ No duplicate rows found ({inserted_rows:,} unique rows)")
+                    else:
+                        log_func(f"📊 Inserted {inserted_rows:,} unique rows")
+
+                return dedup_stats
+
             except Exception as e:
                 execution_time = time.time() - start_time
                 if log_func:

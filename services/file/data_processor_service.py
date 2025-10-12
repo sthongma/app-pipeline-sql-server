@@ -211,7 +211,7 @@ class DataProcessorService:
         """Clean and validate date columns (SQL-based validation)"""
         if not file_type or file_type not in self.dtype_settings:
             return df
-        
+
         # คืนค่า DataFrame เดิม เนื่องจากการ validation จะทำใน SQL แล้ว
         self.log_with_time(f"🔍 Date validation will be performed in the staging table using SQL")
         return df
@@ -220,7 +220,7 @@ class DataProcessorService:
         """Clean numeric column data (SQL-based cleaning)"""
         if not file_type or file_type not in self.dtype_settings:
             return df
-        
+
         # คืนค่า DataFrame เดิม เนื่องจากการ cleaning จะทำใน SQL แล้ว
         self.log_with_time(f"🧹 Numeric cleaning will be performed in the staging table using SQL")
         return df
@@ -229,7 +229,7 @@ class DataProcessorService:
         """Truncate oversized strings and show report (SQL-based truncation)"""
         if not logic_type or logic_type not in self.dtype_settings:
             return df
-        
+
         # คืนค่า DataFrame เดิม เนื่องจากการตัดข้อมูลจะทำใน SQL แล้ว
         self.log_with_time(f"✂️ String truncation will be performed in the staging table using SQL")
         return df
