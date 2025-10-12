@@ -95,6 +95,7 @@ class CLIProgressCallback:
         pass
         
     def disable_checkbox(self, checkbox):
+        # CLI doesn't have checkboxes, safe to ignore
         pass
         
     def set_file_uploaded(self, file_path):
@@ -216,7 +217,9 @@ class AutoProcessCLI:
             'add_file_to_list': self.ui_callbacks.add_file_to_list,
             'reset_select_all': self.ui_callbacks.reset_select_all,
             'enable_select_all': self.ui_callbacks.enable_select_all,
-            'update_status': self.ui_callbacks.update_status
+            'update_status': self.ui_callbacks.update_status,
+            'disable_controls': self.ui_callbacks.disable_controls,
+            'enable_controls': self.ui_callbacks.enable_controls
         }
         
         # Run file scan (no threading for CLI)
@@ -227,10 +230,32 @@ class AutoProcessCLI:
             self.log(f"ERROR: Failed to scan files: {e}")
             return False
     
-    def process_files_automatically(self, folder_path):
-        """Process all files automatically using file handler"""
+    def process_files_automatically(self):
+        """Process all files automatically using batch processing (same as GUI)"""
         self.log("Starting automatic file processing...")
-        
+
+        # Get all scanned files from file service
+        data_files = self.file_service.find_data_files()
+
+        if not data_files:
+            self.log("No data files found")
+            return False
+
+        # Prepare selected files in the format expected by _upload_selected_files
+        # Format: [(file_path, logic_type), checkbox_widget]
+        selected_files = []
+        for file_path in data_files:
+            logic_type = self.file_service.detect_file_type(file_path)
+            if logic_type:
+                # Use None for checkbox since we don't have GUI widgets in CLI
+                selected_files.append(((file_path, logic_type), None))
+
+        if not selected_files:
+            self.log("No matching files found")
+            return False
+
+        self.log(f"Found {len(selected_files)} files to process")
+
         # Create UI callbacks
         ui_callbacks = {
             'disable_controls': self.ui_callbacks.disable_controls,
@@ -243,10 +268,10 @@ class AutoProcessCLI:
             'disable_checkbox': self.ui_callbacks.disable_checkbox,
             'set_file_uploaded': self.ui_callbacks.set_file_uploaded
         }
-        
-        # Run automatic processing (no threading for CLI)
+
+        # Use the same batch processing method as GUI
         try:
-            self.file_handler.run_auto_process(folder_path, ui_callbacks)
+            self.file_handler._upload_selected_files(selected_files, ui_callbacks)
             return True
         except Exception as e:
             self.log(f"ERROR: Failed to process files: {e}")
@@ -265,9 +290,9 @@ class AutoProcessCLI:
         if not self.scan_files(folder_path):
             self.log("ERROR: File scanning failed")
             return False
-        
-        # Step 3: Process files automatically
-        if not self.process_files_automatically(folder_path):
+
+        # Step 3: Process files automatically (using batch processing like GUI)
+        if not self.process_files_automatically():
             self.log("ERROR: Automatic file processing failed")
             return False
         
