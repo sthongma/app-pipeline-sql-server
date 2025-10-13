@@ -1,9 +1,8 @@
 """Log Tab UI Component"""
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import datetime
-import os
-import json
+from config.json_manager import get_log_folder, set_log_folder
 
 
 class LogTab:
@@ -143,25 +142,18 @@ class LogTab:
         self.log_textbox.see("end")
 
     def _load_log_folder_setting(self):
-        """Load saved log folder setting from config file"""
-        config_file = os.path.join("config", "log_folder_config.json")
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    self.log_folder_path = config.get('log_folder_path')
-            except Exception:
-                self.log_folder_path = None
+        """Load saved log folder setting using JSONManager"""
+        try:
+            self.log_folder_path = get_log_folder()
+        except Exception:
+            self.log_folder_path = None
 
     def _save_log_folder_setting(self):
-        """Save log folder setting to config file"""
-        config_file = os.path.join("config", "log_folder_config.json")
+        """Save log folder setting using JSONManager"""
         try:
-            # Ensure config directory exists
-            os.makedirs("config", exist_ok=True)
-            config = {'log_folder_path': self.log_folder_path}
-            with open(config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            success = set_log_folder(self.log_folder_path or "")
+            if not success:
+                messagebox.showerror("Error", "Failed to save log folder setting")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save log folder setting:\n{str(e)}")
 

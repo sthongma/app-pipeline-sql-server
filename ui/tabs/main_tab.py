@@ -1,11 +1,10 @@
 """Main Tab UI Component"""
 import customtkinter as ctk
 from tkinter import messagebox
-import os
-import json
 from ui.components.file_list import FileList
 from ui.components.progress_bar import ProgressBar
 from ui.components.status_bar import StatusBar
+from config.json_manager import get_output_folder, set_output_folder
 
 
 class MainTab:
@@ -160,25 +159,18 @@ class MainTab:
         self.select_all_button.configure(text="Deselect all")
 
     def _load_output_folder_setting(self):
-        """Load saved output folder setting from config file"""
-        config_file = os.path.join("config", "output_folder_config.json")
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    self.output_folder_path = config.get('output_folder_path')
-            except Exception:
-                self.output_folder_path = None
+        """Load saved output folder setting using JSONManager"""
+        try:
+            self.output_folder_path = get_output_folder()
+        except Exception:
+            self.output_folder_path = None
 
     def _save_output_folder_setting(self):
-        """Save output folder setting to config file"""
-        config_file = os.path.join("config", "output_folder_config.json")
+        """Save output folder setting using JSONManager"""
         try:
-            # Ensure config directory exists
-            os.makedirs("config", exist_ok=True)
-            config = {'output_folder_path': self.output_folder_path}
-            with open(config_file, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            success = set_output_folder(self.output_folder_path or "")
+            if not success:
+                messagebox.showerror("Error", "Failed to save output folder setting")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save output folder setting:\n{str(e)}")
 

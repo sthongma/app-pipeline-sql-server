@@ -7,7 +7,7 @@ from tkinter import messagebox, filedialog
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 from utils.logger import setup_file_logging, cleanup_old_log_files
-from config.json_manager import json_manager
+from config.json_manager import json_manager, get_log_folder
 from performance_optimizations import PerformanceOptimizer
 
 
@@ -1067,17 +1067,11 @@ class FileHandler:
             self.log(f"❌ An error occurred while processing files: {e}")
     
     def _load_log_folder_from_config(self):
-        """Load log folder path from log_folder_config.json"""
+        """Load log folder path using JSONManager"""
         try:
-            import json
-            config_file = os.path.join("config", "log_folder_config.json")
-            if os.path.exists(config_file):
-                with open(config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    return config.get('log_folder_path')
+            return get_log_folder()
         except Exception:
-            pass
-        return None
+            return None
 
     def _auto_export_logs(self):
         """ส่งออก log อัตโนมัติไปยังโฟลเดอร์ log_pipeline และจัดการไฟล์เก่า"""

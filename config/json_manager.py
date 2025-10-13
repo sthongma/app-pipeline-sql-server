@@ -93,6 +93,18 @@ class JSONManager:
                     "organize_by_date": True
                 },
                 validation_func=self._validate_file_management_settings
+            ),
+            'output_folder_config': JSONFileConfig(
+                filename='output_folder_config.json',
+                default_content={"folder_path": ""},
+                required_keys=['folder_path'],
+                validation_func=self._validate_folder_config
+            ),
+            'log_folder_config': JSONFileConfig(
+                filename='log_folder_config.json',
+                default_content={"log_folder_path": ""},
+                required_keys=['log_folder_path'],
+                validation_func=self._validate_log_folder_config
             )
         }
     
@@ -207,6 +219,14 @@ class JSONManager:
         if 'folder_path' not in content:
             return False
         return isinstance(content['folder_path'], str)
+
+    def _validate_log_folder_config(self, content: Dict[str, Any]) -> bool:
+        """Validate log folder configuration."""
+        if not isinstance(content, dict):
+            return False
+        if 'log_folder_path' not in content:
+            return False
+        return isinstance(content['log_folder_path'], str)
     
     # Public interface
     def load(self, config_name: str) -> Dict[str, Any]:
@@ -435,3 +455,19 @@ def get_input_folder() -> str:
 def set_input_folder(path: str) -> bool:
     """Set input folder path to input_folder_config.json"""
     return json_manager.set('input_folder_config', 'folder_path', path)
+
+def get_output_folder() -> str:
+    """Get output folder path from output_folder_config.json"""
+    return json_manager.get('output_folder_config', 'folder_path', '')
+
+def set_output_folder(path: str) -> bool:
+    """Set output folder path to output_folder_config.json"""
+    return json_manager.set('output_folder_config', 'folder_path', path)
+
+def get_log_folder() -> str:
+    """Get log folder path from log_folder_config.json"""
+    return json_manager.get('log_folder_config', 'log_folder_path', '')
+
+def set_log_folder(path: str) -> bool:
+    """Set log folder path to log_folder_config.json"""
+    return json_manager.set('log_folder_config', 'log_folder_path', path)
