@@ -106,7 +106,7 @@ class FileHandler:
                 ui_callbacks['update_status']("No matching files found", True)
                 ui_callbacks['reset_select_all']()
 
-            self.log("--- 🏁 File scan completed ---")
+            self.log("============  File scan completed ============")
 
         except Exception as e:
             self.log(f"❌ An error occurred while scanning files: {e}")

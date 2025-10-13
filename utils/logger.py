@@ -96,13 +96,26 @@ def setup_file_logging(base_path: str, enable_export: bool = True) -> Optional[s
         log_filename = f"log_pipeline_{date_str}.log"
         log_file_path = os.path.join(base_path, log_filename)
 
-        # สร้าง FileHandler (mode='a' เพื่อ append ต่อท้ายไฟล์เดิม)
+        # ลบ FileHandler เก่าที่ชี้ไปยังไฟล์ log เดียวกัน (ป้องกันการ log ซ้ำ)
+        root_logger = logging.getLogger()
+        handlers_to_remove = []
+        for handler in root_logger.handlers:
+            if isinstance(handler, logging.FileHandler):
+                # ตรวจสอบว่าเป็น FileHandler ที่ชี้ไปยังไฟล์เดียวกันหรือไม่
+                if hasattr(handler, 'baseFilename') and os.path.normpath(handler.baseFilename) == os.path.normpath(log_file_path):
+                    handlers_to_remove.append(handler)
+
+        # ลบ handler เก่าออก
+        for handler in handlers_to_remove:
+            root_logger.removeHandler(handler)
+            handler.close()
+
+        # สร้าง FileHandler ใหม่ (mode='a' เพื่อ append ต่อท้ายไฟล์เดิม)
         file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(logging.Formatter(AppConstants.LOG_FORMAT))
 
-        # เพิ่ม FileHandler ไปยัง root logger
-        root_logger = logging.getLogger()
+        # เพิ่ม FileHandler ใหม่ไปยัง root logger
         root_logger.addHandler(file_handler)
 
         return log_file_path
