@@ -150,10 +150,11 @@ class MainWindow(ctk.CTkToplevel):
             'toggle_select_all': self._toggle_select_all,
             'browse_excel_path': self._browse_excel_path,
             'run_check_thread': self._run_check_thread,
-            'confirm_upload': self._confirm_upload
+            'confirm_upload': self._confirm_upload,
+            'choose_output_folder': self._choose_output_folder
         }
 
-        self.main_tab_ui = MainTab(parent, callbacks, output_folder_callback=self._on_output_folder_changed)
+        self.main_tab_ui = MainTab(parent, callbacks)
 
         # ส่ง reference ของ tabview เพื่อให้ควบคุม tabs ได้
         self.main_tab_ui.parent_tabview = self.tabview
@@ -253,9 +254,30 @@ class MainWindow(ctk.CTkToplevel):
         """Confirm upload"""
         ui_callbacks = self._get_ui_callbacks()
         self.file_handler.confirm_upload(self.file_list.get_selected_files, ui_callbacks)
-    
 
-    
+    def _choose_output_folder(self):
+        """Choose output folder"""
+        from tkinter import filedialog
+
+        # Get current output folder path from MainTab
+        current_path = self.main_tab_ui.get_output_folder_path()
+
+        folder_path = filedialog.askdirectory(
+            title="Select output folder for uploaded files",
+            initialdir=current_path if current_path else os.getcwd()
+        )
+
+        if folder_path:
+            # Save to MainTab
+            self.main_tab_ui.output_folder_path = folder_path
+            self.main_tab_ui._save_output_folder_setting()
+
+            # Call the existing handler
+            self._on_output_folder_changed(folder_path)
+
+            messagebox.showinfo("Success", f"Output folder set to:\n{folder_path}\n\nUploaded files will be moved to this location.")
+
+
     def _reload_settings_in_services(self):
         """Reload settings in all services"""
         try:

@@ -1,6 +1,6 @@
 """Main Tab UI Component"""
 import customtkinter as ctk
-from tkinter import filedialog, messagebox
+from tkinter import messagebox
 import os
 import json
 from ui.components.file_list import FileList
@@ -9,18 +9,16 @@ from ui.components.status_bar import StatusBar
 
 
 class MainTab:
-    def __init__(self, parent, callbacks, output_folder_callback=None):
+    def __init__(self, parent, callbacks):
         """
         Initialize Main Tab
 
         Args:
             parent: Parent widget
             callbacks: Dictionary of callback functions
-            output_folder_callback: Callback function when output folder is changed
         """
         self.parent = parent
         self.callbacks = callbacks
-        self.output_folder_callback = output_folder_callback
         self.output_folder_path = None
 
         # UI variables
@@ -95,11 +93,11 @@ class MainTab:
         )
         self.folder_btn.pack(side="left", padx=4)
 
-        # ปุ่มเลือกโฟลเดอร์ output 
+        # ปุ่มเลือกโฟลเดอร์ output
         self.output_folder_btn = ctk.CTkButton(
             button_frame,
             text="📂 Choose output folder",
-            command=self._choose_output_folder,
+            command=self.callbacks.get('choose_output_folder'),
             width=170,
         )
         self.output_folder_btn.pack(side="left", padx=4)
@@ -183,29 +181,6 @@ class MainTab:
                 json.dump(config, f, ensure_ascii=False, indent=2)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save output folder setting:\n{str(e)}")
-
-    def _get_output_folder_display_text(self):
-        """Get display text for output folder label"""
-        if self.output_folder_path and os.path.exists(self.output_folder_path):
-            return f"Output folder: {self.output_folder_path}"
-        return "Output folder: Not set (will use default location)"
-
-    def _choose_output_folder(self):
-        """Open folder dialog to choose output folder"""
-        folder_path = filedialog.askdirectory(
-            title="Select output folder for uploaded files",
-            initialdir=self.output_folder_path if self.output_folder_path else os.getcwd()
-        )
-
-        if folder_path:
-            self.output_folder_path = folder_path
-            self._save_output_folder_setting()
-
-            # Call callback if provided
-            if self.output_folder_callback:
-                self.output_folder_callback(folder_path)
-
-            messagebox.showinfo("Success", f"Output folder set to:\n{folder_path}\n\nUploaded files will be moved to this location.")
 
     def get_output_folder_path(self):
         """Get current output folder path"""

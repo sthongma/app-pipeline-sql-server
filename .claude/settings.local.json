@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(py -3 -m py_compile:*)"
+      "Bash(py -3 -m py_compile:*)",
+      "Bash(python -m py_compile:*)"
     ],
     "deny": [],
     "ask": []
