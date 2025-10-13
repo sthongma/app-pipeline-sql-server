@@ -526,7 +526,7 @@ class MainWindow(ctk.CTkToplevel):
         """Initialize input folder if user has previously set it"""
         try:
             if input_folder_path and os.path.exists(input_folder_path):
-                self.log(f"📂 Input folder updated: {input_folder_path}")
+                self.log(f"📁 Input folder updated: {input_folder_path}")
         except Exception:
             pass
 
@@ -552,6 +552,6 @@ class MainWindow(ctk.CTkToplevel):
                 if hasattr(self, 'file_service') and hasattr(self.file_service, 'file_manager'):
                     self.file_service.file_manager.set_output_folder(output_folder_path)
 
-                self.log(f"📂 Output folder updated: {output_folder_path}")
+                self.log(f"📁 Output folder updated: {output_folder_path}")
         except Exception as e:
             self.log(f"❌ Error updating output folder: {e}")

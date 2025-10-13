@@ -86,7 +86,7 @@ class MainTab:
         # ปุ่มเลือกโฟลเดอร์ input
         self.folder_btn = ctk.CTkButton(
             button_frame,
-            text="📂 Choose input folder",
+            text="📁 Choose input folder",
             command=self.callbacks.get('browse_excel_path'),
             width=160,
         )
@@ -95,7 +95,7 @@ class MainTab:
         # ปุ่มเลือกโฟลเดอร์ output
         self.output_folder_btn = ctk.CTkButton(
             button_frame,
-            text="📂 Choose output folder",
+            text="📁 Choose output folder",
             command=self.callbacks.get('choose_output_folder'),
             width=170,
         )

@@ -1071,7 +1071,7 @@ self.log("⚠️ No files found in folder")
 
 # Info
 self.log("📊 Processing 1000 rows")
-self.log("📂 Folder updated: /path/to/folder")
+self.log("📁 Folder updated: /path/to/folder")
 self.log("📁 Found 5 files")
 
 # File operations

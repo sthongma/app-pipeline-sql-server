@@ -38,7 +38,7 @@ class FileHandler:
         if folder:
             self.file_service.set_search_path(folder)
             save_callback(folder)
-            self.log(f"📂 Input folder updated: {folder}")
+            self.log(f"📁 Input folder updated: {folder}")
             messagebox.showinfo("Success", f"Set search path for Excel files to\n{folder}")
     
     def run_check_thread(self, ui_callbacks):
@@ -79,8 +79,8 @@ class FileHandler:
             if not data_files:
                 ui_callbacks['update_progress'](1.0, "Scan completed", "No .xlsx or .csv files found")
                 ui_callbacks['update_status']("No .xlsx or .csv files found in the specified folder", True)
-                self.log("🤷 No .xlsx or .csv files found in the specified folder")
-                self.log("--- 🏁 File scan completed ---")
+                self.log("⚠️  No .xlsx or .csv files found in the specified folder")
+                self.log("============  File scan completed ============")
                 return
 
             found_files_count = 0
@@ -541,7 +541,7 @@ class FileHandler:
 
                 self.log(f"🏷️  Occupation: {file_type}")
                 self.log(f"   ⏱️  Processing Time: {type_time_str}")
-                self.log(f"   📂 Total Files: {stats.get('files_count', 0)}")
+                self.log(f"   📁 Total Files: {stats.get('files_count', 0)}")
 
                 # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
                 successful = stats.get('successful_files', 0)
@@ -681,7 +681,7 @@ class FileHandler:
 
                 self.log(f"🏷️  Occupation: {file_type}")
                 self.log(f"   ⏱️  Processing Time: {type_time_str}")
-                self.log(f"   📂 Total Files: {stats.get('files_count', 0)}")
+                self.log(f"   📁 Total Files: {stats.get('files_count', 0)}")
 
                 # แสดงสถิติเฉพาะที่มีค่ามากกว่า 0
                 successful = stats.get('successful_files', 0)
@@ -819,7 +819,7 @@ class FileHandler:
             ui_callbacks['set_progress_status']("Starting auto processing", "Preparing system...")
             
             self.log("🤖 Starting auto processing")
-            self.log(f"📂 Source folder: {folder_path}")
+            self.log(f"📁 Source folder: {folder_path}")
             
             # === ประมวลผลไฟล์หลัก ===
             self.log("========= Processing files ==========")

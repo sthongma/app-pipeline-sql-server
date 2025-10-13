@@ -67,7 +67,7 @@ class PerformanceOptimizer:
             file_size = os.path.getsize(file_path)
             file_size_mb = file_size / (1024 * 1024)
             
-            self.log_callback(f"📂 Read File: {os.path.basename(file_path)} ({file_size_mb:.1f} MB)")
+            self.log_callback(f"📁 Read File: {os.path.basename(file_path)} ({file_size_mb:.1f} MB)")
             
             # Set optimal chunk size based on file size
             optimal_chunk_size = self.get_optimal_chunk_size(file_size_mb)

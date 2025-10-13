@@ -697,7 +697,7 @@ def _process_in_background(self):
 | ❌ | Error | `"❌ Failed to process"` |
 | ⚠️ | Warning | `"⚠️ File size large"` |
 | 📊 | Data/Stats | `"📊 Processing 1000 rows"` |
-| 📂 | Folder | `"📂 Folder updated"` |
+| 📁 | Folder | `"📁 Folder updated"` |
 | 📁 | File | `"📁 Found 5 files"` |
 | 📦 | Package/Move | `"📦 File moved"` |
 | 📤 | Upload | `"📤 Uploading data"` |
