@@ -1,22 +1,22 @@
 """Log Tab UI Component"""
 import customtkinter as ctk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox
 import datetime
 import os
 import json
 
 
 class LogTab:
-    def __init__(self, parent, log_folder_callback=None):
+    def __init__(self, parent, callbacks):
         """
         Initialize Log Tab
 
         Args:
             parent: Parent widget
-            log_folder_callback: Callback function when log folder is changed
+            callbacks: Dictionary of callback functions
         """
         self.parent = parent
-        self.log_folder_callback = log_folder_callback
+        self.callbacks = callbacks
         self.log_folder_path = None
 
         # Load saved log folder setting
@@ -38,7 +38,7 @@ class LogTab:
         export_btn.pack(side="left", padx=5)
 
         # Log folder setting button
-        log_folder_btn = ctk.CTkButton(toolbar, text="Choose log folder", command=self._choose_log_folder, width=140)
+        log_folder_btn = ctk.CTkButton(toolbar, text="Choose log folder", command=self.callbacks.get('choose_log_folder'), width=140)
         log_folder_btn.pack(side="left", padx=5)
 
         # กล่องข้อความสำหรับแสดง Log
@@ -164,23 +164,6 @@ class LogTab:
                 json.dump(config, f, ensure_ascii=False, indent=2)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save log folder setting:\n{str(e)}")
-
-    def _choose_log_folder(self):
-        """Open folder dialog to choose log folder"""
-        folder_path = filedialog.askdirectory(
-            title="Select log folder",
-            initialdir=self.log_folder_path if self.log_folder_path else os.getcwd()
-        )
-
-        if folder_path:
-            self.log_folder_path = folder_path
-            self._save_log_folder_setting()
-
-            # Call callback if provided
-            if self.log_folder_callback:
-                self.log_folder_callback(folder_path)
-
-            messagebox.showinfo("Success", f"Log folder set to:\n{folder_path}")
 
     def get_log_folder_path(self):
         """Get current log folder path"""

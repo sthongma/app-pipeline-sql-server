@@ -761,14 +761,14 @@ class FileHandler:
         
         self.log("==========================================")
     
-    def start_auto_process(self, load_last_path_callback, column_settings):
+    def start_auto_process(self, load_input_folder_callback, column_settings):
         """เริ่มการประมวลผลอัตโนมัติ (ประมวลผลไฟล์)"""
         # ตรวจสอบว่ามีโฟลเดอร์ต้นทางหรือไม่
-        last_path = load_last_path_callback()
-        if not last_path or not os.path.isdir(last_path):
+        input_folder_path = load_input_folder_callback()
+        if not input_folder_path or not os.path.isdir(input_folder_path):
             messagebox.showerror(
                 "Error",
-                f"Invalid source folder: {last_path}\n\nPlease select a source folder first"
+                f"Invalid source folder: {input_folder_path}\n\nPlease select a source folder first"
             )
             return
 
@@ -783,30 +783,30 @@ class FileHandler:
                 f"Cannot connect to database:\n{message}\n\nPlease check database settings first"
             )
             return
-            
-        
+
+
         # ตรวจสอบการตั้งค่าประเภทไฟล์
         if not column_settings:
             messagebox.showerror(
-                "Error", 
+                "Error",
                 "No file type configuration found\n\nPlease go to Settings tab and add file types first"
             )
             return
-        
+
         # ยืนยันการทำงาน
         result = messagebox.askyesno(
             "Confirm Auto Processing",
-            f"Will perform auto processing in folder:\n{last_path}\n\n"
+            f"Will perform auto processing in folder:\n{input_folder_path}\n\n"
             "Processing steps:\n"
             "1. Find all data files\n"
             "2. Process and upload all files\n"
             "Do you want to proceed?"
         )
-        
+
         if not result:
             return
-        
-        return last_path  # Return path for further processing
+
+        return input_folder_path  # Return path for further processing
     
     def run_auto_process(self, folder_path, ui_callbacks):
         """รันการประมวลผลอัตโนมัติใน thread แยก"""

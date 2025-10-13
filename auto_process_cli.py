@@ -226,7 +226,7 @@ class AutoProcessCLI:
         
         # Set search path
         self.file_service.set_search_path(folder_path)
-        self.settings_handler.save_last_path(folder_path)
+        self.settings_handler.save_input_folder(folder_path)
         
         # Create UI callbacks
         ui_callbacks = {
@@ -380,14 +380,14 @@ Notes:
     # Determine source folder
     folder_path = args.folder_path
     
-    # If no folder specified, use last folder from settings
+    # If no folder specified, use input folder from settings
     if not folder_path:
-        folder_path = cli.settings_handler.load_last_path()
+        folder_path = cli.settings_handler.load_input_folder()
         if folder_path:
-            cli.log(f"Using last folder from settings: {folder_path}")
+            cli.log(f"Using input folder from settings: {folder_path}")
         else:
-            cli.log("ERROR: No source folder specified and no last folder found in settings")
-            cli.log("Please specify a folder path or select a folder in GUI first")
+            cli.log("ERROR: No source folder specified and no input folder found in settings")
+            cli.log("Please specify a folder path or select an input folder in GUI first")
             parser.print_help()
             sys.exit(1)
     

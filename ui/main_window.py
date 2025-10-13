@@ -47,13 +47,13 @@ class MainWindow(ctk.CTkToplevel):
         if preloaded_data:
             self.column_settings = preloaded_data.get('column_settings', {})
             self.dtype_settings = preloaded_data.get('dtype_settings', {})
-            # โหลด last_path จาก preloaded data
-            preloaded_last_path = preloaded_data.get('last_path')
+            # โหลด input_folder_path จาก preloaded data
+            preloaded_input_folder = preloaded_data.get('input_folder_path')
         else:
             # fallback: โหลดแบบปกติถ้าไม่มีข้อมูลล่วงหน้า
             self.column_settings = self.settings_handler.load_column_settings()
             self.dtype_settings = self.settings_handler.load_dtype_settings()
-            preloaded_last_path = None
+            preloaded_input_folder = None
         
         # โหลดการตั้งค่า SQL Server
         self.db_config = DatabaseConfig()
@@ -78,10 +78,10 @@ class MainWindow(ctk.CTkToplevel):
             self.log
         )
         
-        # โหลด path ล่าสุด ถ้ามี (ใช้ preloaded data ก่อน)
-        last_path = preloaded_last_path if preloaded_last_path else self.settings_handler.load_last_path()
-        if last_path and os.path.isdir(last_path):
-            self.file_service.set_search_path(last_path)
+        # โหลด input folder ถ้ามี (ใช้ preloaded data ก่อน)
+        input_folder_path = preloaded_input_folder if preloaded_input_folder else self.settings_handler.load_input_folder()
+        if input_folder_path and os.path.isdir(input_folder_path):
+            self.file_service.set_search_path(input_folder_path)
         
         # สร้าง UI พร้อมแสดง progress
         if ui_progress_callback:
@@ -94,7 +94,7 @@ class MainWindow(ctk.CTkToplevel):
         self.after(50, self._initialize_log_file_if_needed)
 
         # โหลด input folder ถ้ามีการตั้งค่าไว้
-        self.after(55, lambda: self._initialize_input_folder_if_needed(last_path))
+        self.after(55, lambda: self._initialize_input_folder_if_needed(input_folder_path))
 
         # โหลด output folder ถ้ามีการตั้งค่าไว้
         self.after(60, self._initialize_output_folder_if_needed)
@@ -167,7 +167,12 @@ class MainWindow(ctk.CTkToplevel):
     
     def _create_log_tab(self, parent):
         """Create components in Log Tab"""
-        self.log_tab_ui = LogTab(parent, log_folder_callback=self._on_log_folder_changed)
+        # Create log tab with callbacks
+        callbacks = {
+            'choose_log_folder': self._choose_log_folder
+        }
+
+        self.log_tab_ui = LogTab(parent, callbacks)
 
         # เก็บ reference ไปยัง log textbox
         self.log_textbox = self.log_tab_ui.log_textbox
@@ -243,7 +248,7 @@ class MainWindow(ctk.CTkToplevel):
     
     def _browse_excel_path(self):
         """Select folder"""
-        self.file_handler.browse_excel_path(self.settings_handler.save_last_path)
+        self.file_handler.browse_excel_path(self.settings_handler.save_input_folder)
     
     def _run_check_thread(self):
         """Start file checking"""
@@ -277,6 +282,27 @@ class MainWindow(ctk.CTkToplevel):
 
             messagebox.showinfo("Success", f"Output folder set to:\n{folder_path}\n\nUploaded files will be moved to this location.")
 
+    def _choose_log_folder(self):
+        """Choose log folder"""
+        from tkinter import filedialog
+
+        # Get current log folder path from LogTab
+        current_path = self.log_tab_ui.get_log_folder_path()
+
+        folder_path = filedialog.askdirectory(
+            title="Select log folder",
+            initialdir=current_path if current_path else os.getcwd()
+        )
+
+        if folder_path:
+            # Save to LogTab
+            self.log_tab_ui.log_folder_path = folder_path
+            self.log_tab_ui._save_log_folder_setting()
+
+            # Call the existing handler
+            self._on_log_folder_changed(folder_path)
+
+            messagebox.showinfo("Success", f"Log folder set to:\n{folder_path}")
 
     def _reload_settings_in_services(self):
         """Reload settings in all services"""

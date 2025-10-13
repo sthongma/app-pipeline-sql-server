@@ -4,7 +4,7 @@ from config.json_manager import (
     json_manager,
     load_column_settings,
     load_dtype_settings,
-    get_last_path
+    get_input_folder
 )
 
 
@@ -38,19 +38,19 @@ class PreloadService:
             dtype_settings = load_dtype_settings()
             
             if progress_callback:
-                progress_callback("Loading latest path...")
-            
-            # โหลด path ล่าสุด
-            last_path = get_last_path()
-            
+                progress_callback("Loading input folder path...")
+
+            # โหลด input folder path
+            input_folder_path = get_input_folder()
+
             if progress_callback:
                 progress_callback("Preparing data for UI creation...")
-            
+
             # รวมข้อมูลทั้งหมด
             data = {
                 'column_settings': column_settings,
                 'dtype_settings': dtype_settings,
-                'last_path': last_path
+                'input_folder_path': input_folder_path
             }
             
             # เก็บในแคช

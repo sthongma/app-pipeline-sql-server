@@ -404,14 +404,6 @@ def save_app_settings(settings: Dict[str, Any]) -> bool:
     """Save application settings."""
     return json_manager.save('app_settings', settings)
 
-def get_last_path() -> str:
-    """Get last search path (uses input_folder_config)."""
-    return get_input_folder()
-
-def set_last_path(path: str) -> bool:
-    """Set last search path (uses input_folder_config)."""
-    return set_input_folder(path)
-
 def load_column_settings() -> Dict[str, Any]:
     """Load column settings."""
     return json_manager.load('column_settings')

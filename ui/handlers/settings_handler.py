@@ -5,8 +5,8 @@ from config.json_manager import (
     save_column_settings as save_column_config,
     load_dtype_settings as load_dtype_config,
     save_dtype_settings as save_dtype_config,
-    get_last_path,
-    set_last_path
+    get_input_folder,
+    set_input_folder
 )
 
 
@@ -68,22 +68,22 @@ class SettingsHandler:
         except Exception as e:
             self.log(f"Cannot save data type settings: {e}")
     
-    def load_last_path(self):
-        """Load last search path using JSON Manager."""
+    def load_input_folder(self):
+        """Load input folder path using JSON Manager."""
         try:
-            return get_last_path()
+            return get_input_folder()
         except Exception as e:
-            self.log(f"Cannot load last path: {e}")
+            self.log(f"Cannot load input folder path: {e}")
             return None
-    
-    def save_last_path(self, path):
-        """Save last search path using JSON Manager."""
+
+    def save_input_folder(self, path):
+        """Save input folder path using JSON Manager."""
         try:
-            success = set_last_path(path)
+            success = set_input_folder(path)
             if not success:
-                self.log("Failed to save last path")
+                self.log("Failed to save input folder path")
         except Exception as e:
-            self.log(f"Save last path error: {e}")
+            self.log(f"Save input folder path error: {e}")
 
 
 # Convenience functions for direct access
