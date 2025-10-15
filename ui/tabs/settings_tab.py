@@ -119,9 +119,16 @@ class SettingsTab:
         """เสร็จสิ้นการสร้าง UI"""
         # โหลดข้อมูลประเภทไฟล์ที่มีอยู่
         self.refresh_file_type_tabs()
-        
+
         if self.ui_progress_callback:
             self.ui_progress_callback("Settings Tab ready")
+
+        # ✅ แจ้ง callback ว่า UI พร้อมแล้วทันที (ไม่ต้องรอ prebuild UI)
+        if callable(self.on_all_ui_built):
+            try:
+                self.parent.after(0, self.on_all_ui_built)
+            except Exception:
+                self.on_all_ui_built()
     
     def _create_ui(self):
         """สร้างส่วนประกอบใน Settings Tab (เดิม - สำหรับ fallback)"""
@@ -228,22 +235,21 @@ class SettingsTab:
             progress_callback(f"Built UI for {total_types} file types")
     
     def refresh_file_type_tabs(self):
-        """รีเฟรช tabs ของประเภทไฟล์ (ใช้ข้อมูลแคช)"""
+        """รีเฟรช tabs ของประเภทไฟล์ (ไม่ prebuild UI ล่วงหน้า - สร้างเมื่อเลือกเท่านั้น)"""
         # ซิงค์ dtype_settings ก่อนอัปเดต UI
         for file_type in self.column_settings.keys():
             self._sync_dtype_settings(file_type)
-        
+
         # อัปเดต dropdown ของประเภทไฟล์
         self._update_file_type_selector()
-        
+
         # ล้าง UI cache เก่าที่ไม่ใช้แล้ว
         self._cleanup_unused_cache()
-        
+
         # อัปเดต UI ที่แคชไว้ให้ตรงกับข้อมูลใหม่
         self._update_cached_ui()
-        
-        # Pre-build UI สำหรับประเภทไฟล์ใหม่ที่ยังไม่มี cache แบบ async เพื่อลดการค้างของ UI
-        self._prebuild_all_ui_cache_async(progress_callback=self.ui_progress_callback)
+
+        # ✅ ลบการ prebuild UI ล่วงหน้า - ให้สร้างเฉพาะเมื่อผู้ใช้เลือกประเภทไฟล์จริงเท่านั้น (Lazy Loading)
     
     def _cleanup_unused_cache(self):
         """ล้าง UI cache ที่ไม่ใช้แล้ว"""

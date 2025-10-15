@@ -4,7 +4,8 @@
       "Bash(py -3 -m py_compile:*)",
       "Bash(python -m py_compile:*)",
       "Bash(tree:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []
