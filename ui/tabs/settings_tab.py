@@ -1,6 +1,4 @@
 """Settings Tab UI Component"""
-import os
-import json
 import customtkinter as ctk
 from tkinter import messagebox, filedialog
 import pandas as pd
@@ -38,14 +36,6 @@ class SettingsTab:
         
         # สร้าง UI แบบ step-by-step
         self._create_ui_step_by_step()
-    
-    def _start_async_ui_building(self, ui_progress_callback):
-        """Start async UI building"""
-        if ui_progress_callback:
-            ui_progress_callback("Starting to build UI for file types...")
-        
-        # เริ่ม pre-build UI สำหรับทุกประเภทไฟล์
-        self._prebuild_all_ui_cache_async(ui_progress_callback)
     
     def _create_ui_step_by_step(self):
         """สร้าง UI แบบ step-by-step เพื่อไม่บล็อค"""
@@ -129,110 +119,6 @@ class SettingsTab:
                 self.parent.after(0, self.on_all_ui_built)
             except Exception:
                 self.on_all_ui_built()
-    
-    def _create_ui(self):
-        """สร้างส่วนประกอบใน Settings Tab (เดิม - สำหรับ fallback)"""
-        # ปุ่มเพิ่ม/ลบ/บันทึกประเภทไฟล์และ dropdown เลือกประเภทไฟล์
-        control_frame = ctk.CTkFrame(self.parent)
-        control_frame.pack(fill="x", padx=10, pady=10)
-        
-        # ปุ่มควบคุมและ dropdown ในแถวเดียวกัน
-        button_row = ctk.CTkFrame(control_frame, fg_color="transparent")
-        button_row.pack(fill="x", pady=5)
-        
-        # ปุ่มควบคุมด้านซ้าย
-        add_type_btn = ctk.CTkButton(button_row, text="➕ เพิ่มประเภทไฟล์", command=self._add_file_type)
-        add_type_btn.pack(side="left", padx=5)
-        del_type_btn = ctk.CTkButton(button_row, text="🗑️ ลบประเภทไฟล์", command=self._delete_file_type)
-        del_type_btn.pack(side="left", padx=5)
-        save_dtype_btn = ctk.CTkButton(button_row, text="✅ บันทึกชนิดข้อมูล", command=self._save_all_dtype_settings)
-        save_dtype_btn.pack(side="left", padx=5)
-        edit_type_btn = ctk.CTkButton(button_row, text="แก้ไขชื่อประเภทไฟล์", command=self._edit_file_type)
-        edit_type_btn.pack(side="left", padx=5)
-        
-        # Dropdown สำหรับเลือกประเภทไฟล์
-        self.file_type_var = ctk.StringVar(value="เลือกประเภทไฟล์...")
-        self.file_type_selector = ctk.CTkOptionMenu(
-            button_row, 
-            variable=self.file_type_var,
-            values=["เลือกประเภทไฟล์..."],
-            command=self._on_file_type_selected,
-            width=300,
-        )
-        self.file_type_selector.pack(side="right", padx=5)
-        
-        # สร้าง content frame สำหรับแสดงเนื้อหาของประเภทไฟล์ที่เลือก
-        self.content_frame = ctk.CTkFrame(self.parent)
-        self.content_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-    
-    def _prebuild_all_ui_cache_async(self, progress_callback=None):
-        """Pre-build UI สำหรับทุกประเภทไฟล์แบบ async"""
-        self.file_types_to_build = list(self.column_settings.keys())
-        self.total_types = len(self.file_types_to_build)
-        self.current_build_index = 0
-        self.ui_progress_callback = progress_callback
-        
-        if self.total_types > 0:
-            # เริ่มสร้าง UI แรก
-            self._build_next_file_type_ui()
-        else:
-            if progress_callback:
-                progress_callback("No file types to build UI for")
-            # กรณีไม่มีประเภทไฟล์ ให้ถือว่า SettingsTab พร้อมทันที
-            if callable(self.on_all_ui_built):
-                try:
-                    self.parent.after(0, self.on_all_ui_built)
-                except Exception:
-                    self.on_all_ui_built()
-    
-    def _build_next_file_type_ui(self):
-        """สร้าง UI สำหรับประเภทไฟล์ถัดไป"""
-        if self.current_build_index < self.total_types:
-            file_type = self.file_types_to_build[self.current_build_index]
-            
-            # อัพเดท progress
-            if self.ui_progress_callback:
-                self.ui_progress_callback(
-                    f"Building UI for: {file_type} ({self.current_build_index + 1}/{self.total_types})"
-                )
-            
-            # สร้าง UI สำหรับประเภทไฟล์นี้
-            if file_type not in self.ui_cache:
-                self._create_and_cache_ui(file_type)
-                # ซ่อน UI ที่สร้างใหม่
-                self.ui_cache[file_type]['scroll_frame'].pack_forget()
-            
-            self.current_build_index += 1
-            
-            # ใช้ after() เพื่อสร้างประเภทถัดไปโดยไม่บล็อค UI
-            self.parent.after(10, self._build_next_file_type_ui)
-        else:
-            # เสร็จสิ้นการสร้างทั้งหมด
-            if self.ui_progress_callback:
-                self.ui_progress_callback(f"Built UI for {self.total_types} file types")
-            # แจ้ง callback ว่า UI พร้อมแล้ว
-            if callable(self.on_all_ui_built):
-                try:
-                    self.parent.after(0, self.on_all_ui_built)
-                except Exception:
-                    self.on_all_ui_built()
-    
-    def _prebuild_all_ui_cache(self, progress_callback=None):
-        """Pre-build UI สำหรับทุกประเภทไฟล์ล่วงหน้า (เก่า - สำหรับ fallback)"""
-        file_types = list(self.column_settings.keys())
-        total_types = len(file_types)
-        
-        for i, file_type in enumerate(file_types):
-            if progress_callback:
-                progress_callback(f"Building UI for file type: {file_type} ({i+1}/{total_types})")
-                
-            if file_type not in self.ui_cache:
-                self._create_and_cache_ui(file_type)
-                # ซ่อน UI ที่สร้างใหม่
-                self.ui_cache[file_type]['scroll_frame'].pack_forget()
-        
-        if progress_callback and total_types > 0:
-            progress_callback(f"Built UI for {total_types} file types")
     
     def refresh_file_type_tabs(self):
         """รีเฟรช tabs ของประเภทไฟล์ (ไม่ prebuild UI ล่วงหน้า - สร้างเมื่อเลือกเท่านั้น)"""
