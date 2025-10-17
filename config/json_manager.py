@@ -89,8 +89,7 @@ class JSONManager:
                 filename='file_management_settings.json',
                 default_content={
                     "auto_move_enabled": True,
-                    "target_folder": "Uploaded_Files",
-                    "organize_by_date": True
+                    "organize_by_date": False
                 },
                 validation_func=self._validate_file_management_settings
             ),
