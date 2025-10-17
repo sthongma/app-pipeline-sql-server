@@ -4,7 +4,7 @@ Constants for PIPELINE_SQLSERVER
 This file contains various constants used throughout the project for better maintainability and AI comprehension.
 """
 
-from typing import List, Dict
+from typing import List
 import os
 
 # === DATABASE CONSTANTS ===
@@ -18,12 +18,7 @@ class DatabaseConstants:
     # Authentication types
     AUTH_WINDOWS = "Windows"
     AUTH_SQL = "SQL Server"
-    
-    # Default schema names
-    DEFAULT_BRONZE_SCHEMA = "bronze"
-    DEFAULT_SILVER_SCHEMA = "silver"
-    DEFAULT_GOLD_SCHEMA = "gold"
-    
+
     # Supported SQL Server data types
     SUPPORTED_DTYPES: List[str] = [
         "NVARCHAR(100)",
@@ -52,12 +47,6 @@ class FileConstants:
     
     # File size thresholds (in bytes)
     LARGE_FILE_THRESHOLD = 50 * 1024 * 1024  # 50MB
-    CHUNK_SIZE_LARGE = 50000  # rows - increased from 10000 to reduce DB access frequency
-    CHUNK_SIZE_MEDIUM = 20000  # rows - increased from 2000 for better performance
-    CHUNK_SIZE_SMALL = 10000   # rows - increased from 1000 for optimization
-    
-    # Default upload folder structure
-    UPLOADED_FOLDER_NAME = "Uploaded_Files"
     
     # Date format options
     DATE_FORMAT_UK = "UK"  # day first
@@ -71,24 +60,13 @@ class FileConstants:
 # === APPLICATION CONSTANTS ===
 class AppConstants:
     """Application constants"""
-    
-    # Application info
-    APP_NAME = "PIPELINE_SQLSERVER"
-    APP_VERSION = "1.0.0"
-    
+
     # Window settings
     MAIN_WINDOW_SIZE = (900, 780)
     LOGIN_WINDOW_SIZE = (440, 420)
-    
-    # Threading settings
-    MAX_WORKER_THREADS = 3
-    UI_UPDATE_INTERVAL = 100  # milliseconds
-    
-    
+
     # Logging settings
     LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
-    
-    # Performance settings (kept for future use)
 
 
 # === PATH CONSTANTS ===
@@ -110,75 +88,31 @@ class PathConstants:
 # === ERROR MESSAGES ===
 class ErrorMessages:
     """Standard error messages"""
-    
+
     # Database errors
     DB_CONNECTION_FAILED = "Failed to connect to SQL Server"
-    DB_UPLOAD_FAILED = "Data upload failed"
-    DB_SCHEMA_MISMATCH = "Table schema does not match configuration"
-    
-    # File errors
-    FILE_NOT_FOUND = "File not found"
-    FILE_READ_ERROR = "Error reading file"
-    FILE_MOVE_ERROR = "Unable to move file"
-    
+
     # Data validation errors
     MISSING_COLUMNS = "Required columns are missing"
-    INVALID_DATA_TYPE = "Invalid data type"
     EMPTY_DATA = "No data found in file"
-    
-    # Configuration errors
-    CONFIG_LOAD_ERROR = "Unable to load configuration"
-    CONFIG_SAVE_ERROR = "Unable to save configuration"
 
 
 # === SUCCESS MESSAGES ===
 class SuccessMessages:
     """Standard success messages"""
-    
+
     DB_CONNECTION_SUCCESS = "Database connection successful"
-    FILE_UPLOAD_SUCCESS = "File upload successful"
-    FILE_MOVE_SUCCESS = "File move successful"
-    CONFIG_SAVE_SUCCESS = "Settings saved successfully"
 
 
 # === REGEX PATTERNS ===
 class RegexPatterns:
     """Commonly used regular expression patterns"""
-    
+
     # Numeric cleaning
     NUMERIC_ONLY = r"[^\d.-]"
-    
-    # Column name standardization  
+
+    # Column name standardization
     COLUMN_CLEANUP = r'[\s\W]+'
-    
-    # File validation
-    EXCEL_FILE_PATTERN = r'.*\.(xlsx|xls)$'
-    CSV_FILE_PATTERN = r'.*\.csv$'
-    
+
     # SQL Server object naming
     SQL_IDENTIFIER = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
-
-
-# === TYPE MAPPINGS ===
-class TypeMappings:
-    """Data type mappings between different systems"""
-    
-    # Pandas to SQL Server type mapping
-    PANDAS_TO_SQL: Dict[str, str] = {
-        'object': 'NVARCHAR(255)',
-        'int64': 'BIGINT',
-        'int32': 'INT',
-        'float64': 'FLOAT',
-        'datetime64[ns]': 'DATETIME',
-        'bool': 'BIT'
-    }
-    
-    # String representations to actual types
-    DTYPE_STRING_MAPPING: Dict[str, str] = {
-        'string': 'NVARCHAR(255)',
-        'integer': 'INT',
-        'float': 'FLOAT',
-        'date': 'DATE',
-        'datetime': 'DATETIME',
-        'boolean': 'BIT'
-    }
