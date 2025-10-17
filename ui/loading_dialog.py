@@ -55,7 +55,8 @@ class LoadingDialog(ctk.CTkToplevel):
         
         # ตั้งค่าหน้าต่าง
         self.title(title)
-        self.geometry("360x160")
+        # ใช้ขนาดเท่าเดิม ไม่ยืดตาม steps
+        self.geometry("380x160")
         self.resizable(False, False)
         self.transient(parent)  # ทำให้เป็น dialog ของ parent
         self.grab_set()  # ทำให้ dialog เป็น modal
@@ -75,18 +76,22 @@ class LoadingDialog(ctk.CTkToplevel):
         """จัดหน้าต่างให้อยู่กึ่งกลางของ parent window"""
         # รอให้หน้าต่าง update ก่อน
         self.update_idletasks()
-        
+
         # ได้ขนาดของ parent
         parent_x = self.parent.winfo_x()
         parent_y = self.parent.winfo_y()
         parent_width = self.parent.winfo_width()
         parent_height = self.parent.winfo_height()
-        
+
+        # ได้ขนาดของ dialog
+        dialog_width = self.winfo_width()
+        dialog_height = self.winfo_height()
+
         # คำนวณตำแหน่งกึ่งกลาง
-        x = parent_x + (parent_width // 2) - (350 // 2)
-        y = parent_y + (parent_height // 2) - (150 // 2)
-        
-        self.geometry(f"350x150+{x}+{y}")
+        x = parent_x + (parent_width // 2) - (dialog_width // 2)
+        y = parent_y + (parent_height // 2) - (dialog_height // 2)
+
+        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
         
     def _create_ui(self, message):
         """สร้าง UI ของ dialog"""
@@ -107,24 +112,34 @@ class LoadingDialog(ctk.CTkToplevel):
         
         # ข้อความ
         self.message_label = ctk.CTkLabel(
-            main_frame, 
-            text=message, 
+            main_frame,
+            text=message,
             wraplength=300
         )
         self.message_label.pack(pady=(2, 8))
 
-        # กล่องขั้นตอนการทำงาน
+        # แสดงสถานะ step ปัจจุบัน (แทนที่จะแสดง list ทั้งหมด)
         if self.steps:
-            self.steps_frame = ctk.CTkFrame(main_frame)
-            self.steps_frame.pack(fill="x", pady=(0, 6))
-            for step_text in self.steps:
-                row = ctk.CTkFrame(self.steps_frame, fg_color="transparent")
-                row.pack(fill="x", pady=1)
-                icon = ctk.CTkLabel(row, text="○", width=16)
-                icon.pack(side="left", padx=(2, 6))
-                lbl = ctk.CTkLabel(row, text=step_text, anchor="w")
-                lbl.pack(side="left", fill="x", expand=True)
-                self._step_labels.append((icon, lbl))
+            # สร้าง frame สำหรับ icon + text
+            self.step_status_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+            self.step_status_frame.pack(pady=(0, 6), fill="x")
+
+            # Icon
+            self.step_icon_label = ctk.CTkLabel(
+                self.step_status_frame,
+                text="○",
+                text_color="#888888",
+                width=20
+            )
+            self.step_icon_label.pack(side="left", padx=(0, 6))
+
+            # Text
+            self.step_text_label = ctk.CTkLabel(
+                self.step_status_frame,
+                text="Preparing...",
+                anchor="w"
+            )
+            self.step_text_label.pack(side="left", fill="x", expand=True)
 
         # เวลาและเคล็ดลับ
         bottom_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
@@ -173,25 +188,49 @@ class LoadingDialog(ctk.CTkToplevel):
         # ล้างของเดิมและสร้างใหม่หากต้องการ (ขอข้ามเพื่อความเรียบง่าย)
         
     def mark_step_running(self, index: int):
-        """อัพเดทสถานะขั้นตอนเป็น running โดยไม่ update_idletasks() ทันที"""
-        if 0 <= index < len(self._step_labels):
+        """อัพเดทสถานะขั้นตอนเป็น running"""
+        if 0 <= index < len(self.steps):
             self._current_step_index = index
-            icon, _ = self._step_labels[index]
-            icon.configure(text="●")
+            step_text = self.steps[index]
+            # อัพเดท icon (ใส่สี)
+            if hasattr(self, 'step_icon_label') and self.step_icon_label:
+                self.step_icon_label.configure(
+                    text="●",
+                    text_color="#4A9EFF"  # สีฟ้า - กำลังทำ
+                )
+            # อัพเดท text (ไม่ใส่สี)
+            if hasattr(self, 'step_text_label') and self.step_text_label:
+                self.step_text_label.configure(text=step_text)
 
     def mark_step_done(self, index: int):
-        """อัพเดทสถานะขั้นตอนเป็น done โดยไม่ update_idletasks() ทันที"""
-        if 0 <= index < len(self._step_labels):
-            icon, _ = self._step_labels[index]
-            icon.configure(text="✓")
+        """อัพเดทสถานะขั้นตอนเป็น done"""
+        if 0 <= index < len(self.steps):
+            step_text = self.steps[index]
+            # อัพเดท icon (ใส่สี)
+            if hasattr(self, 'step_icon_label') and self.step_icon_label:
+                self.step_icon_label.configure(
+                    text="✓",
+                    text_color="#41AA41"  # สีเขียว - เสร็จแล้ว
+                )
+            # อัพเดท text (ไม่ใส่สี)
+            if hasattr(self, 'step_text_label') and self.step_text_label:
+                self.step_text_label.configure(text=step_text)
             if 0 <= index < len(self._step_done_flags):
                 self._step_done_flags[index] = True
 
     def mark_step_error(self, index: int):
-        """อัพเดทสถานะขั้นตอนเป็น error โดยไม่ update_idletasks() ทันที"""
-        if 0 <= index < len(self._step_labels):
-            icon, _ = self._step_labels[index]
-            icon.configure(text="✗")
+        """อัพเดทสถานะขั้นตอนเป็น error"""
+        if 0 <= index < len(self.steps):
+            step_text = self.steps[index]
+            # อัพเดท icon (ใส่สี)
+            if hasattr(self, 'step_icon_label') and self.step_icon_label:
+                self.step_icon_label.configure(
+                    text="✗",
+                    text_color="#FF4444"  # สีแดง - error
+                )
+            # อัพเดท text (ไม่ใส่สี)
+            if hasattr(self, 'step_text_label') and self.step_text_label:
+                self.step_text_label.configure(text=step_text)
             
     def run_task(self, task_func: Callable, *args, on_done: Callable[[Any, Any], None] | None = None, **kwargs):
         """รันงานใน background thread"""

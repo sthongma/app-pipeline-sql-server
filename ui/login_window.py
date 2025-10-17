@@ -290,13 +290,16 @@ class LoginWindow(ctk.CTk):
                 "Preparing MainWindow and building UI for file types...",
                 min_display_ms=900,
                 min_step_duration_ms=700,
-                min_total_duration_ms=2200,
+                min_total_duration_ms=2800,
                 auto_close_on_task_done=False,
                 steps=[
                     "Build Tab View",
                     "Build Main Tab",
                     "Build Log Tab",
-                    "Build Settings Tab"
+                    "Build Settings Tab",
+                    "Initialize log file",
+                    "Initialize input/output folders",
+                    "Verify SQL Server connection"
                 ]
             )
 
@@ -332,34 +335,51 @@ class LoginWindow(ctk.CTk):
         """Create MainWindow step 1"""
         try:
             self.ui_loading_dialog.update_message("Creating MainWindow...")
-            # สร้าง MainWindow พร้อม progress callback
+
+            # Track completed steps
+            self._completed_ui_steps = set()
+
+            # สร้าง MainWindow พร้อม progress callback ที่มี step index
             def progress_callback(message):
+                """UI building progress callback"""
                 self.ui_loading_dialog.update_message(message)
-                
-            # ใช้ callback เพื่อเปิด main window เมื่อสร้าง UI ทั้งหมดเสร็จ (รอทุกอย่างพร้อมก่อนแสดง)
-            def on_main_ready():
-                # ปิด dialog สร้าง UI และค่อยแสดงหน้าหลัก
-                # ค่อยปล่อยให้ dialog ปิดเองตามเวลาขั้นต่ำ
-                try:
-                    if self.ui_loading_dialog:
-                        self.ui_loading_dialog.release_and_close()
-                except Exception:
-                    pass
-                # ซ่อน Login และโชว์ Main หลังจากพร้อมเต็มที่
-                self.withdraw()
-                self.main_window.deiconify()
+
+                # Map messages to step indices and mark done when moving to next
+                if "Tab View" in message:
+                    self.ui_loading_dialog.mark_step_running(0)
+                    self._completed_ui_steps.add(0)
+                elif "Main Tab" in message:
+                    if 0 in self._completed_ui_steps:
+                        self.ui_loading_dialog.mark_step_done(0)
+                    self.ui_loading_dialog.mark_step_running(1)
+                    self._completed_ui_steps.add(1)
+                elif "Log Tab" in message:
+                    if 1 in self._completed_ui_steps:
+                        self.ui_loading_dialog.mark_step_done(1)
+                    self.ui_loading_dialog.mark_step_running(2)
+                    self._completed_ui_steps.add(2)
+                elif "Settings Tab" in message:
+                    if 2 in self._completed_ui_steps:
+                        self.ui_loading_dialog.mark_step_done(2)
+                    self.ui_loading_dialog.mark_step_running(3)
+                    self._completed_ui_steps.add(3)
+
+            # ใช้ callback เพื่อเปิด main window เมื่อสร้าง UI ทั้งหมดเสร็จ
+            def on_ui_ready():
+                # Mark Settings Tab as done
+                if 3 in self._completed_ui_steps:
+                    self.ui_loading_dialog.mark_step_done(3)
+                # UI สร้างเสร็จแล้ว ต่อด้วย initialization tasks
+                self.after(50, self._run_initialization_tasks)
 
             self.main_window = MainWindow(
                 master=self,
                 preloaded_data=self.preloaded_data,
                 ui_progress_callback=progress_callback,
-                on_ready_callback=on_main_ready
+                on_ready_callback=on_ui_ready
             )
-            # ซ่อน MainWindow ไว้ก่อนจนกว่าจะพร้อม
+            # ซ่อน MainWindow ไว้ก่อนจนกว่าจะพร้อมทั้งหมด
             self.main_window.withdraw()
-            
-            # รอเสร็จแล้ว ปล่อย dialog ปิดตามเวลาและตั้ง handler ปิดหน้าต่างหลัก
-            self.after(150, self._finish_ui_creation)
             
         except Exception as e:
             try:
@@ -371,30 +391,68 @@ class LoginWindow(ctk.CTk):
                 self.ui_loading_dialog.destroy()
             messagebox.showerror("Error", f"Error creating UI: {str(e)}")
     
-    def _finish_ui_creation(self):
-        """Finish UI creation"""
+    def _run_initialization_tasks(self):
+        """รัน initialization tasks ทั้งหมดใน loading dialog"""
         try:
-            self.ui_loading_dialog.update_message("MainWindow and UI created!")
-            
-            # ปล่อยให้ dialog ปิดตัวเองเมื่อครบเวลาขั้นต่ำแล้ว
-            try:
+            def progress_callback(message, step_index=None, mark_done=False):
+                """Callback ที่รับทั้งข้อความ, step index และ mark_done flag"""
+                if self.ui_loading_dialog:
+                    self.ui_loading_dialog.update_message(message)
+                    # ถ้ามี step_index
+                    if step_index is not None:
+                        if mark_done:
+                            # Mark step เป็น done (✓)
+                            self.ui_loading_dialog.mark_step_done(step_index)
+                        else:
+                            # Mark step เป็น running (●)
+                            self.ui_loading_dialog.mark_step_running(step_index)
+
+            # รัน initialization tasks
+            success = self.main_window.run_initialization_tasks(progress_callback)
+
+            if not success:
+                # ถ้า initialization ล้มเหลว
                 if self.ui_loading_dialog:
                     self.ui_loading_dialog.release_and_close()
-            except Exception:
-                pass
-            
-            # ตั้ง handler ปิดหน้าต่างหลัก (MainWindow จะถูกแสดงโดย on_main_ready เมื่อพร้อมทั้งหมด)
-            self.main_window.protocol("WM_DELETE_WINDOW", lambda: self._on_main_window_close(self.main_window))
-            
+                    self.wait_window(self.ui_loading_dialog)
+                messagebox.showerror(
+                    "Initialization Error",
+                    "Failed to initialize system. Please check SQL Server connection."
+                )
+                if hasattr(self, 'main_window'):
+                    self.main_window.destroy()
+                return
+
+            # ทุกอย่างพร้อมแล้ว - แสดง MainWindow
+            self.after(50, self._show_main_window)
+
         except Exception as e:
-            try:
-                if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
-                    return  # ไม่แสดง error ถ้า user ยกเลิก
-            except:
-                pass
-            if hasattr(self, 'ui_loading_dialog'):
-                self.ui_loading_dialog.destroy()
-            messagebox.showerror("Error", f"Error creating UI: {str(e)}")
+            if self.ui_loading_dialog:
+                self.ui_loading_dialog.release_and_close()
+                self.wait_window(self.ui_loading_dialog)
+            messagebox.showerror("Error", f"Error during initialization: {str(e)}")
+            if hasattr(self, 'main_window'):
+                self.main_window.destroy()
+
+    def _show_main_window(self):
+        """แสดง MainWindow หลังจากทุกอย่างพร้อม"""
+        try:
+            self.ui_loading_dialog.update_message("System ready! Opening main window...")
+
+            # ปล่อยให้ dialog ปิดตัวเองเมื่อครบเวลาขั้นต่ำแล้ว
+            if self.ui_loading_dialog:
+                self.ui_loading_dialog.release_and_close()
+                self.wait_window(self.ui_loading_dialog)
+
+            # ตั้ง handler ปิดหน้าต่างหลัก
+            self.main_window.protocol("WM_DELETE_WINDOW", lambda: self._on_main_window_close(self.main_window))
+
+            # ซ่อน Login และโชว์ Main
+            self.withdraw()
+            self.main_window.deiconify()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error showing main window: {str(e)}")
             
     def _on_main_window_close(self, main_window):
         """Handle main window close event"""

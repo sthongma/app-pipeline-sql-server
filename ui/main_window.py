@@ -30,19 +30,23 @@ from utils.logger import create_gui_log_handler, setup_file_logging
 class MainWindow(ctk.CTkToplevel):
     def __init__(self, master=None, preloaded_data=None, ui_progress_callback=None, on_ready_callback=None):
         super().__init__(master)
-        
+
         # ตั้งค่าหน้าต่างแอปพลิเคชัน
         self.title("PIPELINE SQL SERVER")
         self.geometry(f"{AppConstants.MAIN_WINDOW_SIZE[0]}x{AppConstants.MAIN_WINDOW_SIZE[1]}")
         self.resizable(False, False)
-        
+
         # กำหนดประเภทข้อมูลที่รองรับ (SQL Server data types)
         self.supported_dtypes = DatabaseConstants.SUPPORTED_DTYPES
-        
+
+        # เก็บ callback สำหรับรายงานความคืบหน้า
+        self._ui_progress_callback = ui_progress_callback
+        self._on_ready_callback = on_ready_callback
+
         # Initialize handlers
         self.settings_file = "config/column_settings.json"
         self.settings_handler = SettingsHandler(self.settings_file, self.log)
-        
+
         # โหลดการตั้งค่า (ใช้ preloaded data ถ้ามี)
         if preloaded_data:
             self.column_settings = preloaded_data.get('column_settings', {})
@@ -54,14 +58,14 @@ class MainWindow(ctk.CTkToplevel):
             self.column_settings = self.settings_handler.load_column_settings()
             self.dtype_settings = self.settings_handler.load_dtype_settings()
             preloaded_input_folder = None
-        
+
         # โหลดการตั้งค่า SQL Server
         self.db_config = DatabaseConfig()
         self.sql_config = self.db_config.config
-        
+
         # ผูก logging เข้ากับ GUI
         self._attach_logging_to_gui()
-        
+
         # Log environment variables status for debugging
         self._log_environment_status()
 
@@ -69,7 +73,7 @@ class MainWindow(ctk.CTkToplevel):
         self.file_service = FileOrchestrator(log_callback=logging.info)
         self.db_service = DatabaseOrchestrator()
         self.file_mgmt_service = FileManagementService()
-        
+
         # Initialize file handler
         self.file_handler = FileHandler(
             self.file_service,
@@ -77,32 +81,20 @@ class MainWindow(ctk.CTkToplevel):
             self.file_mgmt_service,
             self.log
         )
-        
+
         # โหลด input folder ถ้ามี (ใช้ preloaded data ก่อน)
         input_folder_path = preloaded_input_folder if preloaded_input_folder else self.settings_handler.load_input_folder()
         if input_folder_path and os.path.isdir(input_folder_path):
             self.file_service.set_search_path(input_folder_path)
-        
+
+        # เก็บ input_folder_path ไว้ใช้ใน initialization ภายหลัง
+        self._input_folder_path = input_folder_path
+
         # สร้าง UI พร้อมแสดง progress
         if ui_progress_callback:
             ui_progress_callback("Building Tab View...")
-        
+
         self._create_ui(ui_progress_callback, on_ready_callback)
-        
-
-        # โหลดและเริ่มการบันทึก log ไฟล์ถ้ามีการตั้งค่าไว้
-        self.after(50, self._initialize_log_file_if_needed)
-
-        # โหลด input folder ถ้ามีการตั้งค่าไว้
-        self.after(55, lambda: self._initialize_input_folder_if_needed(input_folder_path))
-
-        # โหลด output folder ถ้ามีการตั้งค่าไว้
-        self.after(60, self._initialize_output_folder_if_needed)
-
-        # ตรวจสอบการเชื่อมต่อ SQL Server หลังสร้าง UI เสร็จ (ทำแบบ async เพื่อลดการค้าง)
-        if ui_progress_callback:
-            ui_progress_callback("Checking SQL Server connection...")
-        self.after(100, self._run_check_sql_connection_async)
     
     def _create_ui(self, ui_progress_callback=None, on_ready_callback=None):
         """Create all UI components"""
@@ -447,46 +439,81 @@ class MainWindow(ctk.CTkToplevel):
         self.current_file_handler = None
     
     def _log_environment_status(self) -> None:
-        """Log current environment variables status for debugging"""
-        env_vars = ['DB_SERVER', 'DB_NAME', 'DB_USERNAME', 'DB_PASSWORD', 'STRUCTURED_LOGGING']
-        logging.info("Environment Variables Status:")
-        
-        for var in env_vars:
-            value = os.getenv(var)
-            if value:
-                # Don't log sensitive values, just indicate they're set
-                if 'PASSWORD' in var or 'USERNAME' in var:
-                    logging.info(f"  {var}: *** (set)")
-                else:
-                    logging.info(f"  {var}: {value}")
-            else:
-                logging.info(f"  {var}: (not set)")
+        """Log current database configuration that user set"""
+        # แสดงเฉพาะข้อมูลสำคัญที่ผู้ใช้ตั้งค่า
+        server = os.getenv('DB_SERVER', 'Not set')
+        database = os.getenv('DB_NAME', 'Not set')
+        schema = os.getenv('DB_SCHEMA', 'bronze')  # default schema
+
+        logging.info("📊 Database Configuration:")
+        logging.info(f"  Server: {server}")
+        logging.info(f"  Database: {database}")
+        logging.info(f"  Schema: {schema}")
     
-    # ===== Database Connection =====
-    def _run_check_sql_connection_async(self) -> None:
-        """Run SQL connection check in background to reduce UI freezing"""
-        def worker():
-            # ปิด popup warning ใน service ระหว่างเช็คแบบ background
+    # ===== Initialization Tasks =====
+    def run_initialization_tasks(self, progress_callback=None) -> bool:
+        """
+        รัน initialization tasks ทั้งหมดและรายงานความคืบหน้า
+        เรียกจาก LoginWindow ก่อนแสดง MainWindow
+
+        Args:
+            progress_callback: Callback function(message, step_index=None, mark_done=False)
+
+        Returns:
+            bool: True ถ้าทุกอย่างสำเร็จ, False ถ้ามี error
+        """
+        try:
+            # Step indices ตาม loading dialog:
+            # 0: "Build Tab View"
+            # 1: "Build Main Tab"
+            # 2: "Build Log Tab"
+            # 3: "Build Settings Tab"
+            # 4: "Initialize log file"
+            # 5: "Initialize input/output folders"
+            # 6: "Verify SQL Server connection"
+
+            # 1. Initialize log file (step 4)
+            if progress_callback:
+                progress_callback("Initializing log file...", 4)
+            self._initialize_log_file_if_needed_sync()
+            if progress_callback:
+                progress_callback("Log file initialized", 4, mark_done=True)
+
+            # 2. Initialize input folder (step 5)
+            if progress_callback:
+                progress_callback("Initializing input folder...", 5)
+            self._initialize_input_folder_if_needed_sync(self._input_folder_path)
+
+            # 3. Initialize output folder (ยัง step 5 เดิม)
+            if progress_callback:
+                progress_callback("Initializing output folder...", 5)
+            self._initialize_output_folder_if_needed_sync()
+            if progress_callback:
+                progress_callback("Folders initialized", 5, mark_done=True)
+
+            # 4. Check SQL connection (step 6)
+            if progress_callback:
+                progress_callback("Verifying SQL Server connection...", 6)
             success, message = self.db_service.check_connection(show_warning=False)
-            # ส่งผลลัพธ์กลับมาอัพเดท UI บน main thread
-            self.after(0, self._on_sql_connection_checked, success, message)
 
-        thread = threading.Thread(target=worker, daemon=True)
-        thread.start()
+            if success:
+                # ไม่ต้อง log เพราะตอน login เชื่อมต่อสำเร็จแล้ว
+                if progress_callback:
+                    progress_callback("SQL Server connected", 6, mark_done=True)
+            else:
+                self.log("❌ " + message)
+                return False
 
-    def _on_sql_connection_checked(self, success: bool, message: str) -> None:
-        if success:
-            self.log("✅ " + message)
-        else:
-            self.log("❌ " + message)
-            messagebox.showerror(
-                "Error",
-                f"Unable to connect to SQL Server:\n{message}\n\nPlease check your connection and try again"
-            )
-            self.after(2000, self.destroy)
+            self.log("🚀 System ready")
+            return True
 
-    def _initialize_log_file_if_needed(self) -> None:
-        """Initialize log file if user has previously set log folder"""
+        except Exception as e:
+            self.log(f"❌ Initialization error: {str(e)}")
+            return False
+
+    # ===== Synchronous Initialization Helpers =====
+    def _initialize_log_file_if_needed_sync(self) -> None:
+        """Initialize log file if user has previously set log folder (synchronous)"""
         try:
             if hasattr(self, 'log_tab_ui') and self.log_tab_ui:
                 log_folder_path = self.log_tab_ui.get_log_folder_path()
@@ -522,16 +549,16 @@ class MainWindow(ctk.CTkToplevel):
         except Exception as e:
             self.log(f"❌ Error setting up log file: {e}")
 
-    def _initialize_input_folder_if_needed(self, input_folder_path: str) -> None:
-        """Initialize input folder if user has previously set it"""
+    def _initialize_input_folder_if_needed_sync(self, input_folder_path: str) -> None:
+        """Initialize input folder if user has previously set it (synchronous)"""
         try:
             if input_folder_path and os.path.exists(input_folder_path):
                 self.log(f"📁 Input folder updated: {input_folder_path}")
         except Exception:
             pass
 
-    def _initialize_output_folder_if_needed(self) -> None:
-        """Initialize output folder if user has previously set it"""
+    def _initialize_output_folder_if_needed_sync(self) -> None:
+        """Initialize output folder if user has previously set it (synchronous)"""
         try:
             if hasattr(self, 'main_tab_ui') and self.main_tab_ui:
                 output_folder_path = self.main_tab_ui.get_output_folder_path()
