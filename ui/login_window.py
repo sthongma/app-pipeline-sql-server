@@ -472,16 +472,16 @@ class LoginWindow(ctk.CTk):
         # 2) ตรวจสิทธิ์ - ใช้ config ที่ user พิมพ์ใหม่
         if progress_callback:
             progress_callback("Checking database permissions...")
-        
+
         # อัปเดต connection service ให้ใช้ config ใหม่ก่อนตรวจสิทธิ์
         self.db_service.update_config(
             server=config["server"],
-            database=config["database"], 
+            database=config["database"],
             auth_type=config["auth_type"],
             username=config.get("username"),
             password=config.get("password")
         )
-        
+
         permission_results = self.db_service.check_permissions(config.get('schema', 'bronze'), log_callback=progress_callback)
         permissions_ok = permission_results.get('success', False)
         if not permissions_ok:

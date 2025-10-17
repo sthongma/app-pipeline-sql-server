@@ -59,22 +59,23 @@ class FileList(ctk.CTkScrollableFrame):
             text_color="#7a7a7a",
         )
         time_label.grid(row=0, column=3, padx=(10, 5), sticky="e")
-        
-        self.file_checkboxes.append((var, (file_path, logic_type), chk))
+
+        # เก็บ reference ทั้ง checkbox, type_label และ filename_label
+        self.file_checkboxes.append((var, (file_path, logic_type), chk, type_label, filename_label))
 
     def get_selected_files(self):
         """ดึงรายการไฟล์ที่ถูกเลือก"""
-        return [(entry, chk) for var, entry, chk in self.file_checkboxes if var.get() == 1]
+        return [(entry, chk) for var, entry, chk, *_ in self.file_checkboxes if var.get() == 1]
 
     def select_all(self):
         """เลือกไฟล์ทั้งหมด"""
-        for var, entry, chk in self.file_checkboxes:
+        for var, entry, chk, *_ in self.file_checkboxes:
             if chk.winfo_exists() and chk.cget("state") != "disabled":
                 var.set(1)
 
     def deselect_all(self):
         """ยกเลิกการเลือกไฟล์ทั้งหมด"""
-        for var, entry, chk in self.file_checkboxes:
+        for var, entry, chk, *_ in self.file_checkboxes:
             if chk.winfo_exists() and chk.cget("state") != "disabled":
                 var.set(0)
 
@@ -83,7 +84,7 @@ class FileList(ctk.CTkScrollableFrame):
         try:
             if chk_widget and chk_widget.winfo_exists():
                 chk_widget.configure(state="disabled", text_color="gray")
-                for v, entry, chk in self.file_checkboxes:
+                for v, entry, chk, *_ in self.file_checkboxes:
                     if chk == chk_widget:
                         v.set(0)
                         break
@@ -91,32 +92,25 @@ class FileList(ctk.CTkScrollableFrame):
             logging.error(f"Error disabling checkbox: {e}")
 
     def set_file_uploaded(self, file_path):
-        """เปลี่ยนชื่อไฟล์เป็นสีเทาเมื่ออัปโหลดแล้ว"""
-        for var, (fpath, logic_type), chk in self.file_checkboxes:
+        """เปลี่ยน type_label และชื่อไฟล์เป็นสีเทาเมื่ออัปโหลดแล้ว"""
+        for var, (fpath, logic_type), chk, type_label, filename_label in self.file_checkboxes:
             if os.path.basename(fpath) == os.path.basename(file_path):
-                parent = chk.master
-                for widget in parent.winfo_children():
-                    if isinstance(widget, ctk.CTkLabel) and widget.cget("text") == os.path.basename(file_path):
-                        widget.configure(text_color="#888888")  # สีเทา
-                        break
+                # เปลี่ยนสี type_label และ filename_label เป็นสีเทา
+                type_label.configure(text_color="#888888")
+                filename_label.configure(text_color="#888888")
+                break
 
     def disable_all_checkboxes(self):
         """ปิดการใช้งานช่องติ๊กทั้งหมดชั่วคราว"""
-        for var, entry, chk in self.file_checkboxes:
+        for var, entry, chk, *_ in self.file_checkboxes:
             if chk.winfo_exists() and chk.cget("state") != "disabled":
                 chk.configure(state="disabled")
 
     def enable_all_checkboxes(self):
         """เปิดการใช้งานช่องติ๊กทั้งหมด (ยกเว้นไฟล์ที่อัปโหลดแล้ว)"""
-        for var, (file_path, logic_type), chk in self.file_checkboxes:
+        for var, _, chk, _, filename_label in self.file_checkboxes:
             if chk.winfo_exists() and chk.cget("state") == "disabled":
-                # เปิดเฉพาะไฟล์ที่ยังไม่ถูกอัปโหลด (ชื่อไฟล์ไม่เป็นสีเทา)
-                parent = chk.master
-                is_uploaded = False
-                for widget in parent.winfo_children():
-                    if isinstance(widget, ctk.CTkLabel) and widget.cget("text") == os.path.basename(file_path):
-                        if widget.cget("text_color") == "#888888":
-                            is_uploaded = True
-                        break
+                # เปิดเฉพาะไฟล์ที่ยังไม่ถูกอัปโหลด (เช็คจากสีของ filename_label)
+                is_uploaded = filename_label.cget("text_color") == "#888888"
                 if not is_uploaded:
                     chk.configure(state="normal")

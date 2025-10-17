@@ -106,8 +106,9 @@ class PermissionCheckerService:
                 'missing_optional': []
             }
         
-        self.log_callback("🔐 Starting SQL Server permission check...")
-        
+        # ไม่แสดงข้อความ "Starting SQL Server permission check" ใน GUI
+        # self.log_callback("Starting SQL Server permission check...")
+
         results = {
             'success': True,
             'user_info': {},
@@ -116,49 +117,52 @@ class PermissionCheckerService:
             'missing_optional': [],
             'recommendations': []
         }
-        
+
         try:
             # ตรวจสอบข้อมูลผู้ใช้
             results['user_info'] = self._get_user_info()
-            
-            # ตรวจสอบแต่ละสิทธิ์
+
+            # ตรวจสอบแต่ละสิทธิ์ (ไม่แสดงข้อความแต่ละสิทธิ์ใน GUI)
             for permission in self.required_permissions:
                 try:
                     has_permission = permission['test_query'](schema_name)
-                    
+
                     permission_result = {
                         'name': permission['name'],
                         'description': permission['description'],
                         'granted': has_permission,
                         'critical': permission['critical']
                     }
-                    
+
                     results['permissions'].append(permission_result)
-                    
+
                     if not has_permission:
                         if permission['critical']:
                             results['missing_critical'].append(permission['name'])
                         else:
                             results['missing_optional'].append(permission['name'])
-                    
-                    status = "✅" if has_permission else ("❌" if permission['critical'] else "⚠️")
-                    self.log_callback(f"  {status} {permission['name']}: {permission['description']}")
-                    
+
+                    # ไม่แสดงข้อความแต่ละสิทธิ์ใน GUI
+                    # status = "✅" if has_permission else ("❌" if permission['critical'] else "⚠️")
+                    # self.log_callback(f"  {status} {permission['name']}: {permission['description']}")
+
                 except Exception as e:
                     self.logger.error(f"Error testing {permission['name']}: {e}")
                     results['missing_critical'].append(permission['name'])
-                    self.log_callback(f"  ❌ {permission['name']}: Cannot test - {e}")
-            
-            # สรุปผล
+                    # ไม่แสดง error ใน GUI
+                    # self.log_callback(f"  {permission['name']}: Cannot test - {e}")
+
+            # ไม่แสดงสรุปผลใน GUI
+            # if results['missing_critical']:
+            #     results['success'] = False
+            #     results['recommendations'] = self._generate_recommendations(results)
+            # else:
+            #     if results['missing_optional']:
+            #         pass
+
             if results['missing_critical']:
                 results['success'] = False
                 results['recommendations'] = self._generate_recommendations(results)
-                self.log_callback(f"\n❌ Missing critical permissions: {', '.join(results['missing_critical'])}")
-            else:
-                self.log_callback("\n✅ User has sufficient permissions for application use")
-                
-                if results['missing_optional']:
-                    self.log_callback(f"⚠️ Missing optional (non-critical) permissions: {', '.join(results['missing_optional'])}")
             
         except Exception as e:
             results['success'] = False
