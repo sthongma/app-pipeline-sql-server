@@ -23,10 +23,11 @@ warnings.filterwarnings("ignore", "Workbook contains no default style", UserWarn
 # Setup paths for imports
 import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
+addon_dir = os.path.dirname(current_dir)  # addons/
+app_root_dir = os.path.dirname(addon_dir)  # app root
 
 # Import main program services first (before local services to avoid namespace conflict)
-sys.path.insert(0, parent_dir)
+sys.path.insert(0, app_root_dir)
 from services.file.file_reader_service import FileReaderService  
 from constants import PathConstants
 from config.json_manager import json_manager

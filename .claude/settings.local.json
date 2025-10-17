@@ -5,7 +5,9 @@
       "Bash(python -m py_compile:*)",
       "Bash(tree:*)",
       "Bash(dir:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(git mv:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

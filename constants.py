@@ -94,12 +94,15 @@ class AppConstants:
 # === PATH CONSTANTS ===
 class PathConstants:
     """Path and file constants"""
-    
+
+    # Base directory (where this constants.py file is located)
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
     # Configuration files (sql_config.json no longer used - using environment variables)
-    CONFIG_DIR = "config"
+    CONFIG_DIR = os.path.join(_BASE_DIR, "config")
     COLUMN_SETTINGS_FILE = os.path.join(CONFIG_DIR, "column_settings.json")
     DTYPE_SETTINGS_FILE = os.path.join(CONFIG_DIR, "dtype_settings.json")
-    
+
     # Default search path
     DEFAULT_SEARCH_PATH = os.path.join(os.path.expanduser("~"), "Downloads")
     

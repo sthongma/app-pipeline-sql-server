@@ -25,7 +25,9 @@ except ImportError:
 
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent))
+# Add app root to path (go up from services -> column_mapper -> addons -> app_root)
+app_root = Path(__file__).parent.parent.parent.parent
+sys.path.append(str(app_root))
 
 from constants import PathConstants
 
