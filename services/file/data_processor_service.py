@@ -18,7 +18,8 @@ from sqlalchemy.types import (
     NVARCHAR, SmallInteger, Text
 )
 
-from constants import PathConstants
+from constants import PathConstants, ProcessingConstants
+from services.settings_manager import settings_manager
 
 
 class DataProcessorService:
@@ -41,12 +42,12 @@ class DataProcessorService:
         """
         self.log_callback = log_callback if log_callback else print
 
-        # Settings cache (เก็บ dtype conversion และ timestamp)
+        # ใช้ SettingsManager singleton แทน local cache
+        self._settings_manager = settings_manager
+
+        # Cache สำหรับ dtype conversion (เก็บเฉพาะ conversion results)
         self._settings_cache: Dict[str, Any] = {}
         self._cache_lock = threading.Lock()
-        self._file_timestamps: Dict[str, float] = {}
-
-        self.load_settings()
 
     def log_with_time(self, message: str, show_time: bool = True) -> None:
         """
@@ -64,57 +65,38 @@ class DataProcessorService:
 
         self.log_callback(formatted_message)
 
+    @property
+    def column_settings(self) -> Dict[str, Any]:
+        """Get column settings from SettingsManager (auto-reloads if changed)"""
+        return self._settings_manager.get_column_settings()
+
+    @column_settings.setter
+    def column_settings(self, value: Dict[str, Any]) -> None:
+        """Set column settings (saves to SettingsManager)"""
+        self._settings_manager.save_column_settings(value)
+
+    @property
+    def dtype_settings(self) -> Dict[str, Any]:
+        """Get dtype settings from SettingsManager (auto-reloads if changed)"""
+        return self._settings_manager.get_dtype_settings()
+
+    @dtype_settings.setter
+    def dtype_settings(self, value: Dict[str, Any]) -> None:
+        """Set dtype settings (saves to SettingsManager)"""
+        self._settings_manager.save_dtype_settings(value)
+
     def load_settings(self, force_reload: bool = False) -> None:
         """
-        Load column and data type settings
+        Load column and data type settings (ใช้ SettingsManager)
 
         Args:
             force_reload: บังคับโหลดใหม่แม้ว่าไฟล์ไม่เปลี่ยน (default: False)
         """
-        with self._cache_lock:
-            try:
-                # ตรวจสอบ timestamp ของไฟล์ column_settings
-                settings_file = PathConstants.COLUMN_SETTINGS_FILE
-                need_reload_column = force_reload
-
-                if os.path.exists(settings_file):
-                    current_mtime = os.path.getmtime(settings_file)
-                    cached_mtime = self._file_timestamps.get('column_settings', 0)
-
-                    if current_mtime > cached_mtime or force_reload:
-                        need_reload_column = True
-                        with open(settings_file, 'r', encoding='utf-8') as f:
-                            self.column_settings = json.load(f)
-                        self._file_timestamps['column_settings'] = current_mtime
-                        # Clear dtype cache เมื่อ column settings เปลี่ยน
-                        self._settings_cache = {k: v for k, v in self._settings_cache.items() if not k.startswith('dtypes_')}
-                else:
-                    self.column_settings = {}
-                    self._file_timestamps['column_settings'] = 0
-
-                # ตรวจสอบ timestamp ของไฟล์ dtype_settings
-                dtype_file = PathConstants.DTYPE_SETTINGS_FILE
-                need_reload_dtype = force_reload
-
-                if os.path.exists(dtype_file):
-                    current_mtime = os.path.getmtime(dtype_file)
-                    cached_mtime = self._file_timestamps.get('dtype_settings', 0)
-
-                    if current_mtime > cached_mtime or force_reload:
-                        need_reload_dtype = True
-                        with open(dtype_file, 'r', encoding='utf-8') as f:
-                            self.dtype_settings = json.load(f)
-                        self._file_timestamps['dtype_settings'] = current_mtime
-                        # Clear dtype cache เมื่อ dtype settings เปลี่ยน
-                        self._settings_cache = {k: v for k, v in self._settings_cache.items() if not k.startswith('dtypes_')}
-                else:
-                    self.dtype_settings = {}
-                    self._file_timestamps['dtype_settings'] = 0
-
-            except Exception:
-                self.column_settings = {}
-                self.dtype_settings = {}
-                self._file_timestamps = {}
+        if force_reload:
+            self._settings_manager.reload_all(force=True)
+            # Clear dtype conversion cache เมื่อ force reload
+            with self._cache_lock:
+                self._settings_cache = {k: v for k, v in self._settings_cache.items() if not k.startswith('dtypes_')}
 
     def _convert_dtype_to_sqlalchemy(self, dtype_str):
         """Convert string dtype to SQLAlchemy type object (cached)"""
@@ -294,129 +276,163 @@ class DataProcessorService:
         
         return validation_report
 
+    def _get_series_row_counts(self, series) -> tuple:
+        """Get row counts for validation"""
+        total_rows = len(series)
+        non_null_rows = series.notna().sum()
+        null_rows = total_rows - non_null_rows
+        return total_rows, non_null_rows, null_rows
+
+    def _validate_numeric_column(self, series, expected_dtype, total_rows) -> dict:
+        """Validate numeric column data"""
+        numeric_series = pd.to_numeric(series, errors='coerce')
+        invalid_mask = numeric_series.isna() & series.notna()
+        invalid_count = invalid_mask.sum()
+
+        if invalid_count == 0:
+            return {}
+
+        invalid_examples = series.loc[invalid_mask].unique()[:3]
+        problem_rows = series.index[invalid_mask].tolist()[:5]
+
+        return {
+            'type': 'numeric_validation_error',
+            'expected_type': str(expected_dtype),
+            'current_type': str(series.dtype),
+            'invalid_count': invalid_count,
+            'total_rows': total_rows,
+            'percentage': round((invalid_count / total_rows) * 100, 2),
+            'examples': [str(x) for x in invalid_examples],
+            'problem_rows': [r + 2 for r in problem_rows],  # +2 สำหรับ header
+            'summary': f"Found non-numeric data {invalid_count:,} rows ({round((invalid_count / total_rows) * 100, 2)}%)"
+        }
+
+    def _get_date_format_setting(self) -> str:
+        """Get date format setting from dtype_settings"""
+        date_format = 'UK'  # default
+        try:
+            if logic_type in self.dtype_settings:
+                date_format = self.dtype_settings[logic_type].get('_date_format', 'UK')
+        except:
+            pass
+        return date_format
+
+    def _validate_date_column(self, series, expected_dtype, total_rows) -> dict:
+        """Validate date/datetime column data"""
+        date_format = self._get_date_format_setting()
+
+        def parse_date_safe(val):
+            try:
+                if pd.isna(val) or val == '':
+                    return pd.NaT
+                # ใช้การตั้งค่า date format
+                dayfirst = (date_format == 'UK')
+                return parser.parse(str(val), dayfirst=dayfirst)
+            except:
+                return pd.NaT
+
+        date_series = series.apply(parse_date_safe)
+        invalid_mask = date_series.isna() & series.notna()
+        invalid_count = invalid_mask.sum()
+
+        if invalid_count == 0:
+            return {}
+
+        invalid_examples = series.loc[invalid_mask].unique()[:3]
+        problem_rows = series.index[invalid_mask].tolist()[:5]
+
+        return {
+            'type': 'date_validation_error',
+            'expected_type': str(expected_dtype),
+            'current_type': str(series.dtype),
+            'date_format_used': date_format,
+            'invalid_count': invalid_count,
+            'total_rows': total_rows,
+            'percentage': round((invalid_count / total_rows) * 100, 2),
+            'examples': [str(x) for x in invalid_examples],
+            'problem_rows': [r + 2 for r in problem_rows],  # +2 สำหรับ header
+            'summary': f"Found invalid dates {invalid_count:,} rows ({round((invalid_count / total_rows) * 100, 2)}%) using {date_format} format"
+        }
+
+    def _validate_string_column(self, series, expected_dtype, total_rows) -> dict:
+        """Validate string column length"""
+        max_length = expected_dtype.length if hasattr(expected_dtype, 'length') else 255
+
+        # หาข้อมูลที่ยาวเกินกำหนด
+        string_series = series.astype(str)
+        too_long_mask = string_series.str.len() > max_length
+        too_long_count = too_long_mask.sum()
+
+        if too_long_count == 0:
+            return {}
+
+        too_long_examples = string_series.loc[too_long_mask].str[:50].unique()[:3]  # แสดงแค่ 50 ตัวอักษรแรก
+        actual_lengths = string_series.loc[too_long_mask].str.len().unique()[:5]
+        max_actual_length = string_series.str.len().max()
+        problem_rows = series.index[too_long_mask].tolist()[:5]
+
+        return {
+            'type': 'string_length_error',
+            'expected_type': f"NVARCHAR({max_length})",
+            'max_allowed_length': max_length,
+            'max_actual_length': max_actual_length,
+            'too_long_count': too_long_count,
+            'total_rows': total_rows,
+            'percentage': round((too_long_count / total_rows) * 100, 2),
+            'examples': [f"{ex}... (length: {len(string_series.loc[string_series.str.startswith(ex[:10])].iloc[0])})" for ex in too_long_examples],
+            'actual_lengths': sorted(actual_lengths, reverse=True),
+            'problem_rows': [r + 2 for r in problem_rows],
+            'summary': f"Found strings exceeding {max_length} chars: {too_long_count:,} rows ({round((too_long_count / total_rows) * 100, 2)}%) Max length: {max_actual_length}"
+        }
+
+    def _check_high_null_percentage(self, null_rows, total_rows, threshold=ProcessingConstants.NULL_WARNING_THRESHOLD) -> dict:
+        """Check if null percentage exceeds threshold"""
+        if null_rows == 0:
+            return {}
+
+        null_percentage = round((null_rows / total_rows) * 100, 2)
+        if null_percentage <= threshold:
+            return {}
+
+        return {
+            'type': 'high_null_percentage',
+            'null_count': null_rows,
+            'total_rows': total_rows,
+            'percentage': null_percentage,
+            'summary': f"High number of nulls {null_rows:,} rows ({null_percentage}%)"
+        }
+
     def _validate_column_data_type(self, series, col_name, expected_dtype):
         """Validate specific column data types"""
         issues = {}
-        
+
         try:
-            total_rows = len(series)
-            non_null_rows = series.notna().sum()
-            null_rows = total_rows - non_null_rows
-            
+            total_rows, non_null_rows, null_rows = self._get_series_row_counts(series)
+
             if isinstance(expected_dtype, (Integer, Float, DECIMAL, SmallInteger)):
-                # ตรวจสอบข้อมูลตัวเลข
-                numeric_series = pd.to_numeric(series, errors='coerce')
-                invalid_mask = numeric_series.isna() & series.notna()
-                invalid_count = invalid_mask.sum()
-                
-                if invalid_count > 0:
-                    invalid_examples = series.loc[invalid_mask].unique()[:3]
-                    problem_rows = series.index[invalid_mask].tolist()[:5]
-                    
-                    issues = {
-                        'type': 'numeric_validation_error',
-                        'expected_type': str(expected_dtype),
-                        'current_type': str(series.dtype),
-                        'invalid_count': invalid_count,
-                        'total_rows': total_rows,
-                        'percentage': round((invalid_count / total_rows) * 100, 2),
-                        'examples': [str(x) for x in invalid_examples],
-                        'problem_rows': [r + 2 for r in problem_rows],  # +2 สำหรับ header
-                        'summary': f"Found non-numeric data {invalid_count:,} rows ({round((invalid_count / total_rows) * 100, 2)}%)"
-                    }
-                    
+                issues = self._validate_numeric_column(series, expected_dtype, total_rows)
+
             elif isinstance(expected_dtype, (DATE, DateTime)):
-                # ตรวจสอบข้อมูลวันที่
-                # โหลดการตั้งค่า date format
-                date_format = 'UK'  # default
-                try:
-                    if logic_type in self.dtype_settings:
-                        date_format = self.dtype_settings[logic_type].get('_date_format', 'UK')
-                except:
-                    pass
-                
-                def parse_date_safe(val):
-                    try:
-                        if pd.isna(val) or val == '':
-                            return pd.NaT
-                        # ใช้การตั้งค่า date format
-                        dayfirst = (date_format == 'UK')
-                        return parser.parse(str(val), dayfirst=dayfirst)
-                    except:
-                        return pd.NaT
-                
-                date_series = series.apply(parse_date_safe)
-                invalid_mask = date_series.isna() & series.notna()
-                invalid_count = invalid_mask.sum()
-                
-                if invalid_count > 0:
-                    invalid_examples = series.loc[invalid_mask].unique()[:3]
-                    problem_rows = series.index[invalid_mask].tolist()[:5]
-                    
-                    issues = {
-                        'type': 'date_validation_error',
-                        'expected_type': str(expected_dtype),
-                        'current_type': str(series.dtype),
-                        'date_format_used': date_format,
-                        'invalid_count': invalid_count,
-                        'total_rows': total_rows,
-                        'percentage': round((invalid_count / total_rows) * 100, 2),
-                        'examples': [str(x) for x in invalid_examples],
-                        'problem_rows': [r + 2 for r in problem_rows],  # +2 สำหรับ header
-                        'summary': f"Found invalid dates {invalid_count:,} rows ({round((invalid_count / total_rows) * 100, 2)}%) using {date_format} format"
-                    }
-                    
+                issues = self._validate_date_column(series, expected_dtype, total_rows)
+
             elif isinstance(expected_dtype, NVARCHAR):
-                # ตรวจสอบความยาวของ string
-                max_length = expected_dtype.length if hasattr(expected_dtype, 'length') else 255
-                
-                # หาข้อมูลที่ยาวเกินกำหนด
-                string_series = series.astype(str)
-                too_long_mask = string_series.str.len() > max_length
-                too_long_count = too_long_mask.sum()
-                
-                if too_long_count > 0:
-                    too_long_examples = string_series.loc[too_long_mask].str[:50].unique()[:3]  # แสดงแค่ 50 ตัวอักษรแรก
-                    actual_lengths = string_series.loc[too_long_mask].str.len().unique()[:5]
-                    max_actual_length = string_series.str.len().max()
-                    problem_rows = series.index[too_long_mask].tolist()[:5]
-                    
-                    issues = {
-                        'type': 'string_length_error',
-                        'expected_type': f"NVARCHAR({max_length})",
-                        'max_allowed_length': max_length,
-                        'max_actual_length': max_actual_length,
-                        'too_long_count': too_long_count,
-                        'total_rows': total_rows,
-                        'percentage': round((too_long_count / total_rows) * 100, 2),
-                        'examples': [f"{ex}... (length: {len(string_series.loc[string_series.str.startswith(ex[:10])].iloc[0])})" for ex in too_long_examples],
-                        'actual_lengths': sorted(actual_lengths, reverse=True),
-                        'problem_rows': [r + 2 for r in problem_rows],
-                        'summary': f"Found strings exceeding {max_length} chars: {too_long_count:,} rows ({round((too_long_count / total_rows) * 100, 2)}%) Max length: {max_actual_length}"
-                    }
+                issues = self._validate_string_column(series, expected_dtype, total_rows)
+
             elif isinstance(expected_dtype, Text):
                 # ข้ามการตรวจสอบความยาวสำหรับ Text() (NVARCHAR(MAX))
                 pass
-            
+
             # เพิ่มข้อมูลเกี่ยวกับ null values ถ้ามี
-            if null_rows > 0 and not issues:
-                null_percentage = round((null_rows / total_rows) * 100, 2)
-                if null_percentage > 50:  # เตือนถ้า null มากกว่า 50%
-                    issues = {
-                        'type': 'high_null_percentage',
-                        'null_count': null_rows,
-                        'total_rows': total_rows,
-                        'percentage': null_percentage,
-                        'summary': f"High number of nulls {null_rows:,} rows ({null_percentage}%)"
-                    }
-        
+            if not issues:
+                issues = self._check_high_null_percentage(null_rows, total_rows)
+
         except Exception as e:
             issues = {
                 'type': 'validation_error',
                 'error': str(e),
                 'summary': f"An error occurred during validation: {str(e)}"
             }
-        
+
         return issues
 
     def generate_pre_processing_report(self, df, logic_type):

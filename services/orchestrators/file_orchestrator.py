@@ -59,16 +59,16 @@ class FileOrchestrator:
         self.file_manager = FileManagementService(search_path)
         
         # อัปเดตข้อมูลจาก JSON Manager
+        # Note: Settings are now managed by SettingsManager singleton
+        # These assignments trigger the property setters which save to SettingsManager
         column_settings = load_column_settings()
         dtype_settings = load_dtype_settings()
-        
+
         self.file_reader.column_settings = column_settings
         self.file_reader.dtype_settings = dtype_settings
-        self.file_reader._settings_loaded = True
-        
-        self.data_processor.column_settings = column_settings  
+
+        self.data_processor.column_settings = column_settings
         self.data_processor.dtype_settings = dtype_settings
-        self.data_processor._settings_loaded = True
         
         # สร้าง performance optimizer
         self.performance_optimizer = PerformanceOptimizer(self.log_callback)

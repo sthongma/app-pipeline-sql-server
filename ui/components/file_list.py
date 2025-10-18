@@ -3,6 +3,7 @@ import customtkinter as ctk
 from tkinter import ttk
 from datetime import datetime
 import logging
+from constants import UIConstants
 
 class FileList(ctk.CTkScrollableFrame):
     def __init__(self, master, **kwargs):
@@ -41,7 +42,7 @@ class FileList(ctk.CTkScrollableFrame):
         type_label = ctk.CTkLabel(
             frame,
             text=logic_type.upper(),
-            text_color="#2B86F5",
+            text_color=UIConstants.COLOR_PRIMARY_BLUE,
         )
         type_label.grid(row=0, column=1, padx=(0, 20), sticky="w")
         
@@ -56,7 +57,7 @@ class FileList(ctk.CTkScrollableFrame):
         time_label = ctk.CTkLabel(
             frame,
             text=f"Created at: {created_time_str}",
-            text_color="#7a7a7a",
+            text_color=UIConstants.COLOR_SECONDARY_GRAY,
         )
         time_label.grid(row=0, column=3, padx=(10, 5), sticky="e")
 
@@ -96,8 +97,8 @@ class FileList(ctk.CTkScrollableFrame):
         for var, (fpath, logic_type), chk, type_label, filename_label in self.file_checkboxes:
             if os.path.basename(fpath) == os.path.basename(file_path):
                 # เปลี่ยนสี type_label และ filename_label เป็นสีเทา
-                type_label.configure(text_color="#888888")
-                filename_label.configure(text_color="#888888")
+                type_label.configure(text_color=UIConstants.COLOR_TEXT_LIGHT)
+                filename_label.configure(text_color=UIConstants.COLOR_TEXT_LIGHT)
                 break
 
     def disable_all_checkboxes(self):
@@ -111,6 +112,6 @@ class FileList(ctk.CTkScrollableFrame):
         for var, _, chk, _, filename_label in self.file_checkboxes:
             if chk.winfo_exists() and chk.cget("state") == "disabled":
                 # เปิดเฉพาะไฟล์ที่ยังไม่ถูกอัปโหลด (เช็คจากสีของ filename_label)
-                is_uploaded = filename_label.cget("text_color") == "#888888"
+                is_uploaded = filename_label.cget("text_color") == UIConstants.COLOR_TEXT_LIGHT
                 if not is_uploaded:
                     chk.configure(state="normal")

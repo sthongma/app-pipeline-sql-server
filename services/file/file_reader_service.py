@@ -9,11 +9,13 @@ import json
 import os
 import re
 import threading
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 import pandas as pd
 
 from constants import PathConstants
+from utils.file_helpers import detect_file_extension_type, read_csv_with_encoding_fallback
+from services.settings_manager import settings_manager
 
 
 class FileReaderService:
@@ -44,60 +46,38 @@ class FileReaderService:
         # ตั้งค่า log callback
         self.log_callback = log_callback if log_callback else print
 
-        # Cache สำหรับการตั้งค่า (เก็บ timestamp เพื่อตรวจสอบการเปลี่ยนแปลง)
-        self._settings_cache: Dict[str, Any] = {}
-        self._cache_lock = threading.Lock()
-        self._file_timestamps: Dict[str, float] = {}
+        # ใช้ SettingsManager singleton แทน local cache
+        self._settings_manager = settings_manager
 
-        self.load_settings()
+    @property
+    def column_settings(self) -> Dict[str, Any]:
+        """Get column settings from SettingsManager (auto-reloads if changed)"""
+        return self._settings_manager.get_column_settings()
+
+    @column_settings.setter
+    def column_settings(self, value: Dict[str, Any]) -> None:
+        """Set column settings (saves to SettingsManager)"""
+        self._settings_manager.save_column_settings(value)
+
+    @property
+    def dtype_settings(self) -> Dict[str, Any]:
+        """Get dtype settings from SettingsManager (auto-reloads if changed)"""
+        return self._settings_manager.get_dtype_settings()
+
+    @dtype_settings.setter
+    def dtype_settings(self, value: Dict[str, Any]) -> None:
+        """Set dtype settings (saves to SettingsManager)"""
+        self._settings_manager.save_dtype_settings(value)
 
     def load_settings(self, force_reload: bool = False) -> None:
         """
-        โหลดการตั้งค่าคอลัมน์และประเภทข้อมูล
+        โหลดการตั้งค่าคอลัมน์และประเภทข้อมูล (ใช้ SettingsManager)
 
         Args:
             force_reload: บังคับโหลดใหม่แม้ว่าไฟล์ไม่เปลี่ยน (default: False)
         """
-        with self._cache_lock:
-            try:
-                # ตรวจสอบ timestamp ของไฟล์ column_settings
-                settings_file = PathConstants.COLUMN_SETTINGS_FILE
-                need_reload_column = force_reload
-
-                if os.path.exists(settings_file):
-                    current_mtime = os.path.getmtime(settings_file)
-                    cached_mtime = self._file_timestamps.get('column_settings', 0)
-
-                    if current_mtime > cached_mtime or force_reload:
-                        need_reload_column = True
-                        with open(settings_file, 'r', encoding='utf-8') as f:
-                            self.column_settings = json.load(f)
-                        self._file_timestamps['column_settings'] = current_mtime
-                else:
-                    self.column_settings = {}
-                    self._file_timestamps['column_settings'] = 0
-
-                # ตรวจสอบ timestamp ของไฟล์ dtype_settings
-                dtype_file = PathConstants.DTYPE_SETTINGS_FILE
-                need_reload_dtype = force_reload
-
-                if os.path.exists(dtype_file):
-                    current_mtime = os.path.getmtime(dtype_file)
-                    cached_mtime = self._file_timestamps.get('dtype_settings', 0)
-
-                    if current_mtime > cached_mtime or force_reload:
-                        need_reload_dtype = True
-                        with open(dtype_file, 'r', encoding='utf-8') as f:
-                            self.dtype_settings = json.load(f)
-                        self._file_timestamps['dtype_settings'] = current_mtime
-                else:
-                    self.dtype_settings = {}
-                    self._file_timestamps['dtype_settings'] = 0
-
-            except Exception:
-                self.column_settings = {}
-                self.dtype_settings = {}
-                self._file_timestamps = {}
+        if force_reload:
+            self._settings_manager.reload_all(force=True)
 
     def set_search_path(self, path):
         """ตั้งค่า path สำหรับค้นหาไฟล์ Excel"""
@@ -165,8 +145,100 @@ class FileReaderService:
         
         return normalized
 
-    def detect_file_type(self, file_path):
-        """ตรวจสอบประเภทของไฟล์ (แบบ dynamic, normalize header) รองรับทั้ง xlsx/xls/csv และ identity mapping"""
+    def _read_file_peek(self, file_path: str, nrows: int = 2) -> Optional[pd.DataFrame]:
+        """อ่านส่วนบนของไฟล์เพื่อดูหัวตาราง"""
+        file_type = detect_file_extension_type(file_path)
+        if file_type == 'csv':
+            return pd.read_csv(file_path, header=None, nrows=nrows, encoding='utf-8')
+        elif file_type == 'excel_xls':
+            return pd.read_excel(file_path, header=None, nrows=nrows, engine='xlrd')
+        else:
+            return pd.read_excel(file_path, header=None, nrows=nrows)
+
+    def _extract_normalized_headers(self, df_peek: pd.DataFrame, row: int) -> set:
+        """แปลง header row ให้เป็น normalized set"""
+        return set(self.normalize_col(col) for col in df_peek.iloc[row].values if not pd.isna(col))
+
+    def _calculate_match_threshold(self, total_columns: int) -> float:
+        """คำนวณ threshold สำหรับการจับคู่ตามจำนวนคอลัมน์"""
+        if total_columns >= 50:
+            return max(0.1, 5/total_columns)
+        elif total_columns >= 20:
+            return max(0.2, 5/total_columns)
+        else:
+            return 0.3
+
+    def _calculate_match_score_for_mapping(
+        self,
+        header_row: set,
+        mapping: dict
+    ) -> Tuple[float, Optional[str]]:
+        """
+        คำนวณ score สำหรับ mapping หนึ่งตัว
+
+        Returns:
+            Tuple of (score, logic_type or None)
+        """
+        if not mapping:
+            return 0.0, None
+
+        required_keys = set(self.normalize_col(c) for c in mapping.keys() if c)
+        required_vals = set(self.normalize_col(c) for c in mapping.values() if c)
+
+        # ตรวจสอบว่าเป็น identity mapping หรือไม่
+        is_identity_mapping = (required_keys == required_vals)
+
+        if is_identity_mapping:
+            # สำหรับ identity mapping ใช้การจับคู่แบบตรง
+            match_count = len(header_row & required_keys)
+            total_required = len(required_keys)
+
+            if total_required > 0:
+                score = match_count / total_required
+                min_threshold = self._calculate_match_threshold(total_required)
+
+                if score >= min_threshold:
+                    return score, None
+        else:
+            # สำหรับ mapping ปกติ ตรวจสอบทั้ง keys และ values
+            keys_match = len(header_row & required_keys)
+            vals_match = len(header_row & required_vals)
+
+            # เลือกทิศทางที่มี match มากกว่า
+            if keys_match > vals_match:
+                score = keys_match / len(required_keys) if required_keys else 0
+                total_keys = len(required_keys)
+            else:
+                score = vals_match / len(required_vals) if required_vals else 0
+                total_keys = len(required_vals)
+
+            min_threshold = self._calculate_match_threshold(total_keys)
+
+            if score >= min_threshold:
+                return score, None
+
+        return 0.0, None
+
+    def _find_best_matching_type(self, header_row: set) -> Optional[str]:
+        """หา logic_type ที่ตรงกันมากที่สุดจาก header row"""
+        best_match = None
+        best_score = 0.0
+
+        for logic_type, mapping in self.column_settings.items():
+            score, _ = self._calculate_match_score_for_mapping(header_row, mapping)
+
+            if score > best_score:
+                best_match = logic_type
+                best_score = score
+
+        return best_match
+
+    def detect_file_type(self, file_path: str) -> Optional[str]:
+        """
+        ตรวจสอบประเภทของไฟล์ (Refactored into smaller methods)
+
+        รองรับทั้ง xlsx/xls/csv และ identity mapping
+        """
         try:
             # โหลด settings ล่าสุดก่อนใช้งาน
             self.load_settings()
@@ -175,85 +247,24 @@ class FileReaderService:
                 return None
 
             # อ่านหัวตารางบางส่วนเพื่อเดาประเภทไฟล์
-            if file_path.lower().endswith('.csv'):
-                df_peek = pd.read_csv(file_path, header=None, nrows=2, encoding='utf-8')
-            elif file_path.lower().endswith('.xls'):
-                # สำหรับไฟล์ .xls ใช้ xlrd engine
-                df_peek = pd.read_excel(file_path, header=None, nrows=2, engine='xlrd')
-            else:
-                # สำหรับไฟล์ .xlsx
-                df_peek = pd.read_excel(file_path, header=None, nrows=2)
+            df_peek = self._read_file_peek(file_path)
+            if df_peek is None:
+                return None
 
             # ตรวจสอบทุก header row ที่เป็นไปได้
             for row in range(min(2, df_peek.shape[0])):
-                header_row = set(self.normalize_col(col) for col in df_peek.iloc[row].values if not pd.isna(col))
-                
+                header_row = self._extract_normalized_headers(df_peek, row)
+
                 # ถ้าไม่มี header ใน row นี้ ข้าม
                 if not header_row:
                     continue
-                
+
                 # หา logic_type ที่ตรงกันมากที่สุด
-                best_match = None
-                best_score = 0
-                
-                for logic_type, mapping in self.column_settings.items():
-                    if not mapping:  # ข้าม mapping ที่ว่าง
-                        continue
-                    
-                    required_keys = set(self.normalize_col(c) for c in mapping.keys() if c)
-                    required_vals = set(self.normalize_col(c) for c in mapping.values() if c)
-                    
-                    # ตรวจสอบว่าเป็น identity mapping หรือไม่
-                    is_identity_mapping = (required_keys == required_vals)
-                    
-                    if is_identity_mapping:
-                        # สำหรับ identity mapping ใช้การจับคู่แบบตรง
-                        match_count = len(header_row & required_keys)
-                        total_required = len(required_keys)
-                        
-                        # ใช้เกณฑ์แบบปรับตัว: อย่างน้อย 5 คอลัมน์ตรง หรือ 10% สำหรับ config ขนาดใหญ่
-                        if total_required > 0:
-                            score = match_count / total_required
-                            if total_required >= 50:
-                                # สำหรับ config ขนาดใหญ่ (50+ คอลัมน์) ใช้เกณฑ์ 10% หรืออย่างน้อย 5 คอลัมน์
-                                min_threshold = max(0.1, 5/total_required)
-                            elif total_required >= 20:
-                                # สำหรับ config ขนาดกลาง (20-49 คอลัมน์) ใช้เกณฑ์ 20% หรืออย่างน้อย 5 คอลัมน์  
-                                min_threshold = max(0.2, 5/total_required)
-                            else:
-                                # สำหรับ config ขนาดเล็ก (< 20 คอลัมน์) ใช้เกณฑ์ 30%
-                                min_threshold = 0.3
-                            
-                            if score >= min_threshold and score > best_score:
-                                best_match = logic_type
-                                best_score = score
-                    else:
-                        # สำหรับ mapping ปกติ ตรวจสอบทั้ง keys และ values
-                        keys_match = len(header_row & required_keys)
-                        vals_match = len(header_row & required_vals)
-                        
-                        # เลือกทิศทางที่มี match มากกว่า
-                        if keys_match > vals_match:
-                            score = keys_match / len(required_keys) if required_keys else 0
-                        else:
-                            score = vals_match / len(required_vals) if required_vals else 0
-                        
-                        # ใช้เกณฑ์แบบปรับตัวเดียวกัน
-                        total_keys = len(required_keys) if keys_match > vals_match else len(required_vals)
-                        if total_keys >= 50:
-                            min_threshold = max(0.1, 5/total_keys)
-                        elif total_keys >= 20:
-                            min_threshold = max(0.2, 5/total_keys)
-                        else:
-                            min_threshold = 0.3
-                            
-                        if score >= min_threshold and score > best_score:
-                            best_match = logic_type
-                            best_score = score
-                
+                best_match = self._find_best_matching_type(header_row)
+
                 if best_match:
                     return best_match
-            
+
             return None
         except Exception:
             return None
@@ -416,23 +427,15 @@ class FileReaderService:
             
             # Auto-detect file type
             if file_type == 'auto':
-                if file_path.lower().endswith('.csv'):
-                    file_type = 'csv'
-                elif file_path.lower().endswith('.xls'):
-                    file_type = 'excel_xls'
-                else:
-                    file_type = 'excel'
+                file_type = detect_file_extension_type(file_path)
             
             # อ่านไฟล์
             if file_type == 'csv':
                 # รองรับไฟล์ภาษาไทย: UTF-8 → cp874 → latin1
-                try:
-                    df = pd.read_csv(file_path, encoding='utf-8')
-                except UnicodeDecodeError:
-                    try:
-                        df = pd.read_csv(file_path, encoding='cp874')
-                    except UnicodeDecodeError:
-                        df = pd.read_csv(file_path, encoding='latin1')
+                success, result = read_csv_with_encoding_fallback(file_path)
+                if not success:
+                    return False, result
+                df = result
             elif file_type == 'excel_xls':
                 # สำหรับไฟล์ .xls ใช้ xlrd engine
                 df = pd.read_excel(file_path, sheet_name=0, engine='xlrd')
@@ -500,13 +503,8 @@ class FileReaderService:
             if not os.path.exists(file_path):
                 return {"error": f"File not found: {file_path}"}
             
-            if file_path.lower().endswith('.csv'):
-                file_type = 'csv'
-            elif file_path.lower().endswith('.xls'):
-                file_type = 'excel_xls'
-            else:
-                file_type = 'excel'
-            
+            file_type = detect_file_extension_type(file_path)
+
             # อ่านแค่ส่วนบน
             if file_type == 'csv':
                 df = pd.read_csv(file_path, nrows=num_rows, encoding='utf-8')
@@ -555,13 +553,8 @@ class FileReaderService:
                 return {"error": f"File not found: {file_path}"}
             
             file_stats = os.stat(file_path)
-            if file_path.lower().endswith('.csv'):
-                file_type = 'csv'
-            elif file_path.lower().endswith('.xls'):
-                file_type = 'excel_xls'
-            else:
-                file_type = 'excel'
-            
+            file_type = detect_file_extension_type(file_path)
+
             # นับจำนวนแถวโดยประมาณ (สำหรับไฟล์ใหญ่)
             try:
                 if file_type == 'csv':

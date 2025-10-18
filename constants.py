@@ -39,22 +39,66 @@ class DatabaseConstants:
 # === FILE PROCESSING CONSTANTS ===
 class FileConstants:
     """File processing constants"""
-    
+
     # Supported file extensions
     SUPPORTED_EXCEL_EXTENSIONS = ['.xlsx', '.xls']
     SUPPORTED_CSV_EXTENSIONS = ['.csv']
     SUPPORTED_EXTENSIONS = SUPPORTED_EXCEL_EXTENSIONS + SUPPORTED_CSV_EXTENSIONS
-    
+
     # File size thresholds (in bytes)
     LARGE_FILE_THRESHOLD = 50 * 1024 * 1024  # 50MB
-    
+
     # Date format options
     DATE_FORMAT_UK = "UK"  # day first
     DATE_FORMAT_US = "US"  # month first
-    
+
     # Column name cleaning patterns
     INVALID_COLUMN_CHARS = r'[\s\W]+'
     REPLACEMENT_CHAR = '_'
+
+
+# === PROCESSING CONSTANTS ===
+class ProcessingConstants:
+    """Data processing and validation constants"""
+
+    # String validation thresholds
+    DEFAULT_STRING_LENGTH = 255
+
+    # Null value thresholds (percentage)
+    NULL_WARNING_THRESHOLD = 50  # Warn if more than 50% nulls
+
+    # Chunk sizes for batch processing
+    CHUNK_SIZE_LARGE = 10000      # Large file processing
+    CHUNK_SIZE_PROCESSING = 5000  # General processing
+
+    # File type detection match thresholds (percentage of matching columns)
+    MATCH_THRESHOLD_PERFECT = 1.0    # 100% match
+    MATCH_THRESHOLD_HIGH = 0.8       # 80% match
+    MATCH_THRESHOLD_MEDIUM = 0.6     # 60% match
+    MATCH_THRESHOLD_LOW = 0.3        # 30% match
+
+
+# === UI CONSTANTS ===
+class UIConstants:
+    """UI color and styling constants"""
+
+    # Primary colors
+    COLOR_PRIMARY_BLUE = "#2B86F5"
+    COLOR_SUCCESS_GREEN = "#41AA41"
+    COLOR_ERROR_RED = "#FF4444"
+    COLOR_WARNING_ORANGE = "#FFA500"
+
+    # Secondary colors
+    COLOR_SECONDARY_GRAY = "#7a7a7a"
+    COLOR_TEXT_LIGHT = "#888888"
+    COLOR_BACKGROUND_DARK = "#2B2B2B"
+
+    # Emoji colors
+    COLOR_EMOJI_SUCCESS = "#41AA41"
+    COLOR_EMOJI_ERROR = "#FF4444"
+    COLOR_EMOJI_WARNING = "#FFA500"
+    COLOR_EMOJI_INFO = "#00BFFF"
+    COLOR_EMOJI_HIGHLIGHT = "#FFD700"
 
 
 # === APPLICATION CONSTANTS ===

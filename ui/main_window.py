@@ -25,10 +25,19 @@ from services.file import FileManagementService
 from config.database import DatabaseConfig
 from constants import AppConstants, DatabaseConstants
 from utils.logger import create_gui_log_handler, setup_file_logging
+from utils.ui_helpers import get_emoji_color_map, setup_emoji_colors, insert_colored_message
+from ui.ui_callbacks import UICallbacks
+from typing import Optional, Dict, Any, Callable
 
 
 class MainWindow(ctk.CTkToplevel):
-    def __init__(self, master=None, preloaded_data=None, ui_progress_callback=None, on_ready_callback=None):
+    def __init__(
+        self,
+        master: Optional[ctk.CTk] = None,
+        preloaded_data: Optional[Dict[str, Any]] = None,
+        ui_progress_callback: Optional[Callable[[str], None]] = None,
+        on_ready_callback: Optional[Callable[[], None]] = None
+    ) -> None:
         super().__init__(master)
 
         # ตั้งค่าหน้าต่างแอปพลิเคชัน
@@ -319,25 +328,33 @@ class MainWindow(ctk.CTkToplevel):
         except Exception as e:
             self.log(f"Error reloading settings: {e}")
     
-    def _get_ui_callbacks(self):
-        """Create dictionary of UI callbacks"""
-        return {
-            'reset_progress': self.progress_bar.reset,
-            'set_progress_status': self.progress_bar.set_status,
-            'update_progress': self.progress_bar.update,
-            'clear_file_list': self.file_list.clear,
-            'add_file_to_list': self.file_list.add_file,
-            'reset_select_all': self.main_tab_ui.reset_select_all,
-            'enable_select_all': self.main_tab_ui.enable_select_all,
-            'update_status': self.status_bar.update_status,
-            'disable_controls': self.main_tab_ui.disable_controls,
-            'enable_controls': self.main_tab_ui.enable_controls,
-            'disable_checkbox': self.file_list.disable_checkbox,
-            'set_file_uploaded': self.file_list.set_file_uploaded
-        }
+    def _get_ui_callbacks(self) -> Dict[str, Callable]:
+        """
+        Create UI callbacks (returns both dict and dataclass for backward compatibility)
+
+        Returns:
+            Dict with UI callback functions (backward compatible)
+        """
+        callbacks = UICallbacks(
+            reset_progress=self.progress_bar.reset,
+            set_progress_status=self.progress_bar.set_status,
+            update_progress=self.progress_bar.update,
+            clear_file_list=self.file_list.clear,
+            add_file_to_list=self.file_list.add_file,
+            reset_select_all=self.main_tab_ui.reset_select_all,
+            enable_select_all=self.main_tab_ui.enable_select_all,
+            update_status=self.status_bar.update_status,
+            disable_controls=self.main_tab_ui.disable_controls,
+            enable_controls=self.main_tab_ui.enable_controls,
+            disable_checkbox=self.file_list.disable_checkbox,
+            set_file_uploaded=self.file_list.set_file_uploaded
+        )
+
+        # Return dict for backward compatibility with existing code
+        return callbacks.to_dict()
     
     # ===== Logging Methods =====
-    def log(self, message):
+    def log(self, message: str) -> None:
         """Standard logging from various GUI components: send to logging system"""
         try:
             logging.info(str(message))
@@ -352,48 +369,6 @@ class MainWindow(ctk.CTkToplevel):
         self.after(0, self._update_textbox, formatted_message)
         self.after(0, self._update_log_textbox, formatted_message)
         
-    def _insert_colored_message(self, text_widget, message, emoji_colors):
-        """ฟังก์ชันกลางสำหรับแทรกข้อความพร้อมสี emoji (DRY principle)"""
-        for char in message:
-            if char in emoji_colors:
-                text_widget.insert("end", char, emoji_colors[char])
-            else:
-                text_widget.insert("end", char)
-
-    def _setup_emoji_colors(self, text_widget):
-        """กำหนดสีสำหรับ emoji (ใช้ร่วมกันได้ทั้ง Main และ Log tab)"""
-        text_widget.tag_config("emoji_success", foreground="#41AA41")    # เขียว
-        text_widget.tag_config("emoji_error", foreground="#FF4444")      # แดง
-        text_widget.tag_config("emoji_warning", foreground="#FFA500")    # ส้ม
-        text_widget.tag_config("emoji_info", foreground="#00BFFF")       # ฟ้า
-        text_widget.tag_config("emoji_search", foreground="#888888")     # เทา
-        text_widget.tag_config("emoji_highlight", foreground="#FFD700")  # ทอง
-        text_widget.tag_config("emoji_phase", foreground="#FF69B4")      # ชมพู
-        text_widget.tag_config("emoji_file", foreground="#00CED1")       # ฟ้าเข้ม
-        text_widget.tag_config("emoji_time", foreground="#9370DB")       # ม่วง
-
-    def _get_emoji_color_map(self):
-        """แมป emoji กับสี (ใช้ร่วมกันได้)"""
-        return {
-            '✅': 'emoji_success',
-            '❌': 'emoji_error',
-            '⚠️': 'emoji_warning',
-            '📊': 'emoji_info',
-            '📁': 'emoji_info',
-            'ℹ️': 'emoji_info',
-            '🔍': 'emoji_search',
-            '🎉': 'emoji_highlight',
-            '📋': 'emoji_phase',
-            '⏳': 'emoji_phase',
-            '📦': 'emoji_file',
-            '📤': 'emoji_file',
-            '⏱️': 'emoji_time',
-            '🔄': 'emoji_phase',
-            '🚀': 'emoji_highlight',
-            '💾': 'emoji_info',
-            '🧹': 'emoji_search',
-            '🏷️': 'emoji_phase',
-        }
 
     def _update_textbox(self, message):
         """Update textbox in main tab with colored emoji"""
@@ -402,11 +377,11 @@ class MainWindow(ctk.CTkToplevel):
 
             # Setup colors ครั้งแรก
             if not hasattr(self, '_emoji_colors_setup_main'):
-                self._setup_emoji_colors(text_widget)
+                setup_emoji_colors(text_widget)
                 self._emoji_colors_setup_main = True
 
             # แทรกข้อความพร้อมสี
-            self._insert_colored_message(text_widget, message, self._get_emoji_color_map())
+            insert_colored_message(text_widget, message, get_emoji_color_map())
             self.textbox.see("end")
         
     def _update_log_textbox(self, message):
