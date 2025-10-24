@@ -149,11 +149,11 @@ class FileReaderService:
         """อ่านส่วนบนของไฟล์เพื่อดูหัวตาราง"""
         file_type = detect_file_extension_type(file_path)
         if file_type == 'csv':
-            return pd.read_csv(file_path, header=None, nrows=nrows, encoding='utf-8')
+            return pd.read_csv(file_path, header=None, nrows=nrows, encoding='utf-8', dtype=str)
         elif file_type == 'excel_xls':
-            return pd.read_excel(file_path, header=None, nrows=nrows, engine='xlrd')
+            return pd.read_excel(file_path, header=None, nrows=nrows, engine='xlrd', dtype=str)
         else:
-            return pd.read_excel(file_path, header=None, nrows=nrows)
+            return pd.read_excel(file_path, header=None, nrows=nrows, dtype=str)
 
     def _extract_normalized_headers(self, df_peek: pd.DataFrame, row: int) -> set:
         """แปลง header row ให้เป็น normalized set"""
@@ -438,10 +438,10 @@ class FileReaderService:
                 df = result
             elif file_type == 'excel_xls':
                 # สำหรับไฟล์ .xls ใช้ xlrd engine
-                df = pd.read_excel(file_path, sheet_name=0, engine='xlrd')
+                df = pd.read_excel(file_path, sheet_name=0, engine='xlrd', dtype=str)
             else:
                 # สำหรับไฟล์ .xlsx
-                df = pd.read_excel(file_path, sheet_name=0)
+                df = pd.read_excel(file_path, sheet_name=0, dtype=str)
             
             if df.empty:
                 return False, "File is empty"
@@ -507,11 +507,11 @@ class FileReaderService:
 
             # อ่านแค่ส่วนบน
             if file_type == 'csv':
-                df = pd.read_csv(file_path, nrows=num_rows, encoding='utf-8')
+                df = pd.read_csv(file_path, nrows=num_rows, encoding='utf-8', dtype=str)
             elif file_type == 'excel_xls':
-                df = pd.read_excel(file_path, sheet_name=0, nrows=num_rows, engine='xlrd')
+                df = pd.read_excel(file_path, sheet_name=0, nrows=num_rows, engine='xlrd', dtype=str)
             else:
-                df = pd.read_excel(file_path, sheet_name=0, nrows=num_rows)
+                df = pd.read_excel(file_path, sheet_name=0, nrows=num_rows, dtype=str)
             
             # ตรวจจับประเภทไฟล์
             detected_type = self.detect_file_type(file_path)
@@ -562,11 +562,11 @@ class FileReaderService:
                         row_count = sum(1 for line in f) - 1  # ลบ header
                 elif file_type == 'excel_xls':
                     # สำหรับ Excel .xls ใช้ xlrd engine
-                    df_shape = pd.read_excel(file_path, sheet_name=0, engine='xlrd').shape
+                    df_shape = pd.read_excel(file_path, sheet_name=0, engine='xlrd', dtype=str).shape
                     row_count = df_shape[0]
                 else:
                     # สำหรับ Excel .xlsx
-                    df_shape = pd.read_excel(file_path, sheet_name=0).shape
+                    df_shape = pd.read_excel(file_path, sheet_name=0, dtype=str).shape
                     row_count = df_shape[0]
             except:
                 row_count = "Cannot count"

@@ -90,12 +90,12 @@ class PerformanceOptimizer:
         """Read small files using standard approach."""
         try:
             if file_type == 'csv':
-                df = pd.read_csv(file_path, header=0, encoding='utf-8')
+                df = pd.read_csv(file_path, header=0, encoding='utf-8', dtype=str)
             elif file_type == 'excel_xls':
-                df = pd.read_excel(file_path, header=0, sheet_name=0, engine='xlrd')
+                df = pd.read_excel(file_path, header=0, sheet_name=0, engine='xlrd', dtype=str)
             else:
-                df = pd.read_excel(file_path, header=0, sheet_name=0, engine='openpyxl')
-            
+                df = pd.read_excel(file_path, header=0, sheet_name=0, engine='openpyxl', dtype=str)
+
             self.log_callback(f"✅ Read File Success: {len(df):,} rows, {len(df.columns)} columns")
             return True, df
             
@@ -179,15 +179,15 @@ class PerformanceOptimizer:
     def _read_csv_chunks(self, file_path: str, encoding: str) -> List[pd.DataFrame]:
         """Read CSV file in chunks with optimized performance."""
         chunks = []
-        
+
         import warnings
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=pd.errors.DtypeWarning)
             # Use optimized chunk size and memory settings
-            chunk_reader = pd.read_csv(file_path, header=0, encoding=encoding, 
+            chunk_reader = pd.read_csv(file_path, header=0, encoding=encoding,
                                      chunksize=self.chunk_size, low_memory=False,
-                                     engine='c')  # Use C engine for better performance
-        
+                                     engine='c', dtype=str)  # Use C engine for better performance, read as string
+
         self.log_callback("💡 Using optimized CSV reader with C engine")
         
         total_processed = 0
@@ -212,38 +212,39 @@ class PerformanceOptimizer:
     def _read_xls_chunks(self, file_path: str) -> List[pd.DataFrame]:
         """Read XLS file in chunks."""
         import xlrd
-        
+
         chunks = []
         workbook = xlrd.open_workbook(file_path)
         worksheet = workbook.sheet_by_index(0)
-        
+
         # Read headers
-        headers = [worksheet.cell_value(0, col_idx) for col_idx in range(worksheet.ncols)]
-        
+        headers = [str(worksheet.cell_value(0, col_idx)) for col_idx in range(worksheet.ncols)]
+
         # Read data in chunks
         chunk_data = []
         for row_idx in range(1, worksheet.nrows):
             if self.cancellation_token.is_set():
                 self.log_callback("❌ Work Cancelled")
                 break
-            
-            row_data = [worksheet.cell_value(row_idx, col_idx) for col_idx in range(worksheet.ncols)]
+
+            # Convert all cell values to string to prevent scientific notation
+            row_data = [str(worksheet.cell_value(row_idx, col_idx)) for col_idx in range(worksheet.ncols)]
             chunk_data.append(row_data)
-            
+
             # Create chunk every chunk_size rows
             if len(chunk_data) >= self.chunk_size:
                 chunk_df = pd.DataFrame(chunk_data, columns=headers)
                 chunks.append(chunk_df)
                 chunk_data = []
-                
+
                 self.log_callback(f"📖 Read Chunk {len(chunks)}: {len(chunk_df):,} rows")
                 gc.collect()
-        
+
         # Add remaining data
         if chunk_data:
             chunk_df = pd.DataFrame(chunk_data, columns=headers)
             chunks.append(chunk_df)
-        
+
         return chunks
     
     def _read_xlsx_chunks(self, file_path: str) -> List[pd.DataFrame]:
@@ -262,20 +263,21 @@ class PerformanceOptimizer:
         self.log_callback(f"📊 Total rows to process: {total_rows:,}")
         
         # Read headers using optimized method
-        headers = [cell.value for cell in next(worksheet.iter_rows(min_row=1, max_row=1))]
-        
+        headers = [str(cell.value) if cell.value is not None else '' for cell in next(worksheet.iter_rows(min_row=1, max_row=1))]
+
         # Read data in larger chunks with batch processing
         chunk_data = []
         processed_rows = 0
-        
+
         # Use iter_rows for better performance instead of cell-by-cell access
         for row in worksheet.iter_rows(min_row=2, values_only=True):
             if self.cancellation_token.is_set():
                 self.log_callback("❌ Work Cancelled")
                 workbook.close()
                 break
-            
-            chunk_data.append(list(row))
+
+            # Convert all cell values to string to prevent scientific notation
+            chunk_data.append([str(cell) if cell is not None else '' for cell in row])
             processed_rows += 1
             
             # Progress feedback every 10,000 rows

@@ -135,10 +135,10 @@ class ColumnMapperCLI:
         try:
             # Read file columns
             if file_path.lower().endswith('.csv'):
-                df_peek = pd.read_csv(file_path, nrows=0)
+                df_peek = pd.read_csv(file_path, nrows=0, dtype=str)
             else:
-                df_peek = pd.read_excel(file_path, nrows=0)
-            
+                df_peek = pd.read_excel(file_path, nrows=0, dtype=str)
+
             actual_columns = list(df_peek.columns)
             
             # Get expected columns from settings

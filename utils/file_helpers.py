@@ -119,6 +119,10 @@ def read_csv_with_encoding_fallback(
 
     last_error = None
 
+    # Add dtype=str to kwargs if not already specified
+    if 'dtype' not in kwargs:
+        kwargs['dtype'] = str
+
     for encoding in encodings:
         try:
             df = pd.read_csv(file_path, encoding=encoding, **kwargs)
