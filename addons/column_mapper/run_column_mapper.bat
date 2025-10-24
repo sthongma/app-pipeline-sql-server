@@ -11,8 +11,8 @@ REM Set Python executable variable
 set "PYTHON_EXE="
 
 REM Prefer project virtual environment Python if available
-if exist "venv\Scripts\python.exe" (
-    set "PYTHON_EXE=venv\Scripts\python.exe"
+if exist "..\..\..venv\Scripts\python.exe" (
+    set "PYTHON_EXE=..\..\..venv\Scripts\python.exe"
     goto :python_found
 )
 

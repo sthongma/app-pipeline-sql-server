@@ -377,14 +377,23 @@ class ColumnMapperCLI:
             print(f"{'='*60}")
             
             # Get ML suggestions
+            self.log(f"Missing columns: {column_analysis['missing']}")
+            self.log(f"Extra columns: {column_analysis['extra']}")
+
             suggestions = self.suggest_mappings_for_missing_columns(
                 column_analysis['missing'],
                 column_analysis['extra'],
                 file_type
             )
-            
+
+            self.log(f"Suggestions generated: {len(suggestions)} columns with suggestions")
+
             if not suggestions:
                 self.log("No mapping suggestions available", 'warning')
+                self.log("This might happen if:")
+                self.log("  1. Column similarity scores are too low (<30%)")
+                self.log("  2. ML model is not available or not working properly")
+                self.log("  3. Column names are too different to match")
                 continue
             
             # Interactive selection (if not in auto mode)
@@ -402,7 +411,8 @@ class ColumnMapperCLI:
                         self.log(f"✅ Auto-applied: '{missing_col}' → '{best_sug['target_column']}' ({best_sug['confidence']:.1f}%)")
                 
                 if not selected_mappings:
-                    self.log("⚠️ No high-confidence mappings found for auto-application")
+                    self.log("⚠️ No high-confidence mappings found for auto-application (threshold >70%)")
+                    self.log("💡 Run in interactive mode (without --auto) to review and apply these suggestions")
             else:
                 selected_mappings = self.interactive_mapping_selection(suggestions)
             

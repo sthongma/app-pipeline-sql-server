@@ -11,8 +11,8 @@ REM Set Python executable variable
 set "PYTHON_EXE="
 
 REM Prefer project virtual environment Python if available
-if exist "venv\Scripts\python.exe" (
-    set "PYTHON_EXE=venv\Scripts\python.exe"
+if exist ".venv\Scripts\python.exe" (
+    set "PYTHON_EXE=.venv\Scripts\python.exe"
     goto :python_found
 )
 
@@ -33,11 +33,11 @@ if not errorlevel 1 (
 
 REM Try common installation paths
 for %%i in (
-    "%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+    "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
     "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
     "%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
     "%LOCALAPPDATA%\Programs\Python\Python39\python.exe"
-    "C:\Python313\python.exe"
+    "C:\Python312\python.exe"
     "C:\Python311\python.exe"
     "C:\Python310\python.exe"
     "C:\Python39\python.exe"

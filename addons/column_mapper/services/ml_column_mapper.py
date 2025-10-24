@@ -77,7 +77,7 @@ class MLColumnMapper:
         """Setup file logging for ML Column Mapper"""
         # Create logger
         self.file_logger = logging.getLogger('MLColumnMapper')
-        self.file_logger.setLevel(logging.INFO)
+        self.file_logger.setLevel(logging.DEBUG)  # Changed to DEBUG for detailed logging
         
         # Clear existing handlers to avoid duplication
         self.file_logger.handlers.clear()
@@ -171,21 +171,29 @@ class MLColumnMapper:
     def _find_similar_columns(self, source_column: str, target_columns: set, file_type: str = None) -> List[Dict[str, Any]]:
         """Find similar columns using ML and string matching"""
         similarities = []
-        
+
+        self._log(f"Finding similar columns for '{source_column}' from {len(target_columns)} candidates", 'debug')
+
         for target_column in target_columns:
             # Calculate different types of similarity
             semantic_score = self._calculate_semantic_similarity(source_column, target_column)
             string_score = self._calculate_string_similarity(source_column, target_column)
             context_score = self._calculate_context_similarity(source_column, target_column, file_type)
-            
+
             # Weighted combined score
             combined_score = (
                 semantic_score * 0.5 +
                 string_score * 0.3 +
                 context_score * 0.2
             )
-            
-            if combined_score > 0.3:  # Minimum threshold
+
+            self._log(
+                f"  '{target_column}': combined={combined_score:.3f} "
+                f"(semantic={semantic_score:.3f}, string={string_score:.3f}, context={context_score:.3f})",
+                'debug'
+            )
+
+            if combined_score > 0.2:  # Minimum threshold (lowered from 0.3 to catch more potential matches)
                 similarities.append({
                     'target_column': target_column,
                     'confidence': round(combined_score * 100, 1),
@@ -194,9 +202,12 @@ class MLColumnMapper:
                     'context_score': round(context_score * 100, 1),
                     'reasoning': self._generate_reasoning(source_column, target_column, semantic_score, string_score)
                 })
-        
+
         # Sort by confidence score
         similarities.sort(key=lambda x: x['confidence'], reverse=True)
+
+        self._log(f"Found {len(similarities)} suggestions above threshold (>30%)", 'debug')
+
         return similarities[:5]  # Return top 5 suggestions
     
     def _calculate_semantic_similarity(self, col1: str, col2: str) -> float:
@@ -239,19 +250,20 @@ class MLColumnMapper:
     def _calculate_context_similarity(self, col1: str, col2: str, file_type: str = None) -> float:
         """Calculate context-based similarity"""
         context_score = 0.0
-        
+
         # Domain-specific keywords
         order_keywords = ['order', 'คำสั่ง', 'ออเดอร์', 'สั่งซื้อ', 'หมายเลข']
         product_keywords = ['product', 'สินค้า', 'ผลิตภัณฑ์', 'ชื่อ', 'รหัส']
         price_keywords = ['price', 'ราคา', 'ยอด', 'เงิน', 'cost']
         date_keywords = ['date', 'time', 'วันที่', 'เวลา', 'created', 'updated']
-        
+        user_keywords = ['user', 'buyer', 'customer', 'ผู้ใช้', 'ผู้ซื้อ', 'บัญชี', 'ลูกค้า']  # New category
+
         col1_lower = col1.lower()
         col2_lower = col2.lower()
-        
+
         # Check if both columns belong to the same domain
-        for keywords in [order_keywords, product_keywords, price_keywords, date_keywords]:
-            if (any(k in col1_lower for k in keywords) and 
+        for keywords in [order_keywords, product_keywords, price_keywords, date_keywords, user_keywords]:
+            if (any(k in col1_lower for k in keywords) and
                 any(k in col2_lower for k in keywords)):
                 context_score += 0.5
                 break
