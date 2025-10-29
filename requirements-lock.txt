@@ -27,10 +27,16 @@ python-dateutil==2.9.0
 # numpy==1.26.3
 # torch==2.1.2
 
-# Security and Development tools (optional)
+# Testing dependencies (development only - uncomment if needed)
+# pytest==7.4.3
+# pytest-cov==4.1.0
+# pytest-mock==3.12.0
+
+# Security and Development tools (optional - uncomment if needed)
 # pip-audit==2.6.1      # Scan for known vulnerabilities
 # bandit==1.7.6         # Python security linter
 # safety==3.0.1         # Check for known security issues
 
 # Note: Run `pip install -r requirements-lock.txt` for production
 # Note: For ML features, run `pip install -r requirements-ml.txt` additionally
+# Note: For development with tests, uncomment pytest lines above

@@ -3,17 +3,22 @@ Database configuration management for PIPELINE_SQLSERVER
 
 This module handles SQL Server connection configuration including:
 - Loading and saving configuration settings
-- Creating SQLAlchemy engines
-- Managing connection strings
+- Creating SQLAlchemy engines with connection pooling
+- Managing connection strings with password masking for security
 """
 
 import os
 import re
+import logging
 from typing import Dict, Any, Optional
 from sqlalchemy import create_engine, Engine
+from sqlalchemy.pool import QueuePool
 
 from constants import DatabaseConstants
 from utils.validators import validate_database_config
+from utils.security_helpers import mask_connection_string
+
+logger = logging.getLogger(__name__)
 
 
 def load_env_file(env_file_path: str = ".env") -> None:
@@ -115,12 +120,29 @@ class DatabaseConfig:
                 f'charset=utf8&autocommit=true'
             )
         
-        # เปิด fast_executemany เพื่อเร่งการอัปโหลด Unicode ผ่าน pyodbc
+        # Configure connection pooling for better performance and resource management
+        engine_config = {
+            'fast_executemany': True,  # เพื่อเร่งการอัปโหลด Unicode ผ่าน pyodbc
+            'poolclass': QueuePool,     # Use connection pooling
+            'pool_size': 5,              # Keep 5 connections in pool
+            'max_overflow': 10,          # Allow up to 10 additional connections
+            'pool_timeout': 30,          # Wait up to 30 seconds for a connection
+            'pool_recycle': 3600,        # Recycle connections after 1 hour
+            'pool_pre_ping': True,       # Test connections before using them
+            'echo': False,               # Don't log SQL queries (security)
+        }
+
         try:
-            self.engine = create_engine(connection_string, fast_executemany=True)
+            self.engine = create_engine(connection_string, **engine_config)
+            # Log successful connection (with masked password)
+            logger.info(f"Database engine created: {mask_connection_string(connection_string)}")
         except TypeError:
-            # เผื่อกรณี SQLAlchemy รุ่นเก่า ไม่รองรับ keyword นี้
+            # Fallback for older SQLAlchemy versions
+            logger.warning("Using fallback engine configuration (no connection pooling)")
             self.engine = create_engine(connection_string)
+        except Exception as e:
+            logger.error(f"Failed to create database engine: {e}")
+            raise
     
     def get_engine(self) -> Optional[Engine]:
         """

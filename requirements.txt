@@ -24,11 +24,18 @@ python-dateutil>=2.8.0,<3.0.0
 # numpy>=1.24.0,<2.0.0
 # torch>=2.0.0,<3.0.0
 
-# Development and Security tools (optional)
-# pytest>=7.0.0
-# black>=22.0.0
-# flake8>=5.0.0
-# mypy>=1.0.0
+# Development and Security tools (optional - uncomment to use)
+# Testing
+# pytest>=7.4.0
+# pytest-cov>=4.1.0    # Coverage reporting
+# pytest-mock>=3.11.0  # Mocking utilities
+
+# Code quality
+# black>=23.0.0        # Code formatter
+# flake8>=6.0.0        # Linting
+# mypy>=1.5.0          # Type checking
+
+# Security scanning
 # pip-audit>=2.6.0     # Scan for vulnerabilities
 # bandit>=1.7.0        # Security linter
 # safety>=3.0.0        # Check known security issues
