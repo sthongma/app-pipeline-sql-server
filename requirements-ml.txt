@@ -1,0 +1,16 @@
+# ML dependencies for Column Mapper addon
+# These are optional and only needed if using ML-based column mapping
+
+# Machine Learning frameworks
+sentence-transformers==2.3.1
+scikit-learn==1.4.0
+numpy==1.26.3
+
+# Deep learning (required by sentence-transformers)
+torch==2.1.2
+
+# Installation:
+# pip install -r requirements-ml.txt
+
+# Note: These dependencies are ~2GB+ in size
+# Only install if you need ML-enhanced column mapping features

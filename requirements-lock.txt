@@ -1,0 +1,36 @@
+# Locked dependency versions for production deployment
+# Generated for production security and stability
+# Last updated: 2025-10-29
+
+# Core dependencies - LOCKED VERSIONS
+pandas==2.1.4
+sqlalchemy==2.0.25
+pyodbc==5.0.1
+
+# UI dependencies
+customtkinter==5.2.2
+
+# File management
+send2trash==1.8.2
+
+# Excel file processing
+openpyxl==3.1.2
+xlrd==2.0.1
+
+# Date parsing
+python-dateutil==2.9.0
+
+# ML dependencies for auto column mapping (optional - see requirements-ml.txt)
+# Uncomment only if using ML column mapper addon
+# sentence-transformers==2.3.1
+# scikit-learn==1.4.0
+# numpy==1.26.3
+# torch==2.1.2
+
+# Security and Development tools (optional)
+# pip-audit==2.6.1      # Scan for known vulnerabilities
+# bandit==1.7.6         # Python security linter
+# safety==3.0.1         # Check for known security issues
+
+# Note: Run `pip install -r requirements-lock.txt` for production
+# Note: For ML features, run `pip install -r requirements-ml.txt` additionally

@@ -28,7 +28,12 @@ from sqlalchemy.types import (
 )
 
 from .data_validation_service import DataValidationService
-from utils.sql_utils import get_numeric_cleaning_expression
+from utils.sql_utils import (
+    get_numeric_cleaning_expression,
+    sanitize_sql_identifier,
+    quote_identifier,
+    build_qualified_table_name
+)
 
 
 class DataUploadService:
@@ -155,7 +160,11 @@ class DataUploadService:
             
             if not validation_results['is_valid']:
                 with self.engine.begin() as conn:
-                    conn.execute(text(f"DROP TABLE {schema_name}.{staging_table}"))
+                    # Sanitize identifiers before DROP
+                    safe_schema = sanitize_sql_identifier(schema_name)
+                    safe_staging_table = sanitize_sql_identifier(staging_table)
+                    drop_query = text(f"DROP TABLE {quote_identifier(safe_schema)}.{quote_identifier(safe_staging_table)}")
+                    conn.execute(drop_query)
                 # ส่ง validation details กลับมาด้วยในรูปแบบ dict
                 return False, {
                     'summary': validation_results['summary'],
@@ -213,40 +222,48 @@ class DataUploadService:
                 log_func(f"❌ {error_msg}")
             return False, error_msg
 
-    def _fix_column_types(self, table_name: str, required_cols: Dict, 
+    def _fix_column_types(self, table_name: str, required_cols: Dict,
                          schema_name: str = 'bronze', log_func=None):
         """Fix column types to match required types for all data types"""
         try:
+            # Sanitize identifiers
+            safe_schema = sanitize_sql_identifier(schema_name)
+            safe_table = sanitize_sql_identifier(table_name)
+
             with self.engine.begin() as conn:
-                # ตรวจสอบชนิดข้อมูลปัจจุบันในฐานข้อมูล
-                check_query = f"""
+                # Use parameterized query for checking column types
+                check_query = text("""
                     SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE
-                    FROM INFORMATION_SCHEMA.COLUMNS 
-                    WHERE TABLE_SCHEMA = '{schema_name}' 
-                    AND TABLE_NAME = '{table_name}'
-                """
-                result = conn.execute(text(check_query))
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = :schema_name
+                    AND TABLE_NAME = :table_name
+                """)
+                result = conn.execute(check_query, {"schema_name": safe_schema, "table_name": safe_table})
                 current_columns = {row.COLUMN_NAME: {
                     'data_type': row.DATA_TYPE,
                     'max_length': row.CHARACTER_MAXIMUM_LENGTH,
                     'precision': row.NUMERIC_PRECISION,
                     'scale': row.NUMERIC_SCALE
                 } for row in result.fetchall()}
-                
+
                 for col_name, dtype in required_cols.items():
                     if col_name not in current_columns:
                         continue
-                        
+
+                    # Sanitize column name
+                    safe_col_name = sanitize_sql_identifier(col_name)
+
                     current_col = current_columns[col_name]
                     target_sql_type = self._get_sql_server_type(dtype)
                     current_type_str = self._format_current_type(current_col)
-                    
+
                     # เปรียบเทียบชนิดข้อมูล ถ้าเหมือนกันก็ข้าม
                     if self._types_are_equivalent(current_type_str, target_sql_type, dtype):
                         continue
-                    
+
                     # มีการเปลี่ยนแปลง ต้อง ALTER
-                    alter_sql = f"ALTER TABLE {schema_name}.{table_name} ALTER COLUMN [{col_name}] {target_sql_type}"
+                    # Note: ALTER COLUMN cannot use bind parameters for column name and type
+                    alter_sql = f"ALTER TABLE {quote_identifier(safe_schema)}.{quote_identifier(safe_table)} ALTER COLUMN {quote_identifier(safe_col_name)} {target_sql_type}"
                     if log_func:
                         log_func(f"🔧 ALTER column '{col_name}': {current_type_str} → {target_sql_type}")
                     conn.execute(text(alter_sql))
@@ -375,15 +392,30 @@ class DataUploadService:
 
     def _create_staging_table(self, staging_table: str, staging_cols: list, schema_name: str, log_func=None):
         """Create staging table with NVARCHAR(MAX) for all columns"""
+        # Sanitize identifiers
+        safe_schema = sanitize_sql_identifier(schema_name)
+        safe_staging_table = sanitize_sql_identifier(staging_table)
+
         with self.engine.begin() as conn:
-            conn.execute(text(f"""
-                IF OBJECT_ID('{schema_name}.{staging_table}', 'U') IS NOT NULL
-                    DROP TABLE {schema_name}.{staging_table};
-            """))
-            cols_sql = ", ".join([f"[{c}] NVARCHAR(MAX) NULL" for c in staging_cols])
-            conn.execute(text(f"CREATE TABLE {schema_name}.{staging_table} ({cols_sql})"))
+            # Use parameterized query for OBJECT_ID check
+            qualified_name = f"{safe_schema}.{safe_staging_table}"
+            check_query = text("""
+                IF OBJECT_ID(:table_name, 'U') IS NOT NULL
+                    DROP TABLE """ + f"{quote_identifier(safe_schema)}.{quote_identifier(safe_staging_table)}")
+            conn.execute(check_query, {"table_name": qualified_name})
+
+            # Sanitize column names and build CREATE TABLE statement
+            safe_cols = []
+            for col in staging_cols:
+                safe_col = sanitize_sql_identifier(col)
+                safe_cols.append(f"{quote_identifier(safe_col)} NVARCHAR(MAX) NULL")
+
+            cols_sql = ", ".join(safe_cols)
+            create_query = text(f"CREATE TABLE {quote_identifier(safe_schema)}.{quote_identifier(safe_staging_table)} ({cols_sql})")
+            conn.execute(create_query)
+
             if log_func:
-                log_func(f"📦 Created staging table: {schema_name}.{staging_table} (NVARCHAR(MAX) for all columns)")
+                log_func(f"📦 Created staging table: {safe_schema}.{safe_staging_table} (NVARCHAR(MAX) for all columns)")
 
     def _upload_to_staging(self, df, staging_table: str, staging_cols: list, schema_name: str, log_func=None):
         """Upload data to staging table"""
@@ -437,16 +469,24 @@ class DataUploadService:
                 dtype={col: required_cols[col] for col in df_cols}
             )
             # เพิ่ม updated_at column ด้วย SQL
+            # Sanitize identifiers before ALTER TABLE
+            safe_schema = sanitize_sql_identifier(schema_name)
+            safe_table = sanitize_sql_identifier(table_name)
             with self.engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [updated_at] DATETIME2 NULL"))
+                alter_query = text(f"ALTER TABLE {quote_identifier(safe_schema)}.{quote_identifier(safe_table)} ADD [updated_at] DATETIME2 NULL")
+                conn.execute(alter_query)
         else:
             # แก้ไขชนิดข้อมูลสำหรับตารางที่มีอยู่แล้ว
             self._fix_column_types(table_name, required_cols, schema_name, log_func)
             if clear_existing:
                 if log_func:
                     log_func(f"🧹 Truncating existing data in table {schema_name}.{table_name}")
+                # Sanitize identifiers before TRUNCATE
+                safe_schema = sanitize_sql_identifier(schema_name)
+                safe_table = sanitize_sql_identifier(table_name)
                 with self.engine.begin() as conn:
-                    conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
+                    truncate_query = text(f"TRUNCATE TABLE {quote_identifier(safe_schema)}.{quote_identifier(safe_table)}")
+                    conn.execute(truncate_query)
             else:
                 if log_func:
                     log_func(f"📋 Appending to existing table {schema_name}.{table_name}")
@@ -459,10 +499,16 @@ class DataUploadService:
             dict: Deduplication statistics with keys 'total_rows', 'inserted_rows', 'duplicates_removed'
         """
 
+        # Sanitize identifiers
+        safe_schema = sanitize_sql_identifier(schema_name)
+        safe_staging_table = sanitize_sql_identifier(staging_table)
+        safe_table_name = sanitize_sql_identifier(table_name)
+
         # Get row count for progress monitoring
         try:
             with self.engine.connect() as conn:
-                result = conn.execute(text(f"SELECT COUNT(*) FROM {schema_name}.{staging_table}"))
+                count_query = text(f"SELECT COUNT(*) FROM {quote_identifier(safe_schema)}.{quote_identifier(safe_staging_table)}")
+                result = conn.execute(count_query)
                 total_rows = result.scalar()
                 if log_func:
                     log_func(f"📊 Preparing to transfer {total_rows:,} rows with type conversion")
@@ -517,9 +563,20 @@ class DataUploadService:
         select_sql = ", ".join(select_exprs)
 
         with self.engine.begin() as conn:
+            # Build INSERT statement with sanitized identifiers
+            quoted_schema = quote_identifier(safe_schema)
+            quoted_table = quote_identifier(safe_table_name)
+            quoted_staging = quote_identifier(safe_staging_table)
+
+            # Sanitize column names in required_cols
+            safe_col_list = []
+            for col in required_cols.keys():
+                safe_col = sanitize_sql_identifier(col)
+                safe_col_list.append(quote_identifier(safe_col))
+
             insert_sql = (
-                f"INSERT INTO {schema_name}.{table_name} (" + ", ".join([f"[{c}]" for c in required_cols.keys()]) + ") "
-                f"SELECT DISTINCT {select_sql} FROM {schema_name}.{staging_table}"
+                f"INSERT INTO {quoted_schema}.{quoted_table} ({', '.join(safe_col_list)}) "
+                f"SELECT DISTINCT {select_sql} FROM {quoted_schema}.{quoted_staging}"
             )
             if log_func:
                 log_func(f"📝 Executing data transfer with type conversion and deduplication...")
@@ -533,7 +590,8 @@ class DataUploadService:
                 execution_time = time.time() - start_time
 
                 # Count inserted rows and report deduplication
-                count_result = conn.execute(text(f"SELECT COUNT(*) FROM {schema_name}.{table_name}"))
+                count_query = text(f"SELECT COUNT(*) FROM {quoted_schema}.{quoted_table}")
+                count_result = conn.execute(count_query)
                 inserted_rows = count_result.scalar()
 
                 # Prepare deduplication statistics to return
