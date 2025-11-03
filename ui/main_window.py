@@ -438,43 +438,46 @@ class MainWindow(ctk.CTkToplevel):
             bool: True ถ้าทุกอย่างสำเร็จ, False ถ้ามี error
         """
         try:
-            # Step indices ตาม loading dialog:
-            # 0: "Build Tab View"
-            # 1: "Build Main Tab"
-            # 2: "Build Log Tab"
-            # 3: "Build Settings Tab"
-            # 4: "Initialize log file"
-            # 5: "Initialize input/output folders"
-            # 6: "Verify SQL Server connection"
+            # Step indices ตาม loading dialog ใน LoginWindow:
+            # 0: "Connect to database"
+            # 1: "Check permissions"
+            # 2: "Load app/file settings"
+            # 3: "Build Tab View"
+            # 4: "Build Main Tab"
+            # 5: "Build Log Tab"
+            # 6: "Build Settings Tab"
+            # 7: "Initialize log file"
+            # 8: "Initialize input/output folders"
+            # 9: "Verify SQL Server connection"
 
-            # 1. Initialize log file (step 4)
+            # 1. Initialize log file (step 7)
             if progress_callback:
-                progress_callback("Initializing log file...", 4)
+                progress_callback("Initializing log file...", 7)
             self._initialize_log_file_if_needed_sync()
             if progress_callback:
-                progress_callback("Log file initialized", 4, mark_done=True)
+                progress_callback("Log file initialized", 7, mark_done=True)
 
-            # 2. Initialize input folder (step 5)
+            # 2. Initialize input folder (step 8)
             if progress_callback:
-                progress_callback("Initializing input folder...", 5)
+                progress_callback("Initializing input folder...", 8)
             self._initialize_input_folder_if_needed_sync(self._input_folder_path)
 
-            # 3. Initialize output folder (ยัง step 5 เดิม)
+            # 3. Initialize output folder (ยัง step 8 เดิม)
             if progress_callback:
-                progress_callback("Initializing output folder...", 5)
+                progress_callback("Initializing output folder...", 8)
             self._initialize_output_folder_if_needed_sync()
             if progress_callback:
-                progress_callback("Folders initialized", 5, mark_done=True)
+                progress_callback("Folders initialized", 8, mark_done=True)
 
-            # 4. Check SQL connection (step 6)
+            # 4. Check SQL connection (step 9)
             if progress_callback:
-                progress_callback("Verifying SQL Server connection...", 6)
+                progress_callback("Verifying SQL Server connection...", 9)
             success, message = self.db_service.check_connection(show_warning=False)
 
             if success:
                 # ไม่ต้อง log เพราะตอน login เชื่อมต่อสำเร็จแล้ว
                 if progress_callback:
-                    progress_callback("SQL Server connected", 6, mark_done=True)
+                    progress_callback("SQL Server connected", 9, mark_done=True)
             else:
                 self.log("❌ " + message)
                 return False

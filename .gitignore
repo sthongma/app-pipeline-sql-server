@@ -98,3 +98,4 @@ config/*.json.backup
 
 nul
 .env
+.claude/settings.local.json

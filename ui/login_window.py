@@ -206,93 +206,20 @@ class LoginWindow(ctk.CTk):
             messagebox.showerror("Error", f"Failed to update database configuration: {str(e)}")
             return
         
-        # ทดสอบการเชื่อมต่อ ตรวจสิทธิ์ และ preload ใน dialog เดียว (background)
+        # ใช้ loading dialog เดียวสำหรับทั้งหมด
         try:
-            loading_dialog = LoadingDialog(
+            self.ui_loading_dialog = LoadingDialog(
                 self,
-                "Preparing system",
-                "Testing database connection...",
+                "Preparing System",
+                "Starting system initialization...",
                 min_display_ms=1200,
-                min_step_duration_ms=900,
-                min_total_duration_ms=3800,
+                min_step_duration_ms=700,
+                min_total_duration_ms=4500,
                 auto_close_on_task_done=False,
                 steps=[
                     "Connect to database",
                     "Check permissions",
                     "Load app/file settings",
-                    "Build main UI components"
-                ]
-            )
-
-            # รันงานแบบรวมใน background และคุมเวลาปิด dialog เองหลังงาน UI พร้อมจริง
-            final_result = {}
-            self._prepare_done_var = ctk.BooleanVar(value=False)
-            def on_prepare_done(res, err):
-                final_result["res"] = res
-                final_result["err"] = err
-                # แจ้งว่าเสร็จแล้วให้ wait_variable เดินต่อ
-                try:
-                    self._prepare_done_var.set(True)
-                except Exception:
-                    pass
-
-            loading_dialog.run_task(self._connect_and_prepare, config, on_done=on_prepare_done)
-
-            # รอให้เตรียมระบบเสร็จ (แต่ยังไม่ปิด dialog)
-            self.wait_variable(self._prepare_done_var)
-
-            # ตรวจสอบผลลัพธ์
-            result = final_result.get("res") or {}
-            error = final_result.get("err")
-            
-            # ถ้า user ยกเลิก ให้ปิดเงียบๆ ไม่แสดง error
-            if loading_dialog.user_cancelled:
-                loading_dialog.release_and_close()
-                self.wait_window(loading_dialog)
-                return
-                
-            if error:
-                loading_dialog.release_and_close()
-                self.wait_window(loading_dialog)
-                messagebox.showerror("Error", f"Error occurred: {str(error)}")
-                return
-
-            if loading_dialog.error and not loading_dialog.user_cancelled:
-                messagebox.showerror("Error", f"Error occurred: {str(loading_dialog.error)}")
-                return
-
-            if not result.get('connection_ok', False):
-                loading_dialog.release_and_close()
-                self.wait_window(loading_dialog)
-                if not loading_dialog.user_cancelled:
-                    messagebox.showerror("Error", "Unable to connect to SQL Server")
-                return
-
-            if not result.get('permissions_ok', False):
-                missing_permissions = result.get('missing_permissions', [])
-                recommendations = result.get('recommendations', [])
-                detail_msg = f"Missing required permissions: {', '.join(missing_permissions)}\n\n"
-                if recommendations:
-                    detail_msg += "Recommendations:\n" + "\n".join(recommendations[:3])
-                loading_dialog.release_and_close()
-                self.wait_window(loading_dialog)
-                if not loading_dialog.user_cancelled:
-                    messagebox.showerror("Insufficient permissions", f"Connected, but permissions are insufficient\n\n{detail_msg}")
-                return
-
-            # ส่งข้อมูลที่โหลดไว้ให้ MainWindow
-            preloaded_data = result.get('preloaded_data')
-
-            # แสดง loading dialog และสร้าง MainWindow ใน main thread
-            self.ui_loading_dialog = LoadingDialog(
-                self,
-                "Building UI",
-                "Preparing MainWindow and building UI for file types...",
-                min_display_ms=900,
-                min_step_duration_ms=700,
-                min_total_duration_ms=2800,
-                auto_close_on_task_done=False,
-                steps=[
                     "Build Tab View",
                     "Build Main Tab",
                     "Build Log Tab",
@@ -303,8 +230,88 @@ class LoginWindow(ctk.CTk):
                 ]
             )
 
+            # เก็บ result และสร้าง done callback
+            final_result = {}
+            self._prepare_done_var = ctk.BooleanVar(value=False)
+
+            def on_prepare_done(res, err):
+                final_result["res"] = res
+                final_result["err"] = err
+                try:
+                    self._prepare_done_var.set(True)
+                except Exception:
+                    pass
+
+            # สร้าง wrapper function ที่จัดการ progress และ steps
+            def task_wrapper(progress_callback=None):
+                def wrapped_callback(message):
+                    """Callback ที่รวม update message และ step tracking"""
+                    if progress_callback:
+                        progress_callback(message)
+
+                    # Track steps based on message
+                    if "Testing database connection" in message:
+                        self.ui_loading_dialog.mark_step_running(0)
+                    elif "Checking database permissions" in message:
+                        self.ui_loading_dialog.mark_step_done(0)
+                        self.ui_loading_dialog.mark_step_running(1)
+                    elif "Loading file types and settings" in message:
+                        self.ui_loading_dialog.mark_step_done(1)
+                        self.ui_loading_dialog.mark_step_running(2)
+
+                return self._connect_and_prepare(config, wrapped_callback)
+
+            self.ui_loading_dialog.run_task(task_wrapper, on_done=on_prepare_done)
+
+            # รอให้เตรียมระบบเสร็จ (แต่ยังไม่ปิด dialog)
+            self.wait_variable(self._prepare_done_var)
+
+            # ตรวจสอบผลลัพธ์
+            result = final_result.get("res") or {}
+            error = final_result.get("err")
+
+            # ถ้า user ยกเลิก ให้ปิดเงียบๆ ไม่แสดง error
+            if self.ui_loading_dialog.user_cancelled:
+                self.ui_loading_dialog.release_and_close()
+                self.wait_window(self.ui_loading_dialog)
+                return
+
+            if error:
+                self.ui_loading_dialog.release_and_close()
+                self.wait_window(self.ui_loading_dialog)
+                messagebox.showerror("Error", f"Error occurred: {str(error)}")
+                return
+
+            if self.ui_loading_dialog.error and not self.ui_loading_dialog.user_cancelled:
+                messagebox.showerror("Error", f"Error occurred: {str(self.ui_loading_dialog.error)}")
+                return
+
+            if not result.get('connection_ok', False):
+                self.ui_loading_dialog.release_and_close()
+                self.wait_window(self.ui_loading_dialog)
+                if not self.ui_loading_dialog.user_cancelled:
+                    messagebox.showerror("Error", "Unable to connect to SQL Server")
+                return
+
+            if not result.get('permissions_ok', False):
+                missing_permissions = result.get('missing_permissions', [])
+                recommendations = result.get('recommendations', [])
+                detail_msg = f"Missing required permissions: {', '.join(missing_permissions)}\n\n"
+                if recommendations:
+                    detail_msg += "Recommendations:\n" + "\n".join(recommendations[:3])
+                self.ui_loading_dialog.release_and_close()
+                self.wait_window(self.ui_loading_dialog)
+                if not self.ui_loading_dialog.user_cancelled:
+                    messagebox.showerror("Insufficient permissions", f"Connected, but permissions are insufficient\n\n{detail_msg}")
+                return
+
+            # Mark step 2 as done before moving to UI creation
+            self.ui_loading_dialog.mark_step_done(2)
+
+            # ส่งข้อมูลที่โหลดไว้ให้ MainWindow
+            self.preloaded_data = result.get('preloaded_data')
+
             # เริ่มสร้าง MainWindow ใน main thread โดยใช้ after()
-            self.preloaded_data = preloaded_data
             self.after(100, self._start_ui_creation)
         except Exception as e:
             # ตรวจสอบว่า error เกิดจาก user cancel หรือไม่
@@ -340,35 +347,36 @@ class LoginWindow(ctk.CTk):
             self._completed_ui_steps = set()
 
             # สร้าง MainWindow พร้อม progress callback ที่มี step index
+            # Steps: 0-2 = connection/permissions/settings, 3-6 = UI building, 7-9 = initialization
             def progress_callback(message):
                 """UI building progress callback"""
                 self.ui_loading_dialog.update_message(message)
 
                 # Map messages to step indices and mark done when moving to next
                 if "Tab View" in message:
-                    self.ui_loading_dialog.mark_step_running(0)
-                    self._completed_ui_steps.add(0)
-                elif "Main Tab" in message:
-                    if 0 in self._completed_ui_steps:
-                        self.ui_loading_dialog.mark_step_done(0)
-                    self.ui_loading_dialog.mark_step_running(1)
-                    self._completed_ui_steps.add(1)
-                elif "Log Tab" in message:
-                    if 1 in self._completed_ui_steps:
-                        self.ui_loading_dialog.mark_step_done(1)
-                    self.ui_loading_dialog.mark_step_running(2)
-                    self._completed_ui_steps.add(2)
-                elif "Settings Tab" in message:
-                    if 2 in self._completed_ui_steps:
-                        self.ui_loading_dialog.mark_step_done(2)
                     self.ui_loading_dialog.mark_step_running(3)
                     self._completed_ui_steps.add(3)
+                elif "Main Tab" in message:
+                    if 3 in self._completed_ui_steps:
+                        self.ui_loading_dialog.mark_step_done(3)
+                    self.ui_loading_dialog.mark_step_running(4)
+                    self._completed_ui_steps.add(4)
+                elif "Log Tab" in message:
+                    if 4 in self._completed_ui_steps:
+                        self.ui_loading_dialog.mark_step_done(4)
+                    self.ui_loading_dialog.mark_step_running(5)
+                    self._completed_ui_steps.add(5)
+                elif "Settings Tab" in message:
+                    if 5 in self._completed_ui_steps:
+                        self.ui_loading_dialog.mark_step_done(5)
+                    self.ui_loading_dialog.mark_step_running(6)
+                    self._completed_ui_steps.add(6)
 
             # ใช้ callback เพื่อเปิด main window เมื่อสร้าง UI ทั้งหมดเสร็จ
             def on_ui_ready():
                 # Mark Settings Tab as done
-                if 3 in self._completed_ui_steps:
-                    self.ui_loading_dialog.mark_step_done(3)
+                if 6 in self._completed_ui_steps:
+                    self.ui_loading_dialog.mark_step_done(6)
                 # UI สร้างเสร็จแล้ว ต่อด้วย initialization tasks
                 self.after(50, self._run_initialization_tasks)
 
