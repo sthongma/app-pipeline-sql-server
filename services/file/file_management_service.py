@@ -56,10 +56,15 @@ class FileManagementService:
     # ========================
     
     def move_uploaded_files(self, file_paths, logic_types=None, search_path=None):
-        """Move uploaded files directly to output folder with new naming format"""
+        """Move uploaded files to date-organized folders with original filenames"""
         try:
             # Use custom output folder if set, otherwise use search_path
             base_folder = self.output_folder if self.output_folder else (search_path or self.base_path)
+
+            # สร้างโฟลเดอร์ย่อยตามวันที่ (YYYY-MM-DD)
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            date_folder = os.path.join(base_folder, current_date)
+            os.makedirs(date_folder, exist_ok=True)
 
             moved_files = []
 
@@ -67,25 +72,16 @@ class FileManagementService:
             def move_single_file(args):
                 idx, file_path = args
                 try:
-                    logic_type = logic_types[idx] if logic_types else "Unknown"
-
-                    # สร้างโฟลเดอร์ถ้ายังไม่มี
-                    os.makedirs(base_folder, exist_ok=True)
-
-                    # สร้าง timestamp ใหม่สำหรับแต่ละไฟล์เพื่อป้องกันชื่อซ้ำ
-                    current_datetime = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-
-                    # สร้างชื่อไฟล์ใหม่ในรูปแบบ {logic_type}_{datetime}_{original_filename}
+                    # ใช้ชื่อไฟล์เดิม (ไม่เปลี่ยนชื่อ)
                     file_name = os.path.basename(file_path)
-                    new_name = f"{logic_type}_{current_datetime}_{file_name}"
-                    destination = os.path.join(base_folder, new_name)
+                    destination = os.path.join(date_folder, file_name)
 
-                    # ถ้าไฟล์มีชื่อซ้ำ (กรณีที่ประมวลผลเร็วมาก) ให้เพิ่ม milliseconds
+                    # ถ้าไฟล์มีชื่อซ้ำ ให้เพิ่ม timestamp ท้ายชื่อไฟล์
                     if os.path.exists(destination):
                         name, ext = os.path.splitext(file_name)
-                        milliseconds = datetime.now().strftime("%f")[:3]
-                        new_name = f"{logic_type}_{current_datetime}_{name}_{milliseconds}{ext}"
-                        destination = os.path.join(base_folder, new_name)
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        new_name = f"{name}_{timestamp}{ext}"
+                        destination = os.path.join(date_folder, new_name)
 
                     shutil.move(file_path, destination)
                     return (file_path, destination)
