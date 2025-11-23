@@ -1,41 +1,45 @@
-"""Service for preloading data - Modernized with JSON Manager"""
+"""Service for preloading data - Modernized with Settings Manager"""
 from typing import Dict, Any, Tuple
 from config.json_manager import (
     json_manager,
-    load_column_settings,
-    load_dtype_settings,
     get_input_folder
 )
+from services.settings_manager import settings_manager
 
 
 class PreloadService:
     """Service for preloading file types and various settings"""
-    
+
     def __init__(self):
         self._cached_data = {}
-    
+
     def preload_file_settings(self, progress_callback=None) -> Tuple[bool, str, Dict[str, Any]]:
         """
         Preload all file settings in advance
-        
+
         Args:
             progress_callback: Function to call for progress updates (message)
-            
+
         Returns:
             Tuple[bool, str, Dict]: (success, message, data)
         """
         try:
             if progress_callback:
                 progress_callback("Loading column settings...")
-            
-            # โหลดการตั้งค่าคอลัมน์
-            column_settings = load_column_settings()
-            
+
+            # โหลดการตั้งค่าคอลัมน์ทั้งหมดจาก settings_manager
+            column_settings = {}
+            file_types = settings_manager.list_file_types()
+            for file_type in file_types:
+                column_settings[file_type] = settings_manager.get_column_settings(file_type)
+
             if progress_callback:
                 progress_callback("Loading data type settings...")
-            
-            # โหลดการตั้งค่าประเภทข้อมูล
-            dtype_settings = load_dtype_settings()
+
+            # โหลดการตั้งค่าประเภทข้อมูลทั้งหมด
+            dtype_settings = {}
+            for file_type in file_types:
+                dtype_settings[file_type] = settings_manager.get_dtype_settings(file_type)
             
             if progress_callback:
                 progress_callback("Loading input folder path...")

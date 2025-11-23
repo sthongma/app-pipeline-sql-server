@@ -48,17 +48,6 @@ class SettingsManager:
         self._file_type_cache: Dict[str, Dict[str, Any]] = {}
         self._file_type_timestamps: Dict[str, float] = {}
 
-        # Legacy cache (for backward compatibility)
-        self.column_settings: Dict[str, Any] = {}
-        self.dtype_settings: Dict[str, Any] = {}
-        self._file_timestamps: Dict[str, float] = {
-            'column_settings': 0,
-            'dtype_settings': 0
-        }
-
-        # Load legacy settings initially if they exist
-        self.reload_all()
-
     def reload_all(self, force: bool = False) -> None:
         """
         Reload all settings from disk
@@ -67,43 +56,8 @@ class SettingsManager:
             force: Force reload even if files haven't changed
         """
         with self._settings_lock:
-            self._reload_legacy_settings(force)
             self._file_type_cache.clear()
             self._file_type_timestamps.clear()
-
-    def _reload_legacy_settings(self, force: bool = False) -> None:
-        """Reload legacy column and dtype settings files if they exist"""
-        # Check for legacy column_settings.json
-        column_file = PathConstants.COLUMN_SETTINGS_FILE
-        if os.path.exists(column_file):
-            current_mtime = os.path.getmtime(column_file)
-            cached_mtime = self._file_timestamps.get('column_settings', 0)
-
-            if force or current_mtime > cached_mtime:
-                try:
-                    with open(column_file, 'r', encoding='utf-8') as f:
-                        self.column_settings = json.load(f)
-                    self._file_timestamps['column_settings'] = current_mtime
-                except Exception:
-                    self.column_settings = {}
-        else:
-            self.column_settings = {}
-
-        # Check for legacy dtype_settings.json
-        dtype_file = PathConstants.DTYPE_SETTINGS_FILE
-        if os.path.exists(dtype_file):
-            current_mtime = os.path.getmtime(dtype_file)
-            cached_mtime = self._file_timestamps.get('dtype_settings', 0)
-
-            if force or current_mtime > cached_mtime:
-                try:
-                    with open(dtype_file, 'r', encoding='utf-8') as f:
-                        self.dtype_settings = json.load(f)
-                    self._file_timestamps['dtype_settings'] = current_mtime
-                except Exception:
-                    self.dtype_settings = {}
-        else:
-            self.dtype_settings = {}
 
     def _get_file_type_config(self, file_type: str, reload: bool = True) -> Dict[str, Any]:
         """
@@ -134,101 +88,33 @@ class SettingsManager:
 
         return self._file_type_cache.get(file_type, {"columns": {}, "dtypes": {}})
 
-    def get_column_settings(self, file_type: Optional[str] = None) -> Dict[str, Any]:
+    def get_column_settings(self, file_type: str) -> Dict[str, Any]:
         """
-        Get column settings with support for both legacy and new structure
+        Get column settings for a specific file type
 
         Args:
-            file_type: Specific file type to get settings for, or None for all
+            file_type: Specific file type to get settings for
 
         Returns:
             Column settings dictionary
         """
         with self._settings_lock:
-            # Try new structure first
-            if file_type and os.path.exists(PathConstants.FILE_TYPES_DIR):
-                config = self._get_file_type_config(file_type)
-                if config['columns']:
-                    return config['columns']
+            config = self._get_file_type_config(file_type)
+            return config['columns']
 
-            # Fall back to legacy structure
-            self._reload_legacy_settings()
-            if file_type:
-                return self.column_settings.get(file_type, {})
-            return self.column_settings.copy()
-
-    def get_dtype_settings(self, file_type: Optional[str] = None) -> Dict[str, Any]:
+    def get_dtype_settings(self, file_type: str) -> Dict[str, Any]:
         """
-        Get dtype settings with support for both legacy and new structure
+        Get dtype settings for a specific file type
 
         Args:
-            file_type: Specific file type to get settings for, or None for all
+            file_type: Specific file type to get settings for
 
         Returns:
             Dtype settings dictionary
         """
         with self._settings_lock:
-            # Try new structure first
-            if file_type and os.path.exists(PathConstants.FILE_TYPES_DIR):
-                config = self._get_file_type_config(file_type)
-                if config['dtypes']:
-                    return config['dtypes']
-
-            # Fall back to legacy structure
-            self._reload_legacy_settings()
-            if file_type:
-                return self.dtype_settings.get(file_type, {})
-            return self.dtype_settings.copy()
-
-    def save_column_settings(self, settings: Dict[str, Any]) -> bool:
-        """
-        Save column settings to legacy file (backward compatibility)
-
-        Args:
-            settings: Column settings to save (dict of file_type -> columns)
-
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            settings_file = PathConstants.COLUMN_SETTINGS_FILE
-            os.makedirs(os.path.dirname(settings_file), exist_ok=True)
-
-            with open(settings_file, 'w', encoding='utf-8') as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False)
-
-            with self._settings_lock:
-                self.column_settings = settings.copy()
-                self._file_timestamps['column_settings'] = os.path.getmtime(settings_file)
-
-            return True
-        except Exception:
-            return False
-
-    def save_dtype_settings(self, settings: Dict[str, Any]) -> bool:
-        """
-        Save dtype settings to legacy file (backward compatibility)
-
-        Args:
-            settings: Dtype settings to save (dict of file_type -> dtypes)
-
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            dtype_file = PathConstants.DTYPE_SETTINGS_FILE
-            os.makedirs(os.path.dirname(dtype_file), exist_ok=True)
-
-            with open(dtype_file, 'w', encoding='utf-8') as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False)
-
-            with self._settings_lock:
-                self.dtype_settings = settings.copy()
-                self._file_timestamps['dtype_settings'] = os.path.getmtime(dtype_file)
-
-            return True
-        except Exception:
-            return False
+            config = self._get_file_type_config(file_type)
+            return config['dtypes']
 
     def save_file_type(self, file_type: str, columns: Dict[str, str], dtypes: Dict[str, str]) -> bool:
         """
@@ -281,10 +167,6 @@ class SettingsManager:
     def clear_cache(self) -> None:
         """Clear all cached settings (will reload on next access)"""
         with self._settings_lock:
-            self._file_timestamps = {
-                'column_settings': 0,
-                'dtype_settings': 0
-            }
             self._file_type_cache.clear()
             self._file_type_timestamps.clear()
 
