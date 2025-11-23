@@ -38,6 +38,7 @@ venv.bak/
 
 # Configuration files (exclude backups to avoid sensitive data)
 config/backups/
+config/*
 
 # Logs and temporary files
 logs/
