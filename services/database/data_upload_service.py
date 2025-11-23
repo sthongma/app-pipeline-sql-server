@@ -64,12 +64,11 @@ class DataUploadService:
             self.logger.warning(f"ไม่สามารถโหลด dtype_settings ได้: {e}")
             self.dtype_settings = {}
 
-    def upload_data(self, df, logic_type: str, required_cols: Dict, schema_name: str = 'bronze', 
+    def upload_data(self, df, logic_type: str, required_cols: Dict, schema_name: str = 'bronze',
                    log_func=None, force_recreate: bool = False, clear_existing: bool = True):
         """
-        Upload data to database: create table from config, insert only configured columns,
-        if database schema doesn't match, drop and recreate table
-        
+        Upload data to database with support for Replace or Upsert strategies
+
         Args:
             df: DataFrame to upload
             logic_type: File type
@@ -77,14 +76,30 @@ class DataUploadService:
             schema_name: Database schema name
             log_func: Function for logging
             force_recreate: Force table recreation (used when auto-updating data types)
-            clear_existing: Whether to clear existing data (default True for backwards compatibility)
+            clear_existing: Whether to clear existing data (ignored if update_strategy='upsert')
         """
-        
+
         # โหลด dtype_settings ใหม่ทุกครั้งเพื่อให้ได้ค่าล่าสุดหลัง Save
         self._load_dtype_settings()
-        
+
+        # อ่าน update strategy และ upsert keys
+        update_strategy = "replace"  # default
+        upsert_keys = []
+
+        if logic_type in self.dtype_settings:
+            update_strategy = self.dtype_settings[logic_type].get(
+                '_update_strategy', 'replace'
+            )
+            upsert_keys = self.dtype_settings[logic_type].get(
+                '_upsert_keys', []
+            )
+
         if log_func:
             log_func("✅ Database access permissions are correct")
+            strategy_name = "Upsert (Incremental)" if update_strategy == "upsert" else "Replace (Full)"
+            log_func(f"📋 Update Strategy: {strategy_name}")
+            if update_strategy == "upsert" and upsert_keys:
+                log_func(f"🔑 Upsert Keys: {', '.join(upsert_keys)}")
         
         try:
             if df is None or df.empty:
@@ -164,7 +179,8 @@ class DataUploadService:
                 }
             
             self._create_or_recreate_final_table(
-                table_name, required_cols, schema_name, needs_recreate, log_func, df, clear_existing
+                table_name, required_cols, schema_name, needs_recreate, log_func, df,
+                clear_existing, update_strategy, upsert_keys
             )
             
             if log_func:
@@ -404,17 +420,137 @@ class DataUploadService:
                 index=False
             )
 
-    def _create_or_recreate_final_table(self, table_name: str, required_cols: Dict, schema_name: str, 
-                                      needs_recreate: bool, log_func, df, clear_existing: bool = True):
-        """Create or recreate final table based on dtype config"""
+    def _delete_by_keys(self, staging_table: str, final_table: str,
+                       upsert_keys: list, schema_name: str, log_func=None):
+        """
+        Delete rows in final table where upsert keys match staging table
+
+        Args:
+            staging_table: Staging table name
+            final_table: Final table name
+            upsert_keys: List of column names to match on
+            schema_name: Database schema
+            log_func: Logging function
+
+        Example SQL (single key):
+            DELETE FROM bronze.orders
+            WHERE order_id IN (
+                SELECT DISTINCT order_id FROM bronze.orders__stg
+            )
+
+        Example SQL (multiple keys):
+            DELETE T FROM bronze.orders T
+            INNER JOIN bronze.orders__stg S
+            ON T.order_id = S.order_id
+            AND T.order_date = S.order_date
+        """
+        if not upsert_keys:
+            if log_func:
+                log_func("⚠️ No upsert keys specified, skipping delete")
+            return
+
+        # Validate upsert keys exist in staging table
+        try:
+            with self.engine.connect() as conn:
+                result = conn.execute(text(f"""
+                    SELECT COLUMN_NAME
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = '{schema_name}'
+                    AND TABLE_NAME = '{staging_table}'
+                """))
+                available_cols = {row[0] for row in result}
+
+                missing_keys = set(upsert_keys) - available_cols
+                if missing_keys:
+                    raise ValueError(f"Upsert keys not found in table: {missing_keys}")
+
+                # Check for NULL values in upsert keys
+                for key in upsert_keys:
+                    result = conn.execute(text(f"""
+                        SELECT COUNT(*)
+                        FROM {schema_name}.{staging_table}
+                        WHERE [{key}] IS NULL
+                    """))
+                    null_count = result.scalar()
+                    if null_count > 0:
+                        raise ValueError(
+                            f"Upsert key '{key}' contains {null_count} NULL values. "
+                            f"All upsert keys must be non-NULL."
+                        )
+        except Exception as e:
+            if log_func:
+                log_func(f"❌ Validation failed: {e}")
+            raise
+
+        # Build and execute DELETE statement
+        with self.engine.begin() as conn:
+            if len(upsert_keys) == 1:
+                # Single key - use IN clause for better performance
+                key = upsert_keys[0]
+                delete_sql = f"""
+                    DELETE FROM {schema_name}.{final_table}
+                    WHERE [{key}] IN (
+                        SELECT DISTINCT [{key}]
+                        FROM {schema_name}.{staging_table}
+                    )
+                """
+            else:
+                # Multiple keys - use INNER JOIN
+                join_conditions = " AND ".join([
+                    f"T.[{key}] = S.[{key}]" for key in upsert_keys
+                ])
+                delete_sql = f"""
+                    DELETE T
+                    FROM {schema_name}.{final_table} T
+                    INNER JOIN {schema_name}.{staging_table} S
+                    ON {join_conditions}
+                """
+
+            if log_func:
+                keys_str = ", ".join(upsert_keys)
+                log_func(f"🗑️ Deleting existing rows matching keys: {keys_str}")
+
+            try:
+                result = conn.execute(text(delete_sql))
+                deleted_count = result.rowcount
+
+                if log_func:
+                    log_func(f"✅ Deleted {deleted_count:,} existing rows")
+            except Exception as e:
+                if log_func:
+                    log_func(f"❌ Delete failed: {e}")
+                raise
+
+    def _create_or_recreate_final_table(self, table_name: str, required_cols: Dict, schema_name: str,
+                                      needs_recreate: bool, log_func, df, clear_existing: bool = True,
+                                      update_strategy: str = "replace", upsert_keys: list = None):
+        """
+        Create or recreate final table based on dtype config
+
+        Now supports two strategies:
+        - replace: TRUNCATE table before INSERT (default)
+        - upsert: DELETE matching keys, then INSERT
+
+        Args:
+            table_name: Name of the final table
+            required_cols: Required columns and their data types
+            schema_name: Database schema name
+            needs_recreate: Whether to recreate the table
+            log_func: Logging function
+            df: DataFrame being uploaded
+            clear_existing: Whether to clear existing data (ignored if update_strategy='upsert')
+            update_strategy: 'replace' or 'upsert'
+            upsert_keys: List of columns to use as keys for upsert (required if update_strategy='upsert')
+        """
+        upsert_keys = upsert_keys or []
         insp = inspect(self.engine)
-        
+
         if needs_recreate or not insp.has_table(table_name, schema=schema_name):
             if needs_recreate and log_func:
                 log_func(f"🛠️ Creating table {schema_name}.{table_name} to match data type settings")
             elif log_func:
                 log_func(f"📋 Creating table {schema_name}.{table_name} from data type settings")
-            
+
             # สร้าง empty DataFrame ที่มีเฉพาะคอลัมน์ที่มีอยู่ใน df (ไม่รวม updated_at)
             df_cols = [col for col in required_cols.keys() if col != 'updated_at']
             df.head(0)[df_cols].to_sql(
@@ -431,12 +567,22 @@ class DataUploadService:
         else:
             # แก้ไขชนิดข้อมูลสำหรับตารางที่มีอยู่แล้ว
             self._fix_column_types(table_name, required_cols, schema_name, log_func)
-            if clear_existing:
+
+            # เลือก strategy
+            if update_strategy == "upsert":
+                # Incremental: DELETE by keys
+                staging_table = f"{table_name}__stg"
+                self._delete_by_keys(
+                    staging_table, table_name, upsert_keys, schema_name, log_func
+                )
+            elif clear_existing:
+                # Replace: TRUNCATE table
                 if log_func:
                     log_func(f"🧹 Truncating existing data in table {schema_name}.{table_name}")
                 with self.engine.begin() as conn:
                     conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
             else:
+                # Append mode
                 if log_func:
                     log_func(f"📋 Appending to existing table {schema_name}.{table_name}")
 
