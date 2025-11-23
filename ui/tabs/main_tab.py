@@ -5,6 +5,7 @@ from ui.components.file_list import FileList
 from ui.components.progress_bar import ProgressBar
 from ui.components.status_bar import StatusBar
 from config.json_manager import get_output_folder, set_output_folder
+from ui.icon_manager import get_icon
 
 
 class MainTab:
@@ -68,16 +69,20 @@ class MainTab:
         # ปุ่มตรวจสอบไฟล์ในโฟลเดอร์
         self.check_btn = ctk.CTkButton(
             button_frame,
-            text="🔍 Check files in folder",
+            text="Check Files",
+            image=get_icon('search', size=18),
+            compound="left",
             command=self.callbacks.get('run_check_thread'),
             width=160,
         )
         self.check_btn.pack(side="left", padx=4)
 
-        # ปุ่มอัปโหลดไฟล์ 
+        # ปุ่มอัปโหลดไฟล์
         self.upload_button = ctk.CTkButton(
             button_frame,
-            text="📤 Upload selected files",
+            text="Upload Files",
+            image=get_icon('upload', size=18),
+            compound="left",
             command=self.callbacks.get('confirm_upload'),
             width=160,
         )
@@ -86,7 +91,9 @@ class MainTab:
         # ปุ่มเลือกโฟลเดอร์ input
         self.folder_btn = ctk.CTkButton(
             button_frame,
-            text="📁 Choose input folder",
+            text="Input Folder",
+            image=get_icon('folder_input', size=18),
+            compound="left",
             command=self.callbacks.get('browse_excel_path'),
             width=160,
         )
@@ -95,7 +102,9 @@ class MainTab:
         # ปุ่มเลือกโฟลเดอร์ output
         self.output_folder_btn = ctk.CTkButton(
             button_frame,
-            text="📁 Choose output folder",
+            text="Output Folder",
+            image=get_icon('folder', size=18),
+            compound="left",
             command=self.callbacks.get('choose_output_folder'),
             width=170,
         )
