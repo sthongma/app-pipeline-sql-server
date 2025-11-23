@@ -49,25 +49,29 @@ class FileReaderService:
         # ใช้ SettingsManager singleton แทน local cache
         self._settings_manager = settings_manager
 
+        # Instance variables for settings (loaded from settings_manager by FileOrchestrator)
+        self._column_settings: Dict[str, Any] = {}
+        self._dtype_settings: Dict[str, Any] = {}
+
     @property
     def column_settings(self) -> Dict[str, Any]:
-        """Get column settings from SettingsManager (auto-reloads if changed)"""
-        return self._settings_manager.get_column_settings()
+        """Get column settings"""
+        return self._column_settings
 
     @column_settings.setter
     def column_settings(self, value: Dict[str, Any]) -> None:
-        """Set column settings (saves to SettingsManager)"""
-        self._settings_manager.save_column_settings(value)
+        """Set column settings"""
+        self._column_settings = value
 
     @property
     def dtype_settings(self) -> Dict[str, Any]:
-        """Get dtype settings from SettingsManager (auto-reloads if changed)"""
-        return self._settings_manager.get_dtype_settings()
+        """Get dtype settings"""
+        return self._dtype_settings
 
     @dtype_settings.setter
     def dtype_settings(self, value: Dict[str, Any]) -> None:
-        """Set dtype settings (saves to SettingsManager)"""
-        self._settings_manager.save_dtype_settings(value)
+        """Set dtype settings"""
+        self._dtype_settings = value
 
     def load_settings(self, force_reload: bool = False) -> None:
         """

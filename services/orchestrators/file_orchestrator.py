@@ -30,49 +30,53 @@ from services.file import (
     FileManagementService
 )
 from performance_optimizations import PerformanceOptimizer
-from config.json_manager import load_column_settings, load_dtype_settings
+from services.settings_manager import settings_manager
 
 
 class FileOrchestrator:
     """
     Main file service (orchestrator)
-    
+
     Responsibilities:
     - Coordinate between different services
     - Complete file reading and processing
     - Provide same interface as legacy system
     """
-    
+
     def __init__(self, search_path: Optional[str] = None, log_callback: Optional[callable] = None) -> None:
         """
         Initialize FileService
-        
+
         Args:
             search_path (Optional[str]): Folder path for file search
             log_callback (Optional[callable]): Function for logging
         """
         self.log_callback = log_callback if log_callback else logging.info
-        
+
         # สร้าง services
         self.file_reader = FileReaderService(search_path, self.log_callback)
         self.data_processor = DataProcessorService(self.log_callback)
         self.file_manager = FileManagementService(search_path)
-        
-        # อัปเดตข้อมูลจาก JSON Manager
-        # Note: Settings are now managed by SettingsManager singleton
-        # These assignments trigger the property setters which save to SettingsManager
-        column_settings = load_column_settings()
-        dtype_settings = load_dtype_settings()
+
+        # Load all file types from settings_manager
+        # Build legacy-style dictionaries for services that expect them
+        column_settings = {}
+        dtype_settings = {}
+
+        file_types = settings_manager.list_file_types()
+        for file_type in file_types:
+            column_settings[file_type] = settings_manager.get_column_settings(file_type)
+            dtype_settings[file_type] = settings_manager.get_dtype_settings(file_type)
 
         self.file_reader.column_settings = column_settings
         self.file_reader.dtype_settings = dtype_settings
 
         self.data_processor.column_settings = column_settings
         self.data_processor.dtype_settings = dtype_settings
-        
+
         # สร้าง performance optimizer
         self.performance_optimizer = PerformanceOptimizer(self.log_callback)
-        
+
         # เก็บ reference สำหรับ backward compatibility
         self.search_path = self.file_reader.search_path
         self.column_settings = column_settings

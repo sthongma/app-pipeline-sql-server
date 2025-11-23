@@ -30,6 +30,7 @@ app_root = Path(__file__).parent.parent.parent.parent
 sys.path.append(str(app_root))
 
 from constants import PathConstants
+from services.settings_manager import settings_manager
 
 
 class MLColumnMapper:
@@ -117,27 +118,38 @@ class MLColumnMapper:
                 self.file_logger.info(message)
     
     def _load_column_settings(self) -> Dict[str, Dict[str, str]]:
-        """Load column settings from JSON file"""
+        """Load column settings from settings manager"""
         try:
-            with open(PathConstants.COLUMN_SETTINGS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            # Build legacy-style dictionary from all file types
+            column_settings = {}
+            file_types = settings_manager.list_file_types()
+            for file_type in file_types:
+                column_settings[file_type] = settings_manager.get_column_settings(file_type)
+            return column_settings
         except Exception:
             return {}
-    
+
     def _load_dtype_settings(self) -> Dict[str, Dict[str, str]]:
-        """Load data type settings from JSON file"""
+        """Load data type settings from settings manager"""
         try:
-            with open(PathConstants.DTYPE_SETTINGS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            # Build legacy-style dictionary from all file types
+            dtype_settings = {}
+            file_types = settings_manager.list_file_types()
+            for file_type in file_types:
+                dtype_settings[file_type] = settings_manager.get_dtype_settings(file_type)
+            return dtype_settings
         except Exception:
             return {}
-    
+
     def _save_column_settings(self) -> bool:
-        """Save updated column settings to JSON file"""
+        """Save updated column settings via settings manager"""
         try:
-            os.makedirs(os.path.dirname(PathConstants.COLUMN_SETTINGS_FILE), exist_ok=True)
-            with open(PathConstants.COLUMN_SETTINGS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.column_settings, f, ensure_ascii=False, indent=2)
+            # column_settings is a dict of {file_type: {original_col: mapped_col}}
+            # Save each file type separately
+            for file_type, columns in self.column_settings.items():
+                # Get existing dtypes for this file type
+                dtypes = self.dtype_settings.get(file_type, {})
+                settings_manager.save_file_type(file_type, columns, dtypes)
             return True
         except Exception as e:
             self._log(f"Error saving column settings: {str(e)}", 'error')
