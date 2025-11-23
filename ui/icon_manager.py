@@ -4,7 +4,7 @@ Icons are pre-downloaded using download_icons_simple.py
 """
 import os
 import customtkinter as ctk
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from pathlib import Path
 from typing import Optional
 
@@ -76,11 +76,23 @@ class IconManager:
 
         if icon_path and icon_path.exists():
             try:
-                img = Image.open(icon_path)
+                img_light = Image.open(icon_path)
                 # Resize if needed
-                if img.size[0] != size:
-                    img = img.resize((size, size), Image.LANCZOS)
-                ctk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
+                if img_light.size[0] != size:
+                    img_light = img_light.resize((size, size), Image.LANCZOS)
+
+                # Create white version for dark theme while preserving transparency
+                img_dark = img_light.convert('RGBA')
+                # Extract alpha channel
+                r, g, b, a = img_dark.split()
+                # Invert only RGB channels (not alpha)
+                rgb = Image.merge('RGB', (r, g, b))
+                rgb_inverted = ImageOps.invert(rgb)
+                r2, g2, b2 = rgb_inverted.split()
+                # Merge back with original alpha
+                img_dark = Image.merge('RGBA', (r2, g2, b2, a))
+
+                ctk_image = ctk.CTkImage(light_image=img_light, dark_image=img_dark, size=(size, size))
                 self._loaded_icons[cache_key] = ctk_image
                 return ctk_image
             except Exception as e:
@@ -100,15 +112,18 @@ class IconManager:
         Returns:
             CTkImage with simple placeholder
         """
-        # Create a simple square placeholder
-        img = Image.new('RGBA', (size, size), (128, 128, 128, 0))
-        draw = ImageDraw.Draw(img)
-
-        # Draw a simple circle
+        # Create dark placeholder for light theme
+        img_light = Image.new('RGBA', (size, size), (128, 128, 128, 0))
+        draw_light = ImageDraw.Draw(img_light)
         margin = size // 4
-        draw.ellipse([margin, margin, size - margin, size - margin], fill=(128, 128, 128, 180))
+        draw_light.ellipse([margin, margin, size - margin, size - margin], fill=(128, 128, 128, 180))
 
-        return ctk.CTkImage(light_image=img, dark_image=img, size=(size, size))
+        # Create light placeholder for dark theme
+        img_dark = Image.new('RGBA', (size, size), (200, 200, 200, 0))
+        draw_dark = ImageDraw.Draw(img_dark)
+        draw_dark.ellipse([margin, margin, size - margin, size - margin], fill=(200, 200, 200, 180))
+
+        return ctk.CTkImage(light_image=img_light, dark_image=img_dark, size=(size, size))
 
     def preload_icons(self, icon_names: list):
         """
