@@ -649,12 +649,6 @@ class SettingsTab:
                 self.dtype_settings[file_type] = {}
 
             self.dtype_settings[file_type]['_upsert_keys'] = selected_keys
-
-            messagebox.showinfo(
-                "Success",
-                f"Upsert keys saved: {', '.join(selected_keys)}",
-                parent=dialog
-            )
             dialog.destroy()
 
         cancel_btn = ctk.CTkButton(
@@ -667,7 +661,7 @@ class SettingsTab:
 
         save_btn = ctk.CTkButton(
             button_frame,
-            text="Save",
+            text="OK",
             command=save_and_close,
             width=100
         )

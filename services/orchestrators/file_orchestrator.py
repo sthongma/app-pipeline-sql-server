@@ -259,20 +259,26 @@ class FileOrchestrator:
         return self.file_reader.normalize_col(col)
 
     def load_settings(self):
-        """Load new settings from JSON Manager"""
-        # โหลดการตั้งค่าใหม่จาก JSON Manager
-        column_settings = load_column_settings()
-        dtype_settings = load_dtype_settings()
-        
+        """Load new settings from settings_manager"""
+        # โหลดการตั้งค่าใหม่จาก settings_manager
+        # Build legacy-style dictionaries for services that expect them
+        column_settings = {}
+        dtype_settings = {}
+
+        file_types = settings_manager.list_file_types()
+        for file_type in file_types:
+            column_settings[file_type] = settings_manager.get_column_settings(file_type)
+            dtype_settings[file_type] = settings_manager.get_dtype_settings(file_type)
+
         # อัปเดตข้อมูลใน file_reader และ data_processor
         self.file_reader.column_settings = column_settings
         self.file_reader.dtype_settings = dtype_settings
         self.file_reader._settings_loaded = True
-        
-        self.data_processor.column_settings = column_settings  
+
+        self.data_processor.column_settings = column_settings
         self.data_processor.dtype_settings = dtype_settings
         self.data_processor._settings_loaded = True
-        
+
         # อัปเดต reference ใน FileService
         self.column_settings = column_settings
 

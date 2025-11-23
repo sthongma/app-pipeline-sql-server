@@ -117,8 +117,12 @@ class DataUploadService:
             
             table_name = None
             try:
-                col_config = load_column_settings()
-                table_name = col_config.get("__table_names__", {}).get(logic_type)
+                # Load column settings from settings_manager for this specific file type
+                col_config = settings_manager.get_column_settings(logic_type)
+                # Check if there's a custom table name mapping in the settings
+                # Note: Using logic_type as table name if not specified
+                if isinstance(col_config, dict):
+                    table_name = col_config.get("__table_name__")
             except Exception:
                 table_name = None
             if not table_name:
