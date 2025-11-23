@@ -309,21 +309,36 @@ class SettingsTab:
         if current_file_type != "Select a file type..." and current_file_type in self.dtype_menus:
             if current_file_type not in self.dtype_settings:
                 self.dtype_settings[current_file_type] = {}
-            
-            # บันทึก date format ก่อนเป็นอันดับแรก
+
+            # บันทึก meta fields ก่อน
+            meta_dict = {}
+
+            # 1. Date format
             if hasattr(self, 'date_format_menus') and current_file_type in self.date_format_menus:
-                # ลบ _date_format เก่าออกก่อน (ถ้ามี) แล้วค่อยเพิ่มใหม่ในตำแหน่งแรก
-                temp_dict = self.dtype_settings[current_file_type].copy()
-                if "_date_format" in temp_dict:
-                    del temp_dict["_date_format"]
-                self.dtype_settings[current_file_type] = {"_date_format": self.date_format_menus[current_file_type].get()}
-                self.dtype_settings[current_file_type].update(temp_dict)
-            
-            # จากนั้นค่อยบันทึกชนิดข้อมูลแต่ละคอลัมน์ (ใช้ target column เป็น key)
+                meta_dict["_date_format"] = self.date_format_menus[current_file_type].get()
+
+            # 2. Update strategy
+            if hasattr(self, 'strategy_menus') and current_file_type in self.strategy_menus:
+                strategy_display = self.strategy_menus[current_file_type].get()
+                meta_dict["_update_strategy"] = "upsert" if "Upsert" in strategy_display else "replace"
+
+            # 3. Upsert keys (เก็บไว้ถ้ามี)
+            if "_upsert_keys" in self.dtype_settings.get(current_file_type, {}):
+                meta_dict["_upsert_keys"] = self.dtype_settings[current_file_type]["_upsert_keys"]
+
+            # ลบ meta fields เก่าออก
+            temp_dict = {k: v for k, v in self.dtype_settings[current_file_type].items()
+                         if not k.startswith('_')}
+
+            # สร้าง dict ใหม่โดยใส่ meta fields ก่อน
+            self.dtype_settings[current_file_type] = meta_dict
+            self.dtype_settings[current_file_type].update(temp_dict)
+
+            # บันทึกชนิดข้อมูลแต่ละคอลัมน์ (ใช้ target column เป็น key)
             for source_col, menu in self.dtype_menus[current_file_type].items():
                 target_col = self.column_settings[current_file_type][source_col]
                 self.dtype_settings[current_file_type][target_col] = menu.get()
-            
+
             if self.callbacks.get('save_dtype_settings'):
                 self.callbacks['save_dtype_settings']()
             messagebox.showinfo("Success", f"Saved data types for {current_file_type}")
@@ -393,17 +408,21 @@ class SettingsTab:
         """สร้างและแคช UI สำหรับประเภทไฟล์"""
         # สร้าง scrollable frame สำหรับแสดงคอลัมน์
         scroll_frame = ctk.CTkScrollableFrame(self.content_frame, width=820, height=460)
-        
+
         # --- Date Format Dropdown ---
         date_format_menu = self._create_date_format_section(scroll_frame, file_type)
-        
+
+        # --- Update Strategy Section ---
+        strategy_menu = self._create_update_strategy_section(scroll_frame, file_type)
+
         # --- Column Settings ---
         column_menus = self._create_column_settings_section(scroll_frame, file_type)
-        
+
         # แคช UI elements
         self.ui_cache[file_type] = {
             'scroll_frame': scroll_frame,
             'date_format_menu': date_format_menu,
+            'strategy_menu': strategy_menu,
             'column_menus': column_menus
         }
     
@@ -437,9 +456,188 @@ class SettingsTab:
         
         # เก็บ reference สำหรับบันทึก
         self.date_format_menus[file_type] = date_format_menu
-        
+
         return date_format_menu
-    
+
+    def _create_update_strategy_section(self, parent, file_type):
+        """สร้างส่วน Update Strategy"""
+        # เพิ่ม outer frame เพื่อครอบและเพิ่มระยะห่าง
+        strategy_outer_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        strategy_outer_frame.pack(fill="x", pady=10, padx=8)
+
+        # strategy_frame ที่มีกรอบสีเทาเข้มและมุมโค้งมน
+        strategy_frame = ctk.CTkFrame(strategy_outer_frame, corner_radius=8)
+        strategy_frame.pack(fill="x", pady=3, padx=3)
+
+        strategy_label = ctk.CTkLabel(
+            strategy_frame,
+            text="🔄 Update Strategy",
+            width=400,
+            anchor="w"
+        )
+        strategy_label.pack(side="left", padx=(15, 10), pady=12, expand=True, fill="x")
+
+        # Container for dropdown and button
+        controls_container = ctk.CTkFrame(strategy_frame, fg_color="transparent")
+        controls_container.pack(side="right", padx=(0, 15), pady=12)
+
+        # Dropdown
+        strategy_menu = ctk.CTkOptionMenu(
+            controls_container,
+            values=["Replace", "Upsert (Incremental)"],
+            width=180,
+            command=lambda v: self._on_strategy_changed(file_type, v)
+        )
+        current_strategy = self.dtype_settings.get(file_type, {}).get(
+            '_update_strategy', 'replace'
+        )
+        strategy_menu.set("Upsert (Incremental)" if current_strategy == "upsert" else "Replace")
+        strategy_menu.pack(side="left", padx=(0, 5))
+
+        # Settings button
+        settings_btn = ctk.CTkButton(
+            controls_container,
+            text="⚙️",
+            width=40,
+            command=lambda: self._open_upsert_keys_dialog(file_type)
+        )
+        settings_btn.pack(side="left")
+
+        # เก็บ reference
+        if not hasattr(self, 'strategy_menus'):
+            self.strategy_menus = {}
+        if not hasattr(self, 'settings_buttons'):
+            self.settings_buttons = {}
+
+        self.strategy_menus[file_type] = strategy_menu
+        self.settings_buttons[file_type] = settings_btn
+
+        # Disable settings button if Replace mode
+        if current_strategy == "replace":
+            settings_btn.configure(state="disabled")
+
+        return strategy_menu
+
+    def _on_strategy_changed(self, file_type, strategy_display_name):
+        """เมื่อเปลี่ยน strategy"""
+        strategy_value = "upsert" if "Upsert" in strategy_display_name else "replace"
+
+        # Enable/disable settings button
+        if file_type in self.settings_buttons:
+            if strategy_value == "upsert":
+                self.settings_buttons[file_type].configure(state="normal")
+            else:
+                self.settings_buttons[file_type].configure(state="disabled")
+
+    def _open_upsert_keys_dialog(self, file_type):
+        """เปิด dialog สำหรับเลือก upsert keys"""
+        # สร้าง toplevel dialog
+        dialog = ctk.CTkToplevel(self.parent)
+        dialog.title("Upsert Configuration")
+        dialog.geometry("500x600")
+        dialog.transient(self.parent)
+        dialog.grab_set()
+
+        # Header
+        header = ctk.CTkLabel(
+            dialog,
+            text="🔑 Select Upsert Keys",
+            font=("", 16, "bold")
+        )
+        header.pack(pady=20, padx=20)
+
+        # Description
+        desc = ctk.CTkLabel(
+            dialog,
+            text="Selected columns will be used to identify existing records.\n"
+                 "Rows matching these keys will be deleted and re-inserted.",
+            wraplength=450,
+            justify="left"
+        )
+        desc.pack(pady=10, padx=20)
+
+        # Scrollable frame for checkboxes
+        scroll_frame = ctk.CTkScrollableFrame(dialog, width=450, height=350)
+        scroll_frame.pack(pady=10, padx=20, fill="both", expand=True)
+
+        # Get available columns
+        columns = list(self.column_settings.get(file_type, {}).values())
+        current_upsert_keys = self.dtype_settings.get(file_type, {}).get('_upsert_keys', [])
+
+        # Create checkboxes
+        checkbox_vars = {}
+        for col in columns:
+            if col == 'updated_at':  # Skip meta columns
+                continue
+
+            var = ctk.BooleanVar(value=(col in current_upsert_keys))
+            checkbox = ctk.CTkCheckBox(
+                scroll_frame,
+                text=col,
+                variable=var,
+                font=("", 12)
+            )
+            checkbox.pack(anchor="w", pady=5, padx=10)
+            checkbox_vars[col] = var
+
+        # Warning
+        warning_frame = ctk.CTkFrame(dialog, fg_color=("gray85", "gray25"))
+        warning_frame.pack(pady=10, padx=20, fill="x")
+
+        warning_label = ctk.CTkLabel(
+            warning_frame,
+            text="⚠️ At least one upsert key must be selected for Upsert mode",
+            font=("", 11),
+            text_color=("orange", "yellow")
+        )
+        warning_label.pack(pady=10, padx=10)
+
+        # Buttons
+        button_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        button_frame.pack(pady=20, padx=20)
+
+        def save_and_close():
+            # Collect selected keys
+            selected_keys = [col for col, var in checkbox_vars.items() if var.get()]
+
+            # Validate
+            if not selected_keys:
+                messagebox.showwarning(
+                    "Validation Error",
+                    "Please select at least one upsert key for Upsert mode",
+                    parent=dialog
+                )
+                return
+
+            # Save to dtype_settings
+            if file_type not in self.dtype_settings:
+                self.dtype_settings[file_type] = {}
+
+            self.dtype_settings[file_type]['_upsert_keys'] = selected_keys
+
+            messagebox.showinfo(
+                "Success",
+                f"Upsert keys saved: {', '.join(selected_keys)}",
+                parent=dialog
+            )
+            dialog.destroy()
+
+        cancel_btn = ctk.CTkButton(
+            button_frame,
+            text="Cancel",
+            command=dialog.destroy,
+            width=100
+        )
+        cancel_btn.pack(side="left", padx=10)
+
+        save_btn = ctk.CTkButton(
+            button_frame,
+            text="Save",
+            command=save_and_close,
+            width=100
+        )
+        save_btn.pack(side="left", padx=10)
+
     def _create_column_settings_section(self, parent, file_type):
         """สร้างส่วนการตั้งค่าคอลัมน์"""
         if file_type not in self.dtype_menus:
