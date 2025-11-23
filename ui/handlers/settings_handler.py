@@ -38,13 +38,28 @@ class SettingsHandler:
             return {}
     
     def save_column_settings(self, column_settings):
-        """Save column settings using JSON Manager."""
+        """
+        Save column settings using JSON Manager.
+
+        Saves to both legacy format (for backward compatibility)
+        and new format (individual file type files).
+        """
         try:
+            # Save to legacy format for backward compatibility
             success = save_column_config(column_settings)
+
+            # Also save to new format (file_types/*.json)
+            # Combine with existing dtype settings
+            dtype_settings = self.load_dtype_settings()
+
+            for file_type, columns in column_settings.items():
+                dtypes = dtype_settings.get(file_type, {})
+                json_manager.save_file_type(file_type, columns, dtypes)
+
             if success:
-                self.log("Column settings saved successfully")
+                self.log("Column settings saved successfully (both legacy and new format)")
             else:
-                self.log("Failed to save column settings")
+                self.log("Failed to save column settings to legacy format")
         except Exception as e:
             self.log(f"Cannot save column settings: {e}")
     
@@ -58,13 +73,28 @@ class SettingsHandler:
             return {}
     
     def save_dtype_settings(self, dtype_settings):
-        """Save data type settings using JSON Manager."""
+        """
+        Save data type settings using JSON Manager.
+
+        Saves to both legacy format (for backward compatibility)
+        and new format (individual file type files).
+        """
         try:
+            # Save to legacy format for backward compatibility
             success = save_dtype_config(dtype_settings)
+
+            # Also save to new format (file_types/*.json)
+            # Combine with existing column settings
+            column_settings = self.load_column_settings()
+
+            for file_type, dtypes in dtype_settings.items():
+                columns = column_settings.get(file_type, {})
+                json_manager.save_file_type(file_type, columns, dtypes)
+
             if success:
-                self.log("Data type settings saved successfully")
+                self.log("Data type settings saved successfully (both legacy and new format)")
             else:
-                self.log("Failed to save data type settings")
+                self.log("Failed to save data type settings to legacy format")
         except Exception as e:
             self.log(f"Cannot save data type settings: {e}")
     
