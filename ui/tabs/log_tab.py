@@ -60,12 +60,13 @@ class LogTab:
 
     def _export_log(self):
         """Export log content to a file - with double-click protection"""
-        # Check if button is already disabled
+        # Check if any button is already disabled (using export_btn as indicator)
         if self.export_btn.cget('state') == 'disabled':
             return  # Already processing, ignore this click
 
-        # Disable button immediately
-        self.export_btn.configure(state='disabled')
+        # Disable all controls immediately
+        if 'disable_controls' in self.callbacks:
+            self.callbacks['disable_controls']()
 
         try:
             log_text = self.log_textbox.get("1.0", "end").strip()
@@ -97,8 +98,9 @@ class LogTab:
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to export log:\n{str(e)}")
         finally:
-            # Always re-enable button
-            self.export_btn.configure(state='normal')
+            # Always re-enable all controls
+            if 'enable_controls' in self.callbacks:
+                self.callbacks['enable_controls']()
     
     def _get_emoji_color_map(self):
         """แมป emoji กับสี (shared with main_window.py)"""

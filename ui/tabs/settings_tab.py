@@ -607,6 +607,15 @@ class SettingsTab:
 
     def _open_upsert_keys_dialog(self, file_type):
         """เปิด dialog สำหรับเลือก upsert keys"""
+        # Check if any button is already disabled (to prevent opening multiple dialogs)
+        if hasattr(self, 'settings_buttons') and file_type in self.settings_buttons:
+            if self.settings_buttons[file_type].cget('state') == 'disabled':
+                return  # Already processing, ignore this click
+        
+        # Disable all controls immediately
+        if 'disable_controls' in self.callbacks:
+            self.callbacks['disable_controls']()
+
         dialog = ctk.CTkToplevel(self.parent)
         dialog.title("Upsert Configuration")
         dialog.geometry("400x700")
@@ -693,11 +702,22 @@ class SettingsTab:
 
             self.dtype_settings[file_type]['_upsert_keys'] = selected_keys
             dialog.destroy()
+            
+            # Re-enable all controls after dialog closes
+            if 'enable_controls' in self.callbacks:
+                self.callbacks['enable_controls']()
+
+        def cancel_and_close():
+            dialog.destroy()
+            
+            # Re-enable all controls after dialog closes
+            if 'enable_controls' in self.callbacks:
+                self.callbacks['enable_controls']()
 
         cancel_btn = ctk.CTkButton(
             button_frame,
             text="Cancel",
-            command=dialog.destroy,
+            command=cancel_and_close,
             width=100
         )
         cancel_btn.pack(side="left", padx=10)

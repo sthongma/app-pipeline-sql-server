@@ -170,7 +170,9 @@ class MainWindow(ctk.CTkToplevel):
         """Create components in Log Tab"""
         # Create log tab with callbacks
         callbacks = {
-            'choose_log_folder': self._choose_log_folder
+            'choose_log_folder': self._choose_log_folder,
+            'disable_controls': lambda: self.main_tab_ui.disable_controls(),
+            'enable_controls': lambda: self.main_tab_ui.enable_controls()
         }
 
         self.log_tab_ui = LogTab(parent, callbacks)
@@ -249,20 +251,18 @@ class MainWindow(ctk.CTkToplevel):
     
     def _browse_excel_path(self):
         """Select folder - with double-click protection"""
-        button = self.main_tab_ui.folder_btn
-
-        # Check if button is already disabled
-        if button.cget('state') == 'disabled':
+        # Check if any button is already disabled (using folder_btn as indicator)
+        if self.main_tab_ui.folder_btn.cget('state') == 'disabled':
             return  # Already processing, ignore this click
 
-        # Disable button immediately
-        button.configure(state='disabled')
+        # Disable all controls immediately
+        self.main_tab_ui.disable_controls()
 
         try:
             self.file_handler.browse_excel_path(self.settings_handler.save_input_folder)
         finally:
-            # Always re-enable button
-            button.configure(state='normal')
+            # Always re-enable all controls
+            self.main_tab_ui.enable_controls()
     
     def _run_check_thread(self):
         """Start file checking"""
@@ -278,14 +278,12 @@ class MainWindow(ctk.CTkToplevel):
         """Choose output folder - with double-click protection"""
         from tkinter import filedialog
 
-        button = self.main_tab_ui.output_folder_btn
-
-        # Check if button is already disabled
-        if button.cget('state') == 'disabled':
+        # Check if any button is already disabled (using output_folder_btn as indicator)
+        if self.main_tab_ui.output_folder_btn.cget('state') == 'disabled':
             return  # Already processing, ignore this click
 
-        # Disable button immediately
-        button.configure(state='disabled')
+        # Disable all controls immediately
+        self.main_tab_ui.disable_controls()
 
         try:
             # Get current output folder path from MainTab
@@ -306,21 +304,19 @@ class MainWindow(ctk.CTkToplevel):
 
                 messagebox.showinfo("Success", f"Output folder set to:\n{folder_path}\n\nUploaded files will be moved to this location.")
         finally:
-            # Always re-enable button
-            button.configure(state='normal')
+            # Always re-enable all controls
+            self.main_tab_ui.enable_controls()
 
     def _choose_log_folder(self):
         """Choose log folder - with double-click protection"""
         from tkinter import filedialog
 
-        button = self.log_tab_ui.log_folder_btn
-
-        # Check if button is already disabled
-        if button.cget('state') == 'disabled':
+        # Check if any button is already disabled (using log_folder_btn as indicator)
+        if self.log_tab_ui.log_folder_btn.cget('state') == 'disabled':
             return  # Already processing, ignore this click
 
-        # Disable button immediately
-        button.configure(state='disabled')
+        # Disable all controls immediately
+        self.main_tab_ui.disable_controls()
 
         try:
             # Get current log folder path from LogTab
@@ -341,8 +337,8 @@ class MainWindow(ctk.CTkToplevel):
 
                 messagebox.showinfo("Success", f"Log folder set to:\n{folder_path}")
         finally:
-            # Always re-enable button
-            button.configure(state='normal')
+            # Always re-enable all controls
+            self.main_tab_ui.enable_controls()
 
     def _reload_settings_in_services(self):
         """Reload settings in all services"""

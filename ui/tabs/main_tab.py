@@ -117,6 +117,7 @@ class MainTab:
         self.select_all_button.configure(state="normal")
         self.upload_button.configure(state="normal")
         self.folder_btn.configure(state="normal")
+        self.output_folder_btn.configure(state="normal")
         self.check_btn.configure(state="normal")
         self.file_list.enable_all_checkboxes()
         
@@ -129,6 +130,7 @@ class MainTab:
         self.select_all_button.configure(state="disabled")
         self.upload_button.configure(state="disabled")
         self.folder_btn.configure(state="disabled")
+        self.output_folder_btn.configure(state="disabled")
         self.check_btn.configure(state="disabled")
         self.file_list.disable_all_checkboxes()
 
