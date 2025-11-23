@@ -122,6 +122,11 @@ class PathConstants:
 
     # Configuration files (sql_config.json no longer used - using environment variables)
     CONFIG_DIR = os.path.join(_BASE_DIR, "config")
+
+    # New structure: file types in separate directory
+    FILE_TYPES_DIR = os.path.join(CONFIG_DIR, "file_types")
+
+    # Legacy file paths (kept for backward compatibility during migration)
     COLUMN_SETTINGS_FILE = os.path.join(CONFIG_DIR, "column_settings.json")
     DTYPE_SETTINGS_FILE = os.path.join(CONFIG_DIR, "dtype_settings.json")
 
