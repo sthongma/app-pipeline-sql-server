@@ -3,6 +3,7 @@ import customtkinter as ctk
 from tkinter import messagebox, filedialog
 import pandas as pd
 from constants import DatabaseConstants, FileConstants
+from ui.icon_manager import get_icon
 
 
 class SettingsTab:
@@ -62,13 +63,40 @@ class SettingsTab:
     def _create_buttons(self, button_row):
         """สร้างปุ่มควบคุม"""
         # ปุ่มควบคุมด้านซ้าย
-        add_type_btn = ctk.CTkButton(button_row, text="➕ Add file type", command=self._add_file_type)
+        add_type_btn = ctk.CTkButton(
+            button_row,
+            text="Add File Type",
+            image=get_icon('add', size=18),
+            compound="left",
+            command=self._add_file_type
+        )
         add_type_btn.pack(side="left", padx=5)
-        del_type_btn = ctk.CTkButton(button_row, text="➖ Remove file type", command=self._delete_file_type)
+
+        del_type_btn = ctk.CTkButton(
+            button_row,
+            text="Remove",
+            image=get_icon('remove', size=18),
+            compound="left",
+            command=self._delete_file_type
+        )
         del_type_btn.pack(side="left", padx=5)
-        save_dtype_btn = ctk.CTkButton(button_row, text="✅ Save data types", command=self._save_all_dtype_settings)
+
+        save_dtype_btn = ctk.CTkButton(
+            button_row,
+            text="Save Settings",
+            image=get_icon('save', size=18),
+            compound="left",
+            command=self._save_all_dtype_settings
+        )
         save_dtype_btn.pack(side="left", padx=5)
-        edit_type_btn = ctk.CTkButton(button_row, text="✏️ Rename file type", command=self._edit_file_type)
+
+        edit_type_btn = ctk.CTkButton(
+            button_row,
+            text="Rename",
+            image=get_icon('edit', size=18),
+            compound="left",
+            command=self._edit_file_type
+        )
         edit_type_btn.pack(side="left", padx=5)
         
         if self.ui_progress_callback:
@@ -431,15 +459,17 @@ class SettingsTab:
         # เพิ่ม outer frame เพื่อครอบและเพิ่มระยะห่าง
         date_outer_frame = ctk.CTkFrame(parent, fg_color="transparent")
         date_outer_frame.pack(fill="x", pady=10, padx=8)
-        
+
         # date_format_frame ที่มีกรอบสีเทาเข้มและมุมโค้งมน
         date_format_frame = ctk.CTkFrame(date_outer_frame, corner_radius=8)
         date_format_frame.pack(fill="x", pady=3, padx=3)
-        
+
         date_format_label = ctk.CTkLabel(
-            date_format_frame, 
-            text="⏰ Date Format (US / MM-DD or UK / DD-MM)", 
-            width=400, 
+            date_format_frame,
+            text="Date Format (US / MM-DD or UK / DD-MM)",
+            image=get_icon('time', size=18),
+            compound="left",
+            width=400,
             anchor="w",
         )
         date_format_label.pack(side="left", padx=(15, 10), pady=12, expand=True, fill="x")
@@ -471,7 +501,9 @@ class SettingsTab:
 
         strategy_label = ctk.CTkLabel(
             strategy_frame,
-            text="🔄 Update Strategy",
+            text="Update Strategy",
+            image=get_icon('refresh', size=18),
+            compound="left",
             width=400,
             anchor="w"
         )
@@ -497,7 +529,8 @@ class SettingsTab:
         # Settings button
         settings_btn = ctk.CTkButton(
             controls_container,
-            text="⚙️",
+            text="",
+            image=get_icon('settings', size=18),
             width=40,
             command=lambda: self._open_upsert_keys_dialog(file_type)
         )
@@ -534,14 +567,16 @@ class SettingsTab:
         dialog = ctk.CTkToplevel(self.parent)
         dialog.title("Upsert Configuration")
         dialog.geometry("400x700")
-        dialog.resizable(False, False) 
+        dialog.resizable(False, False)
         dialog.transient(self.parent)
         dialog.grab_set()
 
         # Header
         header = ctk.CTkLabel(
             dialog,
-            text="🔑 Select Upsert Keys",
+            text="Select Upsert Keys",
+            image=get_icon('key', size=20),
+            compound="left",
             font=("", 16, "bold")
         )
         header.pack(pady=20, padx=20)
