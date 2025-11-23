@@ -531,10 +531,10 @@ class SettingsTab:
 
     def _open_upsert_keys_dialog(self, file_type):
         """เปิด dialog สำหรับเลือก upsert keys"""
-        # สร้าง toplevel dialog
         dialog = ctk.CTkToplevel(self.parent)
         dialog.title("Upsert Configuration")
-        dialog.geometry("500x600")
+        dialog.geometry("400x700")
+        dialog.resizable(False, False) 
         dialog.transient(self.parent)
         dialog.grab_set()
 
