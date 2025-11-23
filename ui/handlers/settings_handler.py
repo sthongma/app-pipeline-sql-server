@@ -1,70 +1,79 @@
-"""Settings Operation Handlers - Modernized with JSON Manager"""
+"""Settings Operation Handlers - Modernized with Settings Manager"""
 from config.json_manager import (
     json_manager,
-    load_column_settings as load_column_config,
-    save_column_settings as save_column_config,
-    load_dtype_settings as load_dtype_config,
-    save_dtype_settings as save_dtype_config,
     get_input_folder,
     set_input_folder
 )
+from services.settings_manager import settings_manager
 
 
 class SettingsHandler:
     """
-    Modernized Settings Handler using centralized JSON Manager.
-    
+    Modernized Settings Handler using centralized Settings Manager.
+
     Provides backward compatibility while using the new unified system.
     """
-    
+
     def __init__(self, settings_file, log_callback):
         """
         Initialize Settings Handler
-        
+
         Args:
             settings_file: Path to settings file (kept for compatibility)
             log_callback: Function to call for logging
         """
         self.settings_file = settings_file  # Kept for compatibility
         self.log = log_callback
-    
+
     def load_column_settings(self):
-        """Load column settings using JSON Manager."""
+        """Load all column settings from settings manager."""
         try:
-            settings = load_column_config()
-            return settings
+            # Build legacy-style dictionary from all file types
+            column_settings = {}
+            file_types = settings_manager.list_file_types()
+            for file_type in file_types:
+                column_settings[file_type] = settings_manager.get_column_settings(file_type)
+            return column_settings
         except Exception as e:
             self.log(f"Cannot load column settings: {e}")
             return {}
-    
+
     def save_column_settings(self, column_settings):
-        """Save column settings using JSON Manager."""
+        """Save column settings for all file types."""
         try:
-            success = save_column_config(column_settings)
-            if success:
-                self.log("Column settings saved successfully")
-            else:
-                self.log("Failed to save column settings")
+            # column_settings is a dict of {file_type: {original_col: mapped_col}}
+            # Save each file type separately
+            for file_type, columns in column_settings.items():
+                # Get existing dtypes for this file type
+                dtypes = settings_manager.get_dtype_settings(file_type)
+                settings_manager.save_file_type(file_type, columns, dtypes)
+            self.log("Column settings saved successfully")
         except Exception as e:
             self.log(f"Cannot save column settings: {e}")
-    
+
     def load_dtype_settings(self):
-        """Load data type settings using JSON Manager."""
+        """Load all dtype settings from settings manager."""
         try:
-            settings = load_dtype_config()
-            return settings
+            # Build legacy-style dictionary from all file types
+            dtype_settings = {}
+            file_types = settings_manager.list_file_types()
+            for file_type in file_types:
+                dtype_settings[file_type] = settings_manager.get_dtype_settings(file_type)
+            return dtype_settings
         except Exception as e:
             self.log(f"Cannot load data type settings: {e}")
             return {}
-    
+
     def save_dtype_settings(self, dtype_settings):
-        """Save data type settings using JSON Manager."""
+        """Save dtype settings for all file types."""
         try:
-            success = save_dtype_config(dtype_settings)
-            if success:
-                self.log("Data type settings saved successfully")
-            else:
-                self.log("Failed to save data type settings")
+            # dtype_settings is a dict of {file_type: {column: dtype}}
+            # Save each file type separately
+            for file_type, dtypes in dtype_settings.items():
+                # Get existing columns for this file type
+                columns = settings_manager.get_column_settings(file_type)
+                settings_manager.save_file_type(file_type, columns, dtypes)
+            self.log("Data type settings saved successfully")
         except Exception as e:
             self.log(f"Cannot save data type settings: {e}")
     

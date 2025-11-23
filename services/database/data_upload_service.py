@@ -13,7 +13,7 @@ import pandas as pd
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import DBAPIError
 
-from config.json_manager import load_dtype_settings, load_column_settings
+from services.settings_manager import settings_manager
 from sqlalchemy.types import (
     DateTime,
     Integer as SA_Integer,
@@ -34,14 +34,14 @@ from utils.sql_utils import get_numeric_cleaning_expression
 class DataUploadService:
     """
     Data upload service for database operations
-    
+
     Handles staging, validation, and final data upload
     """
-    
+
     def __init__(self, engine, schema_service, validation_service: DataValidationService = None) -> None:
         """
         Initialize DataUploadService
-        
+
         Args:
             engine: SQLAlchemy engine instance
             schema_service: Schema service instance
@@ -51,15 +51,19 @@ class DataUploadService:
         self.schema_service = schema_service
         self.validation_service = validation_service or DataValidationService(engine)
         self.logger = logging.getLogger(__name__)
-        
+
         # โหลดการตั้งค่าประเภทข้อมูล
         self.dtype_settings = {}
         self._load_dtype_settings()
-    
+
     def _load_dtype_settings(self):
-        """Load data type settings from file using JSON Manager"""
+        """Load data type settings from settings_manager"""
         try:
-            self.dtype_settings = load_dtype_settings()
+            # Load all file types from settings_manager
+            self.dtype_settings = {}
+            file_types = settings_manager.list_file_types()
+            for file_type in file_types:
+                self.dtype_settings[file_type] = settings_manager.get_dtype_settings(file_type)
         except Exception as e:
             self.logger.warning(f"ไม่สามารถโหลด dtype_settings ได้: {e}")
             self.dtype_settings = {}
