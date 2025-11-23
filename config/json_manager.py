@@ -62,48 +62,20 @@ class JSONManager:
                 default_content={
                     "window_size": [900, 780],
                     "theme": "system",
-                    "auto_move_files": True,
                     "backup_enabled": True,
-                    "log_level": "INFO"
+                    "log_level": "INFO",
+                    "folders": {
+                        "input_folder": "",
+                        "output_folder": "",
+                        "log_folder": ""
+                    },
+                    "file_management": {
+                        "auto_move_enabled": True,
+                        "organize_by_date": False
+                    }
                 },
                 required_keys=[],
                 validation_func=self._validate_app_settings
-            ),
-            'input_folder_config': JSONFileConfig(
-                filename='input_folder_config.json',
-                default_content={"folder_path": ""},
-                required_keys=['folder_path'],
-                validation_func=self._validate_folder_config
-            ),
-            'column_settings': JSONFileConfig(
-                filename='column_settings.json',
-                default_content={},
-                validation_func=self._validate_column_settings
-            ),
-            'dtype_settings': JSONFileConfig(
-                filename='dtype_settings.json',
-                default_content={},
-                validation_func=self._validate_dtype_settings
-            ),
-            'file_management_settings': JSONFileConfig(
-                filename='file_management_settings.json',
-                default_content={
-                    "auto_move_enabled": True,
-                    "organize_by_date": False
-                },
-                validation_func=self._validate_file_management_settings
-            ),
-            'output_folder_config': JSONFileConfig(
-                filename='output_folder_config.json',
-                default_content={"folder_path": ""},
-                required_keys=['folder_path'],
-                validation_func=self._validate_folder_config
-            ),
-            'log_folder_config': JSONFileConfig(
-                filename='log_folder_config.json',
-                default_content={"log_folder_path": ""},
-                required_keys=['log_folder_path'],
-                validation_func=self._validate_log_folder_config
             )
         }
     
@@ -190,42 +162,29 @@ class JSONManager:
         return filename.replace('.json', '').replace('_', '_')
     
     # Validation functions
-    
+
     def _validate_app_settings(self, content: Dict[str, Any]) -> bool:
         """Validate application settings."""
+        if not isinstance(content, dict):
+            return False
+
+        # Validate window_size
         if 'window_size' in content:
             window_size = content['window_size']
             if not (isinstance(window_size, list) and len(window_size) == 2):
                 return False
+
+        # Validate folders section
+        if 'folders' in content:
+            if not isinstance(content['folders'], dict):
+                return False
+
+        # Validate file_management section
+        if 'file_management' in content:
+            if not isinstance(content['file_management'], dict):
+                return False
+
         return True
-    
-    def _validate_column_settings(self, content: Dict[str, Any]) -> bool:
-        """Validate column settings."""
-        return isinstance(content, dict)
-    
-    def _validate_dtype_settings(self, content: Dict[str, Any]) -> bool:
-        """Validate data type settings."""
-        return isinstance(content, dict)
-    
-    def _validate_file_management_settings(self, content: Dict[str, Any]) -> bool:
-        """Validate file management settings."""
-        return isinstance(content, dict)
-
-    def _validate_folder_config(self, content: Dict[str, Any]) -> bool:
-        """Validate folder configuration."""
-        if not isinstance(content, dict):
-            return False
-        if 'folder_path' not in content:
-            return False
-        return isinstance(content['folder_path'], str)
-
-    def _validate_log_folder_config(self, content: Dict[str, Any]) -> bool:
-        """Validate log folder configuration."""
-        if not isinstance(content, dict):
-            return False
-        if 'log_folder_path' not in content:
-            return False
-        return isinstance(content['log_folder_path'], str)
     
     # Public interface
     def load(self, config_name: str) -> Dict[str, Any]:
@@ -382,10 +341,10 @@ class JSONManager:
     def cleanup_old_backups(self, keep_days: int = 7) -> int:
         """
         Clean up backup files older than specified days.
-        
+
         Args:
             keep_days: Number of days to keep backup files
-            
+
         Returns:
             int: Number of files deleted
         """
@@ -393,20 +352,142 @@ class JSONManager:
             backup_dir = os.path.join(PathConstants.CONFIG_DIR, "backups")
             if not os.path.exists(backup_dir):
                 return 0
-            
+
             deleted_count = 0
             cutoff_time = time.time() - (keep_days * 24 * 60 * 60)
-            
+
             for filename in os.listdir(backup_dir):
                 if filename.endswith('.backup_' + filename.split('.backup_')[-1]):
                     file_path = os.path.join(backup_dir, filename)
                     if os.path.getmtime(file_path) < cutoff_time:
                         os.remove(file_path)
                         deleted_count += 1
-                        
+
             return deleted_count
         except (OSError, PermissionError):
             return 0
+
+    # File Type Management
+
+    def _get_file_type_path(self, file_type: str) -> str:
+        """Get full path for a file type JSON file."""
+        return os.path.join(PathConstants.FILE_TYPES_DIR, f"{file_type}.json")
+
+    def load_file_type(self, file_type: str) -> Dict[str, Any]:
+        """
+        Load file type configuration.
+
+        Args:
+            file_type: Name of the file type
+
+        Returns:
+            Dict with 'columns' and 'dtypes' keys, empty dicts if not found
+        """
+        file_path = self._get_file_type_path(file_type)
+
+        try:
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = json.load(f)
+
+                # Validate structure
+                if isinstance(content, dict) and 'columns' in content and 'dtypes' in content:
+                    return content
+        except (json.JSONDecodeError, PermissionError):
+            pass
+
+        # Return empty structure if file doesn't exist or is invalid
+        return {"columns": {}, "dtypes": {}}
+
+    def save_file_type(self, file_type: str, columns: Dict[str, str], dtypes: Dict[str, str]) -> bool:
+        """
+        Save file type configuration.
+
+        Args:
+            file_type: Name of the file type
+            columns: Column mappings
+            dtypes: Data type mappings
+
+        Returns:
+            bool: Success status
+        """
+        try:
+            # Ensure directory exists
+            os.makedirs(PathConstants.FILE_TYPES_DIR, exist_ok=True)
+
+            file_path = self._get_file_type_path(file_type)
+
+            # Create backup if file exists
+            if os.path.exists(file_path):
+                backup_dir = os.path.join(PathConstants.FILE_TYPES_DIR, "backups")
+                os.makedirs(backup_dir, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_path = os.path.join(backup_dir, f"{file_type}.json.backup_{timestamp}")
+                shutil.copy2(file_path, backup_path)
+
+            # Save file
+            content = {
+                "columns": columns,
+                "dtypes": dtypes
+            }
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(content, f, indent=2, ensure_ascii=False)
+
+            return True
+
+        except (OSError, PermissionError, json.JSONEncodeError):
+            return False
+
+    def list_file_types(self) -> List[str]:
+        """
+        List all available file types.
+
+        Returns:
+            List of file type names
+        """
+        try:
+            if not os.path.exists(PathConstants.FILE_TYPES_DIR):
+                return []
+
+            file_types = []
+            for filename in os.listdir(PathConstants.FILE_TYPES_DIR):
+                if filename.endswith('.json') and not filename.startswith('.'):
+                    file_type = filename.replace('.json', '')
+                    file_types.append(file_type)
+
+            return sorted(file_types)
+        except OSError:
+            return []
+
+    def delete_file_type(self, file_type: str) -> bool:
+        """
+        Delete a file type configuration.
+
+        Args:
+            file_type: Name of the file type
+
+        Returns:
+            bool: Success status
+        """
+        try:
+            file_path = self._get_file_type_path(file_type)
+
+            if os.path.exists(file_path):
+                # Create backup before deleting
+                backup_dir = os.path.join(PathConstants.FILE_TYPES_DIR, "backups")
+                os.makedirs(backup_dir, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_path = os.path.join(backup_dir, f"{file_type}.json.backup_{timestamp}")
+                shutil.copy2(file_path, backup_path)
+
+                # Delete file
+                os.remove(file_path)
+                return True
+
+            return False
+        except (OSError, PermissionError):
+            return False
 
 
 # Global JSON manager instance
@@ -423,50 +504,140 @@ def save_app_settings(settings: Dict[str, Any]) -> bool:
     """Save application settings."""
     return json_manager.save('app_settings', settings)
 
-def load_column_settings() -> Dict[str, Any]:
-    """Load column settings."""
-    return json_manager.load('column_settings')
-
-def save_column_settings(settings: Dict[str, Any]) -> bool:
-    """Save column settings."""
-    return json_manager.save('column_settings', settings)
-
-def load_dtype_settings() -> Dict[str, Any]:
-    """Load data type settings."""
-    return json_manager.load('dtype_settings')
-
-def save_dtype_settings(settings: Dict[str, Any]) -> bool:
-    """Save data type settings."""
-    return json_manager.save('dtype_settings', settings)
-
-def load_file_management_settings() -> Dict[str, Any]:
-    """Load file management settings."""
-    return json_manager.load('file_management_settings')
-
-def save_file_management_settings(settings: Dict[str, Any]) -> bool:
-    """Save file management settings."""
-    return json_manager.save('file_management_settings', settings)
+# Folder configuration helpers
 
 def get_input_folder() -> str:
-    """Get input folder path from input_folder_config.json"""
-    return json_manager.get('input_folder_config', 'folder_path', '')
+    """Get input folder path from app_settings.json"""
+    try:
+        settings = json_manager.load('app_settings')
+        return settings.get('folders', {}).get('input_folder', '')
+    except Exception:
+        return ''
 
 def set_input_folder(path: str) -> bool:
-    """Set input folder path to input_folder_config.json"""
-    return json_manager.set('input_folder_config', 'folder_path', path)
+    """Set input folder path in app_settings.json"""
+    try:
+        settings = json_manager.load('app_settings')
+        if 'folders' not in settings:
+            settings['folders'] = {}
+        settings['folders']['input_folder'] = path
+        return json_manager.save('app_settings', settings)
+    except Exception:
+        return False
 
 def get_output_folder() -> str:
-    """Get output folder path from output_folder_config.json"""
-    return json_manager.get('output_folder_config', 'folder_path', '')
+    """Get output folder path from app_settings.json"""
+    try:
+        settings = json_manager.load('app_settings')
+        return settings.get('folders', {}).get('output_folder', '')
+    except Exception:
+        return ''
 
 def set_output_folder(path: str) -> bool:
-    """Set output folder path to output_folder_config.json"""
-    return json_manager.set('output_folder_config', 'folder_path', path)
+    """Set output folder path in app_settings.json"""
+    try:
+        settings = json_manager.load('app_settings')
+        if 'folders' not in settings:
+            settings['folders'] = {}
+        settings['folders']['output_folder'] = path
+        return json_manager.save('app_settings', settings)
+    except Exception:
+        return False
 
 def get_log_folder() -> str:
-    """Get log folder path from log_folder_config.json"""
-    return json_manager.get('log_folder_config', 'log_folder_path', '')
+    """Get log folder path from app_settings.json"""
+    try:
+        settings = json_manager.load('app_settings')
+        return settings.get('folders', {}).get('log_folder', '')
+    except Exception:
+        return ''
 
 def set_log_folder(path: str) -> bool:
-    """Set log folder path to log_folder_config.json"""
-    return json_manager.set('log_folder_config', 'log_folder_path', path)
+    """Set log folder path in app_settings.json"""
+    try:
+        settings = json_manager.load('app_settings')
+        if 'folders' not in settings:
+            settings['folders'] = {}
+        settings['folders']['log_folder'] = path
+        return json_manager.save('app_settings', settings)
+    except Exception:
+        return False
+
+# File management settings helpers
+
+def load_file_management_settings() -> Dict[str, Any]:
+    """Load file management settings from app_settings.json"""
+    try:
+        settings = json_manager.load('app_settings')
+        return settings.get('file_management', {
+            'auto_move_enabled': True,
+            'organize_by_date': False
+        })
+    except Exception:
+        return {'auto_move_enabled': True, 'organize_by_date': False}
+
+def save_file_management_settings(settings: Dict[str, Any]) -> bool:
+    """Save file management settings to app_settings.json"""
+    try:
+        app_settings = json_manager.load('app_settings')
+        app_settings['file_management'] = settings
+        return json_manager.save('app_settings', app_settings)
+    except Exception:
+        return False
+
+# Legacy column/dtype settings (deprecated - use file types instead)
+# Kept for backward compatibility during migration
+
+def load_column_settings() -> Dict[str, Any]:
+    """
+    DEPRECATED: Load column settings from legacy file.
+    Use json_manager.load_file_type() instead.
+    """
+    legacy_file = os.path.join(PathConstants.CONFIG_DIR, 'column_settings.json')
+    try:
+        if os.path.exists(legacy_file):
+            with open(legacy_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_column_settings(settings: Dict[str, Any]) -> bool:
+    """
+    DEPRECATED: Save column settings to legacy file.
+    Use json_manager.save_file_type() instead.
+    """
+    legacy_file = os.path.join(PathConstants.CONFIG_DIR, 'column_settings.json')
+    try:
+        with open(legacy_file, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+def load_dtype_settings() -> Dict[str, Any]:
+    """
+    DEPRECATED: Load dtype settings from legacy file.
+    Use json_manager.load_file_type() instead.
+    """
+    legacy_file = os.path.join(PathConstants.CONFIG_DIR, 'dtype_settings.json')
+    try:
+        if os.path.exists(legacy_file):
+            with open(legacy_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_dtype_settings(settings: Dict[str, Any]) -> bool:
+    """
+    DEPRECATED: Save dtype settings to legacy file.
+    Use json_manager.save_file_type() instead.
+    """
+    legacy_file = os.path.join(PathConstants.CONFIG_DIR, 'dtype_settings.json')
+    try:
+        with open(legacy_file, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
