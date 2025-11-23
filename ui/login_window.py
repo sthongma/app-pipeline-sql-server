@@ -8,12 +8,13 @@ from services.utilities.preload_service import PreloadService
 from constants import AppConstants
 from config.database import DatabaseConfig
 from config.json_manager import json_manager
+from ui.utils.button_utils import ProcessingFlag
 import logging
 
 class LoginWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
-        
+
         # ตั้งค่าหน้าต่าง
         self.title("Login SQL Server")
         self.geometry(f"{AppConstants.LOGIN_WINDOW_SIZE[0]}x{AppConstants.LOGIN_WINDOW_SIZE[1]}")
@@ -21,15 +22,18 @@ class LoginWindow(ctk.CTk):
         # มินิมอลโทน: เพิ่มระยะห่างทั่วๆ ไป
         self._base_padx = 12
         self._base_pady = 10
-        
+
+        # Processing flags
+        self.is_connecting = False
+
         # สร้างบริการ
         self.db_service = DatabaseOrchestrator()
         self.preload_service = PreloadService()
         self.db_config = DatabaseConfig()
-        
+
         # สร้าง UI
         self._create_ui()
-        
+
         # โหลดการตั้งค่าที่บันทึกไว้
         self._load_saved_settings()
         
@@ -104,9 +108,9 @@ class LoginWindow(ctk.CTk):
         # จะวางไว้ที่ row 8, column 1 (ใต้ password entry, ชิดซ้าย)
         remember_check.grid(row=8, column=1, sticky="w", padx=(0, 0), pady=(0, 2))
 
-        # Connect button
-        connect_button = ctk.CTkButton(main_frame, text="Connect", command=self._connect, width=300)
-        connect_button.grid(row=9, column=0, columnspan=2, pady=12, sticky="", ipadx=30)
+        # Connect button (keep reference for double-click prevention)
+        self.connect_button = ctk.CTkButton(main_frame, text="Connect", command=self._connect, width=300)
+        self.connect_button.grid(row=9, column=0, columnspan=2, pady=12, sticky="", ipadx=30)
 
         self._on_auth_change("Windows")
 
@@ -171,156 +175,169 @@ class LoginWindow(ctk.CTk):
                 logging.error(f"Error saving settings: {e}")
                 
     def _connect(self):
-        """Connect to SQL Server"""
-        # Get schema value, default to 'bronze' if empty
-        schema_value = self.schema_entry.get().strip() or 'bronze'
-
-        config = {
-            "server": self.server_entry.get(),
-            "database": self.db_entry.get(),
-            "schema": schema_value,
-            "auth_type": self.auth_menu.get(),
-            "username": self.username_entry.get(),
-            "password": self.password_entry.get()
-        }
-
-        # ตรวจสอบข้อมูลที่จำเป็น
-        if not config["server"] or not config["database"]:
-            messagebox.showerror("Error", "Please fill in Server and Database")
-            return
-
-        if config["auth_type"] == "SQL Server" and (not config["username"] or not config["password"]):
-            messagebox.showerror("Error", "Please fill in Username and Password")
-            return
-            
-        # บันทึกการตั้งค่า
-        self._save_settings()
-        
-        # Reload config to get updated environment variables
-        self.db_config.load_config()
-        
-        # Update DatabaseConfig engine
-        try:
-            self.db_config.update_engine()
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to update database configuration: {str(e)}")
-            return
-        
-        # ใช้ loading dialog เดียวสำหรับทั้งหมด
-        try:
-            self.ui_loading_dialog = LoadingDialog(
-                self,
-                "Preparing System",
-                "Starting system initialization...",
-                min_display_ms=1200,
-                min_step_duration_ms=700,
-                min_total_duration_ms=4500,
-                auto_close_on_task_done=False,
-                steps=[
-                    "Connect to database",
-                    "Check permissions",
-                    "Load app/file settings",
-                    "Build Tab View",
-                    "Build Main Tab",
-                    "Build Log Tab",
-                    "Build Settings Tab",
-                    "Initialize log file",
-                    "Initialize input/output folders",
-                    "Verify SQL Server connection"
-                ]
+        """Connect to SQL Server - with double-click protection"""
+        # Use ProcessingFlag to prevent double-click
+        with ProcessingFlag(
+            self,
+            'is_connecting',
+            button=self.connect_button,
+            on_abort=lambda: messagebox.showwarning(
+                "Already Connecting",
+                "Connection is already in progress. Please wait..."
             )
-
-            # เก็บ result และสร้าง done callback
-            final_result = {}
-            self._prepare_done_var = ctk.BooleanVar(value=False)
-
-            def on_prepare_done(res, err):
-                final_result["res"] = res
-                final_result["err"] = err
-                try:
-                    self._prepare_done_var.set(True)
-                except Exception:
-                    pass
-
-            # สร้าง wrapper function ที่จัดการ progress และ steps
-            def task_wrapper(progress_callback=None):
-                def wrapped_callback(message):
-                    """Callback ที่รวม update message และ step tracking"""
-                    if progress_callback:
-                        progress_callback(message)
-
-                    # Track steps based on message
-                    if "Testing database connection" in message:
-                        self.ui_loading_dialog.mark_step_running(0)
-                    elif "Checking database permissions" in message:
-                        self.ui_loading_dialog.mark_step_done(0)
-                        self.ui_loading_dialog.mark_step_running(1)
-                    elif "Loading file types and settings" in message:
-                        self.ui_loading_dialog.mark_step_done(1)
-                        self.ui_loading_dialog.mark_step_running(2)
-
-                return self._connect_and_prepare(config, wrapped_callback)
-
-            self.ui_loading_dialog.run_task(task_wrapper, on_done=on_prepare_done)
-
-            # รอให้เตรียมระบบเสร็จ (แต่ยังไม่ปิด dialog)
-            self.wait_variable(self._prepare_done_var)
-
-            # ตรวจสอบผลลัพธ์
-            result = final_result.get("res") or {}
-            error = final_result.get("err")
-
-            # ถ้า user ยกเลิก ให้ปิดเงียบๆ ไม่แสดง error
-            if self.ui_loading_dialog.user_cancelled:
-                self.ui_loading_dialog.release_and_close()
-                self.wait_window(self.ui_loading_dialog)
+        ) as can_proceed:
+            if not can_proceed:
                 return
 
-            if error:
-                self.ui_loading_dialog.release_and_close()
-                self.wait_window(self.ui_loading_dialog)
-                messagebox.showerror("Error", f"Error occurred: {str(error)}")
+            # Get schema value, default to 'bronze' if empty
+            schema_value = self.schema_entry.get().strip() or 'bronze'
+
+            config = {
+                "server": self.server_entry.get(),
+                "database": self.db_entry.get(),
+                "schema": schema_value,
+                "auth_type": self.auth_menu.get(),
+                "username": self.username_entry.get(),
+                "password": self.password_entry.get()
+            }
+
+            # ตรวจสอบข้อมูลที่จำเป็น
+            if not config["server"] or not config["database"]:
+                messagebox.showerror("Error", "Please fill in Server and Database")
                 return
 
-            if self.ui_loading_dialog.error and not self.ui_loading_dialog.user_cancelled:
-                messagebox.showerror("Error", f"Error occurred: {str(self.ui_loading_dialog.error)}")
+            if config["auth_type"] == "SQL Server" and (not config["username"] or not config["password"]):
+                messagebox.showerror("Error", "Please fill in Username and Password")
                 return
 
-            if not result.get('connection_ok', False):
-                self.ui_loading_dialog.release_and_close()
-                self.wait_window(self.ui_loading_dialog)
-                if not self.ui_loading_dialog.user_cancelled:
-                    messagebox.showerror("Error", "Unable to connect to SQL Server")
-                return
+            # บันทึกการตั้งค่า
+            self._save_settings()
 
-            if not result.get('permissions_ok', False):
-                missing_permissions = result.get('missing_permissions', [])
-                recommendations = result.get('recommendations', [])
-                detail_msg = f"Missing required permissions: {', '.join(missing_permissions)}\n\n"
-                if recommendations:
-                    detail_msg += "Recommendations:\n" + "\n".join(recommendations[:3])
-                self.ui_loading_dialog.release_and_close()
-                self.wait_window(self.ui_loading_dialog)
-                if not self.ui_loading_dialog.user_cancelled:
-                    messagebox.showerror("Insufficient permissions", f"Connected, but permissions are insufficient\n\n{detail_msg}")
-                return
+            # Reload config to get updated environment variables
+            self.db_config.load_config()
 
-            # Mark step 2 as done before moving to UI creation
-            self.ui_loading_dialog.mark_step_done(2)
-
-            # ส่งข้อมูลที่โหลดไว้ให้ MainWindow
-            self.preloaded_data = result.get('preloaded_data')
-
-            # เริ่มสร้าง MainWindow ใน main thread โดยใช้ after()
-            self.after(100, self._start_ui_creation)
-        except Exception as e:
-            # ตรวจสอบว่า error เกิดจาก user cancel หรือไม่
+            # Update DatabaseConfig engine
             try:
-                if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
-                    return  # ไม่แสดง error ถ้า user ยกเลิก
-            except:
-                pass
-            messagebox.showerror("Error", f"An error occurred: {str(e)}")
+                self.db_config.update_engine()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to update database configuration: {str(e)}")
+                return
+
+            # ใช้ loading dialog เดียวสำหรับทั้งหมด
+            try:
+                self.ui_loading_dialog = LoadingDialog(
+                    self,
+                    "Preparing System",
+                    "Starting system initialization...",
+                    min_display_ms=1200,
+                    min_step_duration_ms=700,
+                    min_total_duration_ms=4500,
+                    auto_close_on_task_done=False,
+                    steps=[
+                        "Connect to database",
+                        "Check permissions",
+                        "Load app/file settings",
+                        "Build Tab View",
+                        "Build Main Tab",
+                        "Build Log Tab",
+                        "Build Settings Tab",
+                        "Initialize log file",
+                        "Initialize input/output folders",
+                        "Verify SQL Server connection"
+                    ]
+                )
+
+                # เก็บ result และสร้าง done callback
+                final_result = {}
+                self._prepare_done_var = ctk.BooleanVar(value=False)
+
+                def on_prepare_done(res, err):
+                    final_result["res"] = res
+                    final_result["err"] = err
+                    try:
+                        self._prepare_done_var.set(True)
+                    except Exception:
+                        pass
+
+                # สร้าง wrapper function ที่จัดการ progress และ steps
+                def task_wrapper(progress_callback=None):
+                    def wrapped_callback(message):
+                        """Callback ที่รวม update message และ step tracking"""
+                        if progress_callback:
+                            progress_callback(message)
+
+                        # Track steps based on message
+                        if "Testing database connection" in message:
+                            self.ui_loading_dialog.mark_step_running(0)
+                        elif "Checking database permissions" in message:
+                            self.ui_loading_dialog.mark_step_done(0)
+                            self.ui_loading_dialog.mark_step_running(1)
+                        elif "Loading file types and settings" in message:
+                            self.ui_loading_dialog.mark_step_done(1)
+                            self.ui_loading_dialog.mark_step_running(2)
+
+                    return self._connect_and_prepare(config, wrapped_callback)
+
+                self.ui_loading_dialog.run_task(task_wrapper, on_done=on_prepare_done)
+
+                # รอให้เตรียมระบบเสร็จ (แต่ยังไม่ปิด dialog)
+                self.wait_variable(self._prepare_done_var)
+
+                # ตรวจสอบผลลัพธ์
+                result = final_result.get("res") or {}
+                error = final_result.get("err")
+
+                # ถ้า user ยกเลิก ให้ปิดเงียบๆ ไม่แสดง error
+                if self.ui_loading_dialog.user_cancelled:
+                    self.ui_loading_dialog.release_and_close()
+                    self.wait_window(self.ui_loading_dialog)
+                    return
+
+                if error:
+                    self.ui_loading_dialog.release_and_close()
+                    self.wait_window(self.ui_loading_dialog)
+                    messagebox.showerror("Error", f"Error occurred: {str(error)}")
+                    return
+
+                if self.ui_loading_dialog.error and not self.ui_loading_dialog.user_cancelled:
+                    messagebox.showerror("Error", f"Error occurred: {str(self.ui_loading_dialog.error)}")
+                    return
+
+                if not result.get('connection_ok', False):
+                    self.ui_loading_dialog.release_and_close()
+                    self.wait_window(self.ui_loading_dialog)
+                    if not self.ui_loading_dialog.user_cancelled:
+                        messagebox.showerror("Error", "Unable to connect to SQL Server")
+                    return
+
+                if not result.get('permissions_ok', False):
+                    missing_permissions = result.get('missing_permissions', [])
+                    recommendations = result.get('recommendations', [])
+                    detail_msg = f"Missing required permissions: {', '.join(missing_permissions)}\n\n"
+                    if recommendations:
+                        detail_msg += "Recommendations:\n" + "\n".join(recommendations[:3])
+                    self.ui_loading_dialog.release_and_close()
+                    self.wait_window(self.ui_loading_dialog)
+                    if not self.ui_loading_dialog.user_cancelled:
+                        messagebox.showerror("Insufficient permissions", f"Connected, but permissions are insufficient\n\n{detail_msg}")
+                    return
+
+                # Mark step 2 as done before moving to UI creation
+                self.ui_loading_dialog.mark_step_done(2)
+
+                # ส่งข้อมูลที่โหลดไว้ให้ MainWindow
+                self.preloaded_data = result.get('preloaded_data')
+
+                # เริ่มสร้าง MainWindow ใน main thread โดยใช้ after()
+                self.after(100, self._start_ui_creation)
+            except Exception as e:
+                # ตรวจสอบว่า error เกิดจาก user cancel หรือไม่
+                try:
+                    if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
+                        return  # ไม่แสดง error ถ้า user ยกเลิก
+                except:
+                    pass
+                messagebox.showerror("Error", f"An error occurred: {str(e)}")
             
     def _start_ui_creation(self):
         """Start UI creation in main thread"""

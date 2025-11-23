@@ -33,12 +33,13 @@ class LogTab:
         copy_btn = ctk.CTkButton(toolbar, text="Copy log", command=self._copy_log_to_clipboard, width=120)
         copy_btn.pack(side="left")
 
-        export_btn = ctk.CTkButton(toolbar, text="Export log", command=self._export_log, width=120)
-        export_btn.pack(side="left", padx=5)
+        # Keep references for double-click prevention
+        self.export_btn = ctk.CTkButton(toolbar, text="Export log", command=self._export_log, width=120)
+        self.export_btn.pack(side="left", padx=5)
 
         # Log folder setting button
-        log_folder_btn = ctk.CTkButton(toolbar, text="Choose log folder", command=self.callbacks.get('choose_log_folder'), width=140)
-        log_folder_btn.pack(side="left", padx=5)
+        self.log_folder_btn = ctk.CTkButton(toolbar, text="Choose log folder", command=self.callbacks.get('choose_log_folder'), width=140)
+        self.log_folder_btn.pack(side="left", padx=5)
 
         # กล่องข้อความสำหรับแสดง Log
         self.log_textbox = ctk.CTkTextbox(self.parent)
@@ -58,35 +59,46 @@ class LogTab:
         messagebox.showinfo("Copied", "Log copied to clipboard")
 
     def _export_log(self):
-        """Export log content to a file"""
-        log_text = self.log_textbox.get("1.0", "end").strip()
-        
-        if not log_text:
-            messagebox.showwarning("Warning", "No log content to export")
-            return
-        
-        # Generate default filename with current datetime
-        current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_filename = f"log_export_{current_time}.txt"
-        
-        # Open file dialog to save the log
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            initialfile=default_filename,
-            filetypes=[
-                ("Text files", "*.txt"),
-                ("Log files", "*.log"),
-                ("All files", "*.*")
-            ]
-        )
-        
-        if file_path:
-            try:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(log_text)
-                messagebox.showinfo("Success", f"Log exported successfully to:\n{file_path}")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to export log:\n{str(e)}")
+        """Export log content to a file - with double-click protection"""
+        # Check if button is already disabled
+        if self.export_btn.cget('state') == 'disabled':
+            return  # Already processing, ignore this click
+
+        # Disable button immediately
+        self.export_btn.configure(state='disabled')
+
+        try:
+            log_text = self.log_textbox.get("1.0", "end").strip()
+
+            if not log_text:
+                messagebox.showwarning("Warning", "No log content to export")
+                return
+
+            # Generate default filename with current datetime
+            current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_filename = f"log_export_{current_time}.txt"
+
+            # Open file dialog to save the log
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                initialfile=default_filename,
+                filetypes=[
+                    ("Text files", "*.txt"),
+                    ("Log files", "*.log"),
+                    ("All files", "*.*")
+                ]
+            )
+
+            if file_path:
+                try:
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write(log_text)
+                    messagebox.showinfo("Success", f"Log exported successfully to:\n{file_path}")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to export log:\n{str(e)}")
+        finally:
+            # Always re-enable button
+            self.export_btn.configure(state='normal')
     
     def _get_emoji_color_map(self):
         """แมป emoji กับสี (shared with main_window.py)"""

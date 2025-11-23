@@ -62,42 +62,42 @@ class SettingsTab:
     
     def _create_buttons(self, button_row):
         """สร้างปุ่มควบคุม"""
-        # ปุ่มควบคุมด้านซ้าย
-        add_type_btn = ctk.CTkButton(
+        # ปุ่มควบคุมด้านซ้าย (keep references for double-click prevention)
+        self.add_type_btn = ctk.CTkButton(
             button_row,
             text="Add File Type",
             image=get_icon('add', size=18),
             compound="left",
             command=self._add_file_type
         )
-        add_type_btn.pack(side="left", padx=5)
+        self.add_type_btn.pack(side="left", padx=5)
 
-        del_type_btn = ctk.CTkButton(
+        self.del_type_btn = ctk.CTkButton(
             button_row,
             text="Remove",
             image=get_icon('remove', size=18),
             compound="left",
             command=self._delete_file_type
         )
-        del_type_btn.pack(side="left", padx=5)
+        self.del_type_btn.pack(side="left", padx=5)
 
-        save_dtype_btn = ctk.CTkButton(
+        self.save_dtype_btn = ctk.CTkButton(
             button_row,
             text="Save Settings",
             image=get_icon('save', size=18),
             compound="left",
             command=self._save_all_dtype_settings
         )
-        save_dtype_btn.pack(side="left", padx=5)
+        self.save_dtype_btn.pack(side="left", padx=5)
 
-        edit_type_btn = ctk.CTkButton(
+        self.edit_type_btn = ctk.CTkButton(
             button_row,
             text="Rename",
             image=get_icon('edit', size=18),
             compound="left",
             command=self._edit_file_type
         )
-        edit_type_btn.pack(side="left", padx=5)
+        self.edit_type_btn.pack(side="left", padx=5)
         
         if self.ui_progress_callback:
             self.ui_progress_callback("Building dropdown...")
@@ -192,20 +192,27 @@ class SettingsTab:
                 self.date_format_menus[file_type].set(val)
     
     def _add_file_type(self):
-        """เพิ่มประเภทไฟล์ใหม่โดยเลือกไฟล์ตัวอย่าง"""
-        # Popup ให้เลือกไฟล์ตัวอย่างทันที (รองรับทั้ง xlsx/xls/csv)
-        file_path = filedialog.askopenfilename(
-            filetypes=[
-                ("Excel/CSV files", "*.xlsx;*.xls;*.csv"), 
-                ("Excel XLSX files", "*.xlsx"), 
-                ("Excel XLS files", "*.xls"), 
-                ("CSV files", "*.csv")
-            ]
-        )
-        if not file_path:
-            return
-        
+        """เพิ่มประเภทไฟล์ใหม่โดยเลือกไฟล์ตัวอย่าง - with double-click protection"""
+        # Check if button is already disabled
+        if self.add_type_btn.cget('state') == 'disabled':
+            return  # Already processing, ignore this click
+
+        # Disable button immediately
+        self.add_type_btn.configure(state='disabled')
+
         try:
+            # Popup ให้เลือกไฟล์ตัวอย่างทันที (รองรับทั้ง xlsx/xls/csv)
+            file_path = filedialog.askopenfilename(
+                filetypes=[
+                    ("Excel/CSV files", "*.xlsx;*.xls;*.csv"),
+                    ("Excel XLSX files", "*.xlsx"),
+                    ("Excel XLS files", "*.xls"),
+                    ("CSV files", "*.csv")
+                ]
+            )
+            if not file_path:
+                return
+
             if file_path.lower().endswith('.csv'):
                 df = pd.read_csv(file_path, nrows=100, encoding='utf-8')
             elif file_path.lower().endswith('.xls'):
@@ -214,36 +221,39 @@ class SettingsTab:
             else:
                 # สำหรับไฟล์ .xlsx
                 df = pd.read_excel(file_path, nrows=100)
-            
+
             columns = list(df.columns)
-            
+
             # infer dtype จากข้อมูลจริง
             inferred_dtypes = self._infer_dtypes(df)
-            
+
             # ให้ผู้ใช้ตั้งชื่อประเภทไฟล์ใหม่
             file_type = ctk.CTkInputDialog(text="New file type name:").get_input()
             if not file_type:
                 return
-            
+
             if file_type in self.column_settings:
                 messagebox.showwarning("Duplicate", "This file type already exists")
                 return
-            
+
             self.column_settings[file_type] = {col: col for col in columns}
             # แปลง inferred_dtypes ให้ใช้ target column เป็น key (ในกรณีนี้ source = target)
             self.dtype_settings[file_type] = {col: inferred_dtypes[col] for col in columns}
-            
+
             # บันทึกการตั้งค่า
             if self.callbacks.get('save_column_settings'):
                 self.callbacks['save_column_settings']()
             if self.callbacks.get('save_dtype_settings'):
                 self.callbacks['save_dtype_settings']()
-            
+
             self.refresh_file_type_tabs()
             messagebox.showinfo("Success", "Imported columns and data types from the sample file")
-            
+
         except Exception as e:
             messagebox.showerror("Error", f"Unable to read file: {e}")
+        finally:
+            # Always re-enable button
+            self.add_type_btn.configure(state='normal')
     
     def _infer_dtypes(self, df):
         """อนุมานประเภทข้อมูลจาก DataFrame"""
@@ -272,106 +282,139 @@ class SettingsTab:
         return inferred_dtypes
     
     def _delete_file_type(self):
-        """ลบประเภทไฟล์"""
-        if not self.column_settings:
-            messagebox.showinfo("No data", "No file types to remove")
-            return
-        
-        file_types = list(self.column_settings.keys())
-        file_type = ctk.CTkInputDialog(
-            text=f"Enter the file type name to remove (e.g., {file_types[0]}):"
-        ).get_input()
-        
-        if not file_type or file_type not in self.column_settings:
-            return
-        
-        if messagebox.askyesno("Confirm", f"Remove file type {file_type}?"):
-            self.column_settings.pop(file_type)
-            self.dtype_settings.pop(file_type, None)
-            
+        """ลบประเภทไฟล์ - with double-click protection"""
+        # Check if button is already disabled
+        if self.del_type_btn.cget('state') == 'disabled':
+            return  # Already processing, ignore this click
+
+        # Disable button immediately
+        self.del_type_btn.configure(state='disabled')
+
+        try:
+            if not self.column_settings:
+                messagebox.showinfo("No data", "No file types to remove")
+                return
+
+            file_types = list(self.column_settings.keys())
+            file_type = ctk.CTkInputDialog(
+                text=f"Enter the file type name to remove (e.g., {file_types[0]}):"
+            ).get_input()
+
+            if not file_type or file_type not in self.column_settings:
+                return
+
+            if messagebox.askyesno("Confirm", f"Remove file type {file_type}?"):
+                self.column_settings.pop(file_type)
+                self.dtype_settings.pop(file_type, None)
+
+                if self.callbacks.get('save_column_settings'):
+                    self.callbacks['save_column_settings']()
+                if self.callbacks.get('save_dtype_settings'):
+                    self.callbacks['save_dtype_settings']()
+
+                self.refresh_file_type_tabs()
+        finally:
+            # Always re-enable button
+            self.del_type_btn.configure(state='normal')
+    
+    def _edit_file_type(self):
+        """แก้ไขชื่อประเภทไฟล์ - with double-click protection"""
+        # Check if button is already disabled
+        if self.edit_type_btn.cget('state') == 'disabled':
+            return  # Already processing, ignore this click
+
+        # Disable button immediately
+        self.edit_type_btn.configure(state='disabled')
+
+        try:
+            if not self.column_settings:
+                messagebox.showinfo("No data", "No file types to edit")
+                return
+
+            file_types = list(self.column_settings.keys())
+            old_type = ctk.CTkInputDialog(
+                text=f"Enter the file type name to edit (e.g., {file_types[0]}):"
+            ).get_input()
+
+            if not old_type or old_type not in self.column_settings:
+                return
+
+            new_type = ctk.CTkInputDialog(
+                text=f"Enter a new file type name (from: {old_type}):"
+            ).get_input()
+
+            if not new_type or new_type in self.column_settings:
+                messagebox.showwarning("Duplicate", "File type already exists or invalid name")
+                return
+
+            # เปลี่ยนชื่อ key ใน column_settings และ dtype_settings
+            self.column_settings[new_type] = self.column_settings.pop(old_type)
+            if old_type in self.dtype_settings:
+                self.dtype_settings[new_type] = self.dtype_settings.pop(old_type)
+
             if self.callbacks.get('save_column_settings'):
                 self.callbacks['save_column_settings']()
             if self.callbacks.get('save_dtype_settings'):
                 self.callbacks['save_dtype_settings']()
-            
+
             self.refresh_file_type_tabs()
-    
-    def _edit_file_type(self):
-        """แก้ไขชื่อประเภทไฟล์"""
-        if not self.column_settings:
-            messagebox.showinfo("No data", "No file types to edit")
-            return
-        
-        file_types = list(self.column_settings.keys())
-        old_type = ctk.CTkInputDialog(
-            text=f"Enter the file type name to edit (e.g., {file_types[0]}):"
-        ).get_input()
-        
-        if not old_type or old_type not in self.column_settings:
-            return
-        
-        new_type = ctk.CTkInputDialog(
-            text=f"Enter a new file type name (from: {old_type}):"
-        ).get_input()
-        
-        if not new_type or new_type in self.column_settings:
-            messagebox.showwarning("Duplicate", "File type already exists or invalid name")
-            return
-        
-        # เปลี่ยนชื่อ key ใน column_settings และ dtype_settings
-        self.column_settings[new_type] = self.column_settings.pop(old_type)
-        if old_type in self.dtype_settings:
-            self.dtype_settings[new_type] = self.dtype_settings.pop(old_type)
-        
-        if self.callbacks.get('save_column_settings'):
-            self.callbacks['save_column_settings']()
-        if self.callbacks.get('save_dtype_settings'):
-            self.callbacks['save_dtype_settings']()
-        
-        self.refresh_file_type_tabs()
-        messagebox.showinfo("Success", f"Renamed file type {old_type} to {new_type}")
+            messagebox.showinfo("Success", f"Renamed file type {old_type} to {new_type}")
+        finally:
+            # Always re-enable button
+            self.edit_type_btn.configure(state='normal')
     
     def _save_all_dtype_settings(self):
-        """บันทึกชนิดข้อมูลสำหรับประเภทไฟล์ที่แสดงอยู่ในขณะนั้น"""
-        current_file_type = self.file_type_var.get()
-        if current_file_type != "Select a file type..." and current_file_type in self.dtype_menus:
-            if current_file_type not in self.dtype_settings:
-                self.dtype_settings[current_file_type] = {}
+        """บันทึกชนิดข้อมูลสำหรับประเภทไฟล์ที่แสดงอยู่ในขณะนั้น - with double-click protection"""
+        # Check if button is already disabled
+        if self.save_dtype_btn.cget('state') == 'disabled':
+            return  # Already processing, ignore this click
 
-            # บันทึก meta fields ก่อน
-            meta_dict = {}
+        # Disable button immediately
+        self.save_dtype_btn.configure(state='disabled')
 
-            # 1. Date format
-            if hasattr(self, 'date_format_menus') and current_file_type in self.date_format_menus:
-                meta_dict["_date_format"] = self.date_format_menus[current_file_type].get()
+        try:
+            current_file_type = self.file_type_var.get()
+            if current_file_type != "Select a file type..." and current_file_type in self.dtype_menus:
+                if current_file_type not in self.dtype_settings:
+                    self.dtype_settings[current_file_type] = {}
 
-            # 2. Update strategy
-            if hasattr(self, 'strategy_menus') and current_file_type in self.strategy_menus:
-                strategy_display = self.strategy_menus[current_file_type].get()
-                meta_dict["_update_strategy"] = "upsert" if "Upsert" in strategy_display else "replace"
+                # บันทึก meta fields ก่อน
+                meta_dict = {}
 
-            # 3. Upsert keys (เก็บไว้ถ้ามี)
-            if "_upsert_keys" in self.dtype_settings.get(current_file_type, {}):
-                meta_dict["_upsert_keys"] = self.dtype_settings[current_file_type]["_upsert_keys"]
+                # 1. Date format
+                if hasattr(self, 'date_format_menus') and current_file_type in self.date_format_menus:
+                    meta_dict["_date_format"] = self.date_format_menus[current_file_type].get()
 
-            # ลบ meta fields เก่าออก
-            temp_dict = {k: v for k, v in self.dtype_settings[current_file_type].items()
-                         if not k.startswith('_')}
+                # 2. Update strategy
+                if hasattr(self, 'strategy_menus') and current_file_type in self.strategy_menus:
+                    strategy_display = self.strategy_menus[current_file_type].get()
+                    meta_dict["_update_strategy"] = "upsert" if "Upsert" in strategy_display else "replace"
 
-            # สร้าง dict ใหม่โดยใส่ meta fields ก่อน
-            self.dtype_settings[current_file_type] = meta_dict
-            self.dtype_settings[current_file_type].update(temp_dict)
+                # 3. Upsert keys (เก็บไว้ถ้ามี)
+                if "_upsert_keys" in self.dtype_settings.get(current_file_type, {}):
+                    meta_dict["_upsert_keys"] = self.dtype_settings[current_file_type]["_upsert_keys"]
 
-            # บันทึกชนิดข้อมูลแต่ละคอลัมน์ (ใช้ target column เป็น key)
-            for source_col, menu in self.dtype_menus[current_file_type].items():
-                target_col = self.column_settings[current_file_type][source_col]
-                self.dtype_settings[current_file_type][target_col] = menu.get()
+                # ลบ meta fields เก่าออก
+                temp_dict = {k: v for k, v in self.dtype_settings[current_file_type].items()
+                             if not k.startswith('_')}
 
-            if self.callbacks.get('save_dtype_settings'):
-                self.callbacks['save_dtype_settings']()
-            messagebox.showinfo("Success", f"Saved data types for {current_file_type}")
-        else:
-            messagebox.showwarning("Warning", "Please select a file type before saving")
+                # สร้าง dict ใหม่โดยใส่ meta fields ก่อน
+                self.dtype_settings[current_file_type] = meta_dict
+                self.dtype_settings[current_file_type].update(temp_dict)
+
+                # บันทึกชนิดข้อมูลแต่ละคอลัมน์ (ใช้ target column เป็น key)
+                for source_col, menu in self.dtype_menus[current_file_type].items():
+                    target_col = self.column_settings[current_file_type][source_col]
+                    self.dtype_settings[current_file_type][target_col] = menu.get()
+
+                if self.callbacks.get('save_dtype_settings'):
+                    self.callbacks['save_dtype_settings']()
+                messagebox.showinfo("Success", f"Saved data types for {current_file_type}")
+            else:
+                messagebox.showwarning("Warning", "Please select a file type before saving")
+        finally:
+            # Always re-enable button
+            self.save_dtype_btn.configure(state='normal')
     
     def _on_file_type_selected(self, choice):
         """เมื่อมีการเลือกประเภทไฟล์จาก dropdown"""

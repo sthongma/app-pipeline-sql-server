@@ -248,8 +248,21 @@ class MainWindow(ctk.CTkToplevel):
         self.main_tab_ui.toggle_select_all()
     
     def _browse_excel_path(self):
-        """Select folder"""
-        self.file_handler.browse_excel_path(self.settings_handler.save_input_folder)
+        """Select folder - with double-click protection"""
+        button = self.main_tab_ui.folder_btn
+
+        # Check if button is already disabled
+        if button.cget('state') == 'disabled':
+            return  # Already processing, ignore this click
+
+        # Disable button immediately
+        button.configure(state='disabled')
+
+        try:
+            self.file_handler.browse_excel_path(self.settings_handler.save_input_folder)
+        finally:
+            # Always re-enable button
+            button.configure(state='normal')
     
     def _run_check_thread(self):
         """Start file checking"""
@@ -262,48 +275,74 @@ class MainWindow(ctk.CTkToplevel):
         self.file_handler.confirm_upload(self.file_list.get_selected_files, ui_callbacks)
 
     def _choose_output_folder(self):
-        """Choose output folder"""
+        """Choose output folder - with double-click protection"""
         from tkinter import filedialog
 
-        # Get current output folder path from MainTab
-        current_path = self.main_tab_ui.get_output_folder_path()
+        button = self.main_tab_ui.output_folder_btn
 
-        folder_path = filedialog.askdirectory(
-            title="Select output folder for uploaded files",
-            initialdir=current_path if current_path else os.getcwd()
-        )
+        # Check if button is already disabled
+        if button.cget('state') == 'disabled':
+            return  # Already processing, ignore this click
 
-        if folder_path:
-            # Save to MainTab
-            self.main_tab_ui.output_folder_path = folder_path
-            self.main_tab_ui._save_output_folder_setting()
+        # Disable button immediately
+        button.configure(state='disabled')
 
-            # Call the existing handler
-            self._on_output_folder_changed(folder_path)
+        try:
+            # Get current output folder path from MainTab
+            current_path = self.main_tab_ui.get_output_folder_path()
 
-            messagebox.showinfo("Success", f"Output folder set to:\n{folder_path}\n\nUploaded files will be moved to this location.")
+            folder_path = filedialog.askdirectory(
+                title="Select output folder for uploaded files",
+                initialdir=current_path if current_path else os.getcwd()
+            )
+
+            if folder_path:
+                # Save to MainTab
+                self.main_tab_ui.output_folder_path = folder_path
+                self.main_tab_ui._save_output_folder_setting()
+
+                # Call the existing handler
+                self._on_output_folder_changed(folder_path)
+
+                messagebox.showinfo("Success", f"Output folder set to:\n{folder_path}\n\nUploaded files will be moved to this location.")
+        finally:
+            # Always re-enable button
+            button.configure(state='normal')
 
     def _choose_log_folder(self):
-        """Choose log folder"""
+        """Choose log folder - with double-click protection"""
         from tkinter import filedialog
 
-        # Get current log folder path from LogTab
-        current_path = self.log_tab_ui.get_log_folder_path()
+        button = self.log_tab_ui.log_folder_btn
 
-        folder_path = filedialog.askdirectory(
-            title="Select log folder",
-            initialdir=current_path if current_path else os.getcwd()
-        )
+        # Check if button is already disabled
+        if button.cget('state') == 'disabled':
+            return  # Already processing, ignore this click
 
-        if folder_path:
-            # Save to LogTab
-            self.log_tab_ui.log_folder_path = folder_path
-            self.log_tab_ui._save_log_folder_setting()
+        # Disable button immediately
+        button.configure(state='disabled')
 
-            # Call the existing handler
-            self._on_log_folder_changed(folder_path)
+        try:
+            # Get current log folder path from LogTab
+            current_path = self.log_tab_ui.get_log_folder_path()
 
-            messagebox.showinfo("Success", f"Log folder set to:\n{folder_path}")
+            folder_path = filedialog.askdirectory(
+                title="Select log folder",
+                initialdir=current_path if current_path else os.getcwd()
+            )
+
+            if folder_path:
+                # Save to LogTab
+                self.log_tab_ui.log_folder_path = folder_path
+                self.log_tab_ui._save_log_folder_setting()
+
+                # Call the existing handler
+                self._on_log_folder_changed(folder_path)
+
+                messagebox.showinfo("Success", f"Log folder set to:\n{folder_path}")
+        finally:
+            # Always re-enable button
+            button.configure(state='normal')
 
     def _reload_settings_in_services(self):
         """Reload settings in all services"""

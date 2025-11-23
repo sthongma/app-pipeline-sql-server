@@ -11,6 +11,7 @@ from utils.logger import setup_file_logging, cleanup_old_log_files
 from config.json_manager import json_manager, get_log_folder
 from performance_optimizations import PerformanceOptimizer
 from utils.ui_helpers import format_elapsed_time
+from ui.utils.button_utils import ProcessingFlag
 
 
 class FileHandler:
@@ -34,7 +35,10 @@ class FileHandler:
         self.db_service = db_service
         self.file_mgmt_service = file_mgmt_service
         self.log: Callable[[str], None] = log_callback
+
+        # Processing flags to prevent double-click
         self.is_checking: bool = False  # Flag to prevent multiple check operations
+        self.is_uploading: bool = False  # Flag to prevent multiple upload operations
 
         # Initialize Performance Optimizer for parallel processing
         self.perf_optimizer = PerformanceOptimizer(log_callback=log_callback)
@@ -125,7 +129,12 @@ class FileHandler:
             self.is_checking = False
     
     def confirm_upload(self, get_selected_files_callback, ui_callbacks):
-        """ยืนยันการอัปโหลดไฟล์ที่เลือก"""
+        """ยืนยันการอัปโหลดไฟล์ที่เลือก - with double-click protection"""
+        # ป้องกันการกดซ้ำขณะกำลัง upload อยู่
+        if self.is_uploading:
+            self.log("⚠️ Upload is already in progress, please wait...")
+            return
+
         selected = get_selected_files_callback()
         if not selected:
             messagebox.showwarning("No files", "Please select files to upload")
@@ -143,20 +152,33 @@ class FileHandler:
                 f"Cannot connect to database:\n{message}\n\nPlease check database settings first"
             )
             return
-            
-            
-            
+
+        # ตั้ง flag ก่อนแสดง confirmation dialog
+        self.is_uploading = True
+
         answer = messagebox.askyesno(
             "Confirm Upload",
             f"Are you sure you want to upload the selected {len(selected)} files?"
         )
-        
+
         if answer:
             ui_callbacks['reset_progress']()
             ui_callbacks['disable_controls']()
-            thread = threading.Thread(target=self._upload_selected_files, args=(selected, ui_callbacks))
+            thread = threading.Thread(target=self._upload_selected_files_wrapper, args=(selected, ui_callbacks))
             thread.start()
-    
+        else:
+            # ถ้า cancel ให้ปลดล็อก flag
+            self.is_uploading = False
+            self.log("Upload cancelled by user")
+
+    def _upload_selected_files_wrapper(self, selected_files, ui_callbacks):
+        """Wrapper to reset upload flag after upload completes"""
+        try:
+            self._upload_selected_files(selected_files, ui_callbacks)
+        finally:
+            # Always reset flag, even if an exception occurred
+            self.is_uploading = False
+
     def _group_files_by_type(self, selected_files: List[Tuple]) -> Dict[str, List[Tuple]]:
         """จัดกลุ่มไฟล์ตามประเภท (logic_type)"""
         files_by_type: Dict[str, List[Tuple]] = {}
