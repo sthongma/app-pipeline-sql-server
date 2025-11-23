@@ -117,15 +117,8 @@ class DataProcessorService:
         try:
             result = None
             if dtype_str.startswith('NVARCHAR'):
-                if dtype_str == 'NVARCHAR(MAX)':
-                    # Use Text for NVARCHAR(MAX) to support long data
-                    result = Text()
-                else:
-                    try:
-                        length = int(dtype_str.split('(')[1].split(')')[0])
-                    except Exception:
-                        length = 255
-                    result = NVARCHAR(length)
+                # Always use Text() for NVARCHAR (maps to NVARCHAR(MAX) in SQL Server)
+                result = Text()
             elif dtype_str.startswith('DECIMAL'):
                 precision, scale = map(int, dtype_str.split('(')[1].split(')')[0].split(','))
                 result = DECIMAL(precision, scale)

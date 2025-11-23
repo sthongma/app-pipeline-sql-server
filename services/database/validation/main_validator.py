@@ -205,18 +205,19 @@ class MainValidator(BaseValidator):
     def _build_validation_phases(self, required_cols: Dict, date_format: str) -> Dict:
         """
         Build validation phases for chunked processing
-        
+
         Args:
             required_cols: Required columns and data types
             date_format: Date format preference
-            
+
         Returns:
             Dict: Validation phases configuration
         """
         phases = {}
-        
-        # กรองเฉพาะคอลัมน์ที่มีใน staging table (ไม่รวม updated_at)
-        staging_cols = {col: dtype for col, dtype in required_cols.items() if col != 'updated_at'}
+
+        # กรองออก metadata columns (ไม่ต้อง validate เพราะสร้างโดยระบบ)
+        metadata_cols = {'_loaded_at', '_created_at', '_source_file', '_batch_id', '_upsert_hash', 'updated_at'}
+        staging_cols = {col: dtype for col, dtype in required_cols.items() if col not in metadata_cols}
         
         # Phase 1: Numeric validation
         numeric_columns = self.numeric_validator.get_numeric_columns(staging_cols)
@@ -237,18 +238,8 @@ class MainValidator(BaseValidator):
                 'columns': date_columns,
                 'chunk_size': 10000
             }
-        
-        # Phase 3: String length validation
-        string_columns = self.string_validator.get_string_columns_with_length(staging_cols)
-        if string_columns:
-            phases['String Length Limits'] = {
-                'type': 'string_length_validation',
-                'validator': self.string_validator,
-                'columns': string_columns,
-                'chunk_size': 15000
-            }
-        
-        # Phase 4: Boolean validation
+
+        # Phase 3: Boolean validation
         boolean_columns = self.boolean_validator.get_boolean_columns(staging_cols)
         if boolean_columns:
             phases['Boolean Values'] = {

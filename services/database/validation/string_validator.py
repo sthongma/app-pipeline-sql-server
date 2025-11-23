@@ -1,132 +1,43 @@
 """
-String length validation module
+String validation module
 """
 
-from typing import List, Dict, Tuple
+from typing import List, Dict
 from sqlalchemy import text
-from sqlalchemy.types import NVARCHAR as SA_NVARCHAR
 
 from .base_validator import BaseValidator
 
 
 class StringValidator(BaseValidator):
     """
-    Validator สำหรับตรวจสอบความยาวของ string
-    
-    ตรวจสอบว่าข้อมูลในคอลัมน์ไม่เกินความยาวที่กำหนด
+    Validator สำหรับตรวจสอบ string data
+
+    เนื่องจากระบบใช้ NVARCHAR(MAX) เท่านั้น จึงไม่ต้องตรวจสอบความยาว
+    Class นี้เก็บ utility methods สำหรับ string validation อื่นๆ
     """
-    
-    def validate(self, conn, staging_table: str, schema_name: str, columns: List, 
+
+    def validate(self, conn, staging_table: str, schema_name: str, columns: List,
                 total_rows: int, chunk_size: int, log_func=None, **kwargs) -> List[Dict]:
         """
-        ตรวจสอบความยาวของ string ในคอลัมน์ต่างๆ
-        
+        Implementation ของ abstract method จาก BaseValidator
+
+        ไม่ได้ใช้งานสำหรับ StringValidator เนื่องจากระบบใช้ NVARCHAR(MAX)
+        ซึ่งไม่มีข้อจำกัดความยาว
+
         Args:
             conn: Database connection
             staging_table: Staging table name
             schema_name: Schema name
-            columns: List of tuples (column_name, max_length) to validate
-            total_rows: Total number of rows
-            chunk_size: Chunk size for processing (unused in this implementation)
-            log_func: Logging function
-            **kwargs: Additional parameters
-            
+            columns: List of columns (ไม่ใช้)
+            total_rows: Total number of rows (ไม่ใช้)
+            chunk_size: Chunk size for processing (ไม่ใช้)
+            log_func: Logging function (ไม่ใช้)
+            **kwargs: Additional parameters (ไม่ใช้)
+
         Returns:
-            List[Dict]: List of validation issues
+            List[Dict]: Empty list
         """
-        issues = []
-        
-        for col, max_length in columns:
-            try:
-                issue = self._validate_single_string_column(
-                    conn, staging_table, schema_name, col, max_length, total_rows, log_func
-                )
-                if issue:
-                    issues.append(issue)
-            except Exception as e:
-                if log_func:
-                    log_func(f"        ⚠️ Error checking column {col}: {e}")
-        
-        return issues
-    
-    def _validate_single_string_column(self, conn, staging_table: str, schema_name: str, 
-                                      col: str, max_length: int, total_rows: int, log_func) -> Dict:
-        """
-        ตรวจสอบความยาวของ string คอลัมน์เดียว
-        
-        Args:
-            conn: Database connection
-            staging_table: Staging table name
-            schema_name: Schema name
-            col: Column name
-            max_length: Maximum allowed length
-            total_rows: Total number of rows
-            log_func: Logging function
-            
-        Returns:
-            Dict: Validation issue หรือ None ถ้าไม่มีปัญหา
-        """
-        safe_col = self.safe_column_name(col)
-        
-        # นับจำนวน error
-        error_query = f"""
-            SELECT COUNT(*) as error_count
-            FROM {schema_name}.{staging_table}
-            WHERE LEN(ISNULL({safe_col}, '')) > {max_length}
-        """
-        
-        result = self.execute_query_safely(
-            conn, error_query, f"Error checking string length for column {col}", log_func
-        )
-        
-        if result is None:
-            return None
-            
-        error_count = result.scalar()
-        
-        if error_count > 0:
-            # ดึงตัวอย่างข้อมูลที่มีปัญหา (แสดงเฉพาะ 30 ตัวอักษรแรก)
-            examples_query = f"""
-                SELECT TOP 3 LEFT({safe_col}, 30) + '...' as example_value
-                FROM {schema_name}.{staging_table}
-                WHERE LEN(ISNULL({safe_col}, '')) > {max_length}
-            """
-            
-            examples_result = self.execute_query_safely(
-                conn, examples_query, f"Error getting examples for column {col}", log_func
-            )
-            
-            examples = []
-            if examples_result:
-                examples = [str(row.example_value) for row in examples_result.fetchall()]
-            
-            return self.create_issue_dict(
-                validation_type='string_length_validation',
-                column=col,
-                error_count=error_count,
-                total_rows=total_rows,
-                examples=examples,
-                max_length=max_length
-            )
-        
-        return None
-    
-    def get_string_columns_with_length(self, required_cols: Dict) -> List[Tuple[str, int]]:
-        """
-        ดึงรายชื่อคอลัมน์ที่เป็นประเภท string พร้อมความยาวสูงสุด
-        
-        Args:
-            required_cols: Dictionary ของคอลัมน์และ data types
-            
-        Returns:
-            List[Tuple[str, int]]: List of tuples (column_name, max_length)
-        """
-        string_columns = []
-        for col, dtype in required_cols.items():
-            if isinstance(dtype, SA_NVARCHAR) and hasattr(dtype, 'length') and dtype.length:
-                string_columns.append((col, dtype.length))
-        
-        return string_columns
+        return []
     
     def validate_string_pattern(self, conn, staging_table: str, schema_name: str, 
                               col: str, pattern: str, pattern_name: str = "pattern",

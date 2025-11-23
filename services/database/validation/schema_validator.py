@@ -67,11 +67,14 @@ class SchemaValidator(BaseValidator):
                         log_func(f"   ℹ️  Final table {final_table} not found - skipping schema validation")
                     return schema_issues
                 
-                # ตรวจสอบแต่ละคอลัมน์ (ข้ามคอลัมน์ระบบ)
-                system_columns = ['updated_at', 'created_at', 'id']  # คอลัมน์ที่ระบบจัดการเอง
+                # ตรวจสอบแต่ละคอลัมน์ (ข้ามคอลัมน์ระบบ และ metadata columns)
+                # Metadata columns ถูกสร้างอัตโนมัติโดยระบบ ไม่ต้อง validate
+                system_columns = {
+                    '_loaded_at', '_created_at', '_source_file', '_batch_id', '_upsert_hash'  # Metadata columns 
+                }
 
                 for col_name, expected_dtype in required_cols.items():
-                    # ข้ามคอลัมน์ระบบ
+                    # ข้ามคอลัมน์ระบบและ metadata columns
                     if col_name in system_columns:
                         continue
 

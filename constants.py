@@ -21,10 +21,6 @@ class DatabaseConstants:
 
     # Supported SQL Server data types
     SUPPORTED_DTYPES: List[str] = [
-        "NVARCHAR(100)",
-        "NVARCHAR(255)", 
-        "NVARCHAR(500)",
-        "NVARCHAR(1000)",
         "NVARCHAR(MAX)",
         "INT",
         "BIGINT",

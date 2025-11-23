@@ -271,14 +271,10 @@ class SettingsTab:
             elif dtype == "date":
                 inferred_dtypes[col] = "DATE"
             elif dtype == "string":
-                maxlen = df[col].astype(str).str.len().max()
-                if pd.isna(maxlen) or maxlen < 1 or maxlen < 255:
-                    maxlen = 255
-                elif maxlen > 1000:
-                    maxlen = "MAX"
-                inferred_dtypes[col] = f"NVARCHAR({maxlen})" if maxlen != "MAX" else "NVARCHAR(MAX)"
+                # Always use NVARCHAR(MAX) for all string columns
+                inferred_dtypes[col] = "NVARCHAR(MAX)"
             else:
-                inferred_dtypes[col] = "NVARCHAR(255)"
+                inferred_dtypes[col] = "NVARCHAR(MAX)"
         return inferred_dtypes
     
     def _delete_file_type(self):
@@ -752,7 +748,7 @@ class SettingsTab:
             col_label.pack(side="left", padx=(15, 10), pady=12, expand=True, fill="x")
             
             dtype_menu = ctk.CTkOptionMenu(row_frame, values=supported_dtypes, width=220)
-            dtype_menu.set(self.dtype_settings.get(file_type, {}).get(target_col, "NVARCHAR(255)"))
+            dtype_menu.set(self.dtype_settings.get(file_type, {}).get(target_col, "NVARCHAR(MAX)"))
             dtype_menu.pack(side="right", padx=(0, 15), pady=12)
             
             self.dtype_menus[file_type][source_col] = dtype_menu
@@ -792,7 +788,7 @@ class SettingsTab:
         # เพิ่ม dtype ที่ยังไม่มี
         for col in target_cols:
             if col not in dtypes:
-                dtypes[col] = "NVARCHAR(255)"
+                dtypes[col] = "NVARCHAR(MAX)"
         # รวม meta key กลับเข้าไป
         dtypes.update(meta_keys)
         self.dtype_settings[file_type] = dtypes

@@ -8,6 +8,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Dict
+import uuid
 
 import pandas as pd
 from sqlalchemy import inspect, text
@@ -25,10 +26,11 @@ from sqlalchemy.types import (
     NVARCHAR as SA_NVARCHAR,
     Text as SA_Text,
     Boolean as SA_Boolean,
+    LargeBinary,
 )
 
 from .data_validation_service import DataValidationService
-from utils.sql_utils import get_numeric_cleaning_expression
+from utils.sql_utils import get_numeric_cleaning_expression, get_basic_cleaning_expression
 
 
 class DataUploadService:
@@ -69,7 +71,7 @@ class DataUploadService:
             self.dtype_settings = {}
 
     def upload_data(self, df, logic_type: str, required_cols: Dict, schema_name: str = 'bronze',
-                   log_func=None, force_recreate: bool = False, clear_existing: bool = True):
+                   log_func=None, force_recreate: bool = False, clear_existing: bool = True, source_file: str = None):
         """
         Upload data to database with support for Replace or Upsert strategies
 
@@ -81,10 +83,14 @@ class DataUploadService:
             log_func: Function for logging
             force_recreate: Force table recreation (used when auto-updating data types)
             clear_existing: Whether to clear existing data (ignored if update_strategy='upsert')
+            source_file: Source filename for metadata tracking
         """
 
         # โหลด dtype_settings ใหม่ทุกครั้งเพื่อให้ได้ค่าล่าสุดหลัง Save
         self._load_dtype_settings()
+
+        # สร้าง batch_id สำหรับการ upload ครั้งนี้
+        batch_id = str(uuid.uuid4())
 
         # อ่าน update strategy และ upsert keys
         update_strategy = "replace"  # default
@@ -111,9 +117,13 @@ class DataUploadService:
             
             if not required_cols:
                 return False, "Data type settings not found"
-            
-            # updated_at จะถูกเพิ่มโดย SQL ในขั้นตอนสุดท้าย
-            required_cols['updated_at'] = DateTime()
+
+            # เพิ่ม metadata columns ที่จะถูกเพิ่มโดย SQL ในขั้นตอนสุดท้าย
+            required_cols['_loaded_at'] = DateTime()
+            required_cols['_created_at'] = DateTime()
+            required_cols['_source_file'] = SA_NVARCHAR(500)
+            required_cols['_batch_id'] = SA_NVARCHAR(50)
+            required_cols['_upsert_hash'] = LargeBinary(16)
             
             table_name = None
             try:
@@ -147,16 +157,25 @@ class DataUploadService:
                     needs_recreate = self._check_type_compatibility(db_col_types, required_cols, log_func)
             
             staging_table = f"{table_name}__stg"
-            # staging table ไม่รวม updated_at เพราะจะเพิ่มใน SQL ตอน transfer
-            staging_cols = [col for col in required_cols.keys() if col != 'updated_at']
+            # staging table ไม่รวม metadata columns เพราะจะเพิ่มใน SQL ตอน transfer
+            metadata_cols = {'_loaded_at', '_created_at', '_source_file', '_batch_id', '_upsert_hash'}
+            staging_cols = [col for col in required_cols.keys() if col not in metadata_cols]
             
             if log_func:
                 log_func(f"📋 Creating staging table {schema_name}.{staging_table}")
             self._create_staging_table(staging_table, staging_cols, schema_name, log_func)
-            
+
+            # เพิ่ม metadata columns ลง DataFrame ก่อน upload เข้า staging
+            df_with_metadata = df.copy()
+            df_with_metadata['_loaded_at'] = datetime.now()
+            df_with_metadata['_created_at'] = datetime.now()
+            df_with_metadata['_source_file'] = source_file or 'unknown'
+            df_with_metadata['_batch_id'] = batch_id
+            df_with_metadata['_upsert_hash'] = None  # จะคำนวณทีหลังถ้าเป็น upsert mode
+
             if log_func:
-                log_func(f"📤 Uploading {len(df):,} rows to staging table")
-            self._upload_to_staging(df, staging_table, staging_cols, schema_name, log_func)
+                log_func(f"📤 Uploading {len(df):,} rows to staging table (with metadata)")
+            self._upload_to_staging(df_with_metadata, staging_table, staging_cols, schema_name, log_func)
             
             # โหลดการตั้งค่า date format
             date_format = 'UK'  # default
@@ -194,12 +213,21 @@ class DataUploadService:
             if log_func:
                 log_func(f"🔄 Transferring data from staging to main table {schema_name}.{table_name}")
             self._transfer_data_from_staging(
-                staging_table, table_name, required_cols, schema_name, log_func, date_format
+                staging_table, table_name, required_cols, schema_name, log_func, date_format,
+                batch_id=batch_id, source_file=source_file, upsert_keys=upsert_keys,
+                update_strategy=update_strategy
             )
 
             # Keep staging table for debugging - it will be cleaned up when new data comes
             if log_func:
                 log_func(f"✅ Keeping staging table {schema_name}.{staging_table} for debugging")
+
+            # Create indexes after successful upload
+            if log_func:
+                log_func(f"🔍 Creating indexes on final table")
+            self._create_indexes_after_upload(
+                table_name, schema_name, upsert_keys, log_func
+            )
 
             # Build summary message
             summary_message = f"Upload successful → {schema_name}.{table_name} (ingested NVARCHAR(MAX) then converted by dtype for {len(df):,} rows)"
@@ -270,13 +298,9 @@ class DataUploadService:
     
     def _get_sql_server_type(self, sa_type) -> str:
         """Convert SQLAlchemy type to SQL Server type string"""
-        if isinstance(sa_type, SA_Text):
+        if isinstance(sa_type, (SA_Text, SA_NVARCHAR)):
+            # Always use NVARCHAR(MAX) for all string types
             return "NVARCHAR(MAX)"
-        elif isinstance(sa_type, SA_NVARCHAR):
-            if hasattr(sa_type, 'length') and sa_type.length:
-                return f"NVARCHAR({sa_type.length})"
-            else:
-                return "NVARCHAR(MAX)"
         elif isinstance(sa_type, SA_Integer):
             return "INT"
         elif isinstance(sa_type, SA_SmallInteger):
@@ -296,14 +320,23 @@ class DataUploadService:
             return "DATETIME2"
         elif isinstance(sa_type, SA_Boolean):
             return "BIT"
+        elif isinstance(sa_type, LargeBinary):
+            return "VARBINARY(16)"  # For _upsert_hash
         else:
             return "NVARCHAR(MAX)"  # Default fallback
     
     def _format_current_type(self, col_info: Dict) -> str:
         """Format current column info to readable type string"""
         data_type = col_info['data_type'].upper()
-        
+
         if data_type in ['NVARCHAR', 'VARCHAR']:
+            if col_info['max_length'] == -1:
+                return f"{data_type}(MAX)"
+            elif col_info['max_length']:
+                return f"{data_type}({col_info['max_length']})"
+            else:
+                return data_type
+        elif data_type in ['VARBINARY', 'BINARY']:
             if col_info['max_length'] == -1:
                 return f"{data_type}(MAX)"
             elif col_info['max_length']:
@@ -321,19 +354,24 @@ class DataUploadService:
         """Check if current and target types are equivalent"""
         current_upper = current_type.upper()
         target_upper = target_type.upper()
-        
+
         # ตรวจสอบความเท่าเทียมแบบเข้มงวด
         if current_upper == target_upper:
             return True
-            
+
         # ตรวจสอบความเท่าเทียมสำหรับ NVARCHAR(MAX)
         if isinstance(sa_type, SA_Text):
             return current_upper in ['NVARCHAR(MAX)', 'TEXT', 'NTEXT']
-            
+
         # ตรวจสอบความเท่าเทียมสำหรับ DATETIME
         if isinstance(sa_type, SA_DateTime):
             return current_upper in ['DATETIME', 'DATETIME2', 'SMALLDATETIME']
-            
+
+        # ตรวจสอบความเท่าเทียมสำหรับ VARBINARY (สำหรับ _upsert_hash)
+        if isinstance(sa_type, LargeBinary):
+            # VARBINARY(16) = VARBINARY(16) or just VARBINARY
+            return current_upper.startswith('VARBINARY') or current_upper.startswith('BINARY')
+
         return False
 
     def _check_type_compatibility(self, db_col_types: Dict, required_cols: Dict, log_func=None) -> bool:
@@ -387,19 +425,37 @@ class DataUploadService:
         return needs_recreate
 
     def _create_staging_table(self, staging_table: str, staging_cols: list, schema_name: str, log_func=None):
-        """Create staging table with NVARCHAR(MAX) for all columns"""
+        """Create staging table with NVARCHAR(MAX) for business columns and metadata columns"""
         with self.engine.begin() as conn:
             conn.execute(text(f"""
                 IF OBJECT_ID('{schema_name}.{staging_table}', 'U') IS NOT NULL
                     DROP TABLE {schema_name}.{staging_table};
             """))
+            # Business columns: NVARCHAR(MAX)
             cols_sql = ", ".join([f"[{c}] NVARCHAR(MAX) NULL" for c in staging_cols])
-            conn.execute(text(f"CREATE TABLE {schema_name}.{staging_table} ({cols_sql})"))
+
+            # Add metadata columns with proper data types
+            metadata_cols_sql = """
+                [_loaded_at] DATETIME2 NULL,
+                [_created_at] DATETIME2 NULL,
+                [_source_file] NVARCHAR(500) NULL,
+                [_batch_id] NVARCHAR(50) NULL,
+                [_upsert_hash] VARBINARY(16) NULL
+            """
+
+            # Combine all columns
+            all_cols_sql = cols_sql + ", " + metadata_cols_sql
+
+            conn.execute(text(f"CREATE TABLE {schema_name}.{staging_table} ({all_cols_sql})"))
             if log_func:
-                log_func(f"📦 Created staging table: {schema_name}.{staging_table} (NVARCHAR(MAX) for all columns)")
+                log_func(f"📦 Created staging table: {schema_name}.{staging_table} (business cols + metadata cols)")
 
     def _upload_to_staging(self, df, staging_table: str, staging_cols: list, schema_name: str, log_func=None):
-        """Upload data to staging table"""
+        """Upload data to staging table (including metadata columns)"""
+        # รวมคอลัมน์ธุรกิจและ metadata columns
+        metadata_cols = ['_loaded_at', '_created_at', '_source_file', '_batch_id', '_upsert_hash']
+        all_cols = list(staging_cols) + metadata_cols
+
         if len(df) > 10000:
             if log_func:
                 log_func(f"📊 Large file ({len(df):,} rows) - uploading in chunks to staging")
@@ -407,7 +463,7 @@ class DataUploadService:
             total_chunks = (len(df) + chunk_size - 1) // chunk_size
             for i in range(0, len(df), chunk_size):
                 chunk = df.iloc[i:i+chunk_size]
-                chunk[staging_cols].to_sql(
+                chunk[all_cols].to_sql(
                     name=staging_table,
                     con=self.engine,
                     schema=schema_name,
@@ -420,7 +476,7 @@ class DataUploadService:
         else:
             if log_func:
                 log_func(f"📤 Uploaded data: {len(df):,} rows → {schema_name}.{staging_table}")
-            df[staging_cols].to_sql(
+            df[all_cols].to_sql(
                 name=staging_table,
                 con=self.engine,
                 schema=schema_name,
@@ -431,7 +487,10 @@ class DataUploadService:
     def _delete_by_keys(self, staging_table: str, final_table: str,
                        upsert_keys: list, schema_name: str, log_func=None):
         """
-        Delete rows in final table where upsert keys match staging table
+        Delete rows in final table where upsert hash matches staging table
+
+        Uses MD5 hash of cleaned upsert keys for fast and accurate matching.
+        This is more reliable than matching on raw values as it uses cleaned data.
 
         Args:
             staging_table: Staging table name
@@ -440,17 +499,11 @@ class DataUploadService:
             schema_name: Database schema
             log_func: Logging function
 
-        Example SQL (single key):
-            DELETE FROM bronze.orders
-            WHERE order_id IN (
-                SELECT DISTINCT order_id FROM bronze.orders__stg
-            )
-
-        Example SQL (multiple keys):
+        Example SQL:
             DELETE T FROM bronze.orders T
             INNER JOIN bronze.orders__stg S
-            ON T.order_id = S.order_id
-            AND T.order_date = S.order_date
+            ON T._upsert_hash = S._upsert_hash
+            WHERE S._upsert_hash IS NOT NULL
         """
         if not upsert_keys:
             if log_func:
@@ -490,40 +543,44 @@ class DataUploadService:
                 log_func(f"❌ Validation failed: {e}")
             raise
 
-        # Build and execute DELETE statement
+        # Staging table มี _upsert_hash column อยู่แล้ว (สร้างตอน create table)
+        # เพียงแค่คำนวณ hash และ DELETE
         with self.engine.begin() as conn:
-            if len(upsert_keys) == 1:
-                # Single key - use IN clause for better performance
-                key = upsert_keys[0]
-                delete_sql = f"""
-                    DELETE FROM {schema_name}.{final_table}
-                    WHERE [{key}] IN (
-                        SELECT DISTINCT [{key}]
-                        FROM {schema_name}.{staging_table}
-                    )
+            try:
+                # Calculate and populate _upsert_hash in staging table
+                cleaned_keys = []
+                for key in upsert_keys:
+                    cleaned = get_basic_cleaning_expression(key)
+                    cleaned_keys.append(f"COALESCE({cleaned}, '')")
+
+                concat_expr = " + '|' + ".join(cleaned_keys)
+                hash_expr = f"HASHBYTES('MD5', {concat_expr})"
+
+                update_sql = f"""
+                    UPDATE {schema_name}.{staging_table}
+                    SET [_upsert_hash] = {hash_expr}
                 """
-            else:
-                # Multiple keys - use INNER JOIN
-                join_conditions = " AND ".join([
-                    f"T.[{key}] = S.[{key}]" for key in upsert_keys
-                ])
+                conn.execute(text(update_sql))
+
+                # Now perform DELETE using _upsert_hash
                 delete_sql = f"""
                     DELETE T
                     FROM {schema_name}.{final_table} T
                     INNER JOIN {schema_name}.{staging_table} S
-                    ON {join_conditions}
+                    ON T.[_upsert_hash] = S.[_upsert_hash]
+                    WHERE S.[_upsert_hash] IS NOT NULL
                 """
 
-            if log_func:
-                keys_str = ", ".join(upsert_keys)
-                log_func(f"🗑️ Deleting existing rows matching keys: {keys_str}")
+                if log_func:
+                    keys_str = ", ".join(upsert_keys)
+                    log_func(f"🗑️ Deleting existing rows using MD5 hash of keys: {keys_str}")
 
-            try:
                 result = conn.execute(text(delete_sql))
                 deleted_count = result.rowcount
 
                 if log_func:
                     log_func(f"✅ Deleted {deleted_count:,} existing rows")
+
             except Exception as e:
                 if log_func:
                     log_func(f"❌ Delete failed: {e}")
@@ -559,8 +616,9 @@ class DataUploadService:
             elif log_func:
                 log_func(f"📋 Creating table {schema_name}.{table_name} from data type settings")
 
-            # สร้าง empty DataFrame ที่มีเฉพาะคอลัมน์ที่มีอยู่ใน df (ไม่รวม updated_at)
-            df_cols = [col for col in required_cols.keys() if col != 'updated_at']
+            # สร้าง empty DataFrame ที่มีเฉพาะคอลัมน์ที่มีอยู่ใน df (ไม่รวม metadata columns)
+            metadata_cols = {'_loaded_at', '_created_at', '_source_file', '_batch_id', '_upsert_hash'}
+            df_cols = [col for col in required_cols.keys() if col not in metadata_cols]
             df.head(0)[df_cols].to_sql(
                 name=table_name,
                 con=self.engine,
@@ -569,9 +627,13 @@ class DataUploadService:
                 index=False,
                 dtype={col: required_cols[col] for col in df_cols}
             )
-            # เพิ่ม updated_at column ด้วย SQL
+            # เพิ่ม metadata columns ด้วย SQL
             with self.engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [updated_at] DATETIME2 NULL"))
+                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_loaded_at] DATETIME2 NULL"))
+                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_created_at] DATETIME2 NULL"))
+                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_source_file] NVARCHAR(500) NULL"))
+                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_batch_id] NVARCHAR(50) NULL"))
+                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_upsert_hash] VARBINARY(16) NULL"))
         else:
             # แก้ไขชนิดข้อมูลสำหรับตารางที่มีอยู่แล้ว
             self._fix_column_types(table_name, required_cols, schema_name, log_func)
@@ -595,8 +657,22 @@ class DataUploadService:
                     log_func(f"📋 Appending to existing table {schema_name}.{table_name}")
 
     def _transfer_data_from_staging(self, staging_table: str, table_name: str, required_cols: Dict,
-                                  schema_name: str, log_func=None, date_format: str = 'UK'):
-        """Transfer data from staging to final table with type conversion
+                                  schema_name: str, log_func=None, date_format: str = 'UK',
+                                  batch_id: str = None, source_file: str = None, upsert_keys: list = None,
+                                  update_strategy: str = 'replace'):
+        """Transfer data from staging to final table with type conversion and metadata
+
+        Args:
+            staging_table: Staging table name
+            table_name: Final table name
+            required_cols: Required columns and data types
+            schema_name: Database schema
+            log_func: Logging function
+            date_format: Date format for conversion
+            batch_id: Batch ID for this upload
+            source_file: Source filename
+            upsert_keys: List of upsert key columns
+            update_strategy: 'replace' or 'upsert'
 
         Returns:
             None
@@ -650,12 +726,17 @@ class DataUploadService:
             target = 'NVARCHAR(MAX)' if isinstance(sa_type_obj, SA_Text) else str(sa_type_obj).upper()
             return f"TRY_CONVERT({target}, {col_ref})"
 
+        # Build SELECT expressions
+        # Metadata columns: เอาจาก staging table โดยตรง (สร้างไว้แล้วตอน upload)
+        # Business columns: แปลง data type ด้วย TRY_CONVERT
+        metadata_cols = {'_loaded_at', '_created_at', '_source_file', '_batch_id', '_upsert_hash'}
         select_exprs = []
         for col_name, sa_type in required_cols.items():
-            if col_name == 'updated_at':
-                # ใช้ GETDATE() สำหรับ updated_at แทนการเพิ่มใน Python
-                select_exprs.append(f"GETDATE() AS [{col_name}]")
+            if col_name in metadata_cols:
+                # Metadata columns: เอาจาก staging table โดยตรง (ไม่ต้องคำนวณใหม่)
+                select_exprs.append(f"[{col_name}]")
             else:
+                # Business columns: แปลง data type
                 select_exprs.append(f"{_sql_type_and_expr(col_name, sa_type)} AS [{col_name}]")
         select_sql = ", ".join(select_exprs)
 
@@ -690,6 +771,66 @@ class DataUploadService:
                 if log_func:
                     log_func(f"❌ Data transfer failed after {execution_time:.1f} seconds: {str(e)[:100]}...")
                 raise
+
+    def _create_indexes_after_upload(self, table_name: str, schema_name: str,
+                                    upsert_keys: list = None, log_func=None):
+        """Create indexes on final table after upload
+
+        Creates indexes on:
+        - _upsert_hash (for fast upsert operations)
+        - _loaded_at (for querying by load date)
+        - Individual upsert key columns (if specified)
+
+        Args:
+            table_name: Final table name
+            schema_name: Database schema
+            upsert_keys: List of upsert key columns
+            log_func: Logging function
+        """
+        upsert_keys = upsert_keys or []
+
+        try:
+            with self.engine.begin() as conn:
+                # Index 1: _upsert_hash (for fast upsert matching)
+                idx_upsert_hash = f"IX_{table_name}_upsert_hash"
+                create_idx_upsert = f"""
+                IF NOT EXISTS (SELECT * FROM sys.indexes
+                              WHERE name = '{idx_upsert_hash}'
+                              AND object_id = OBJECT_ID('{schema_name}.{table_name}'))
+                BEGIN
+                    CREATE NONCLUSTERED INDEX [{idx_upsert_hash}]
+                    ON {schema_name}.{table_name} ([_upsert_hash])
+                END
+                """
+                conn.execute(text(create_idx_upsert))
+                if log_func:
+                    log_func(f"✅ Created index on _upsert_hash")
+
+                # Index 2: _loaded_at (for querying by load date)
+                idx_loaded_at = f"IX_{table_name}_loaded_at"
+                create_idx_loaded = f"""
+                IF NOT EXISTS (SELECT * FROM sys.indexes
+                              WHERE name = '{idx_loaded_at}'
+                              AND object_id = OBJECT_ID('{schema_name}.{table_name}'))
+                BEGIN
+                    CREATE NONCLUSTERED INDEX [{idx_loaded_at}]
+                    ON {schema_name}.{table_name} ([_loaded_at])
+                END
+                """
+                conn.execute(text(create_idx_loaded))
+                if log_func:
+                    log_func(f"✅ Created index on _loaded_at")
+
+                # Note: We don't create indexes on individual upsert key columns because:
+                # - We use _upsert_hash for matching (which already has an index)
+                # - Most upsert keys are NVARCHAR(MAX) which cannot be indexed
+                # - Query performance relies on _upsert_hash, not individual columns
+
+        except Exception as e:
+            if log_func:
+                log_func(f"⚠️ Warning: Could not create some indexes: {e}")
+            # Don't fail the upload if index creation fails
+            pass
 
     def _short_exception_message(self, exc: Exception) -> str:
         """Extract short exception message"""
