@@ -265,7 +265,7 @@ class SettingsTab:
             elif dtype in ["floating", "mixed-integer-float"]:
                 inferred_dtypes[col] = "FLOAT"
             elif dtype == "boolean":
-                inferred_dtypes[col] = "BIT"
+                inferred_dtypes[col] = "INT"
             elif dtype.startswith("datetime"):
                 inferred_dtypes[col] = "DATETIME"
             elif dtype == "date":
@@ -348,10 +348,15 @@ class SettingsTab:
             if old_type in self.dtype_settings:
                 self.dtype_settings[new_type] = self.dtype_settings.pop(old_type)
 
+            # บันทึกไฟล์ใหม่
             if self.callbacks.get('save_column_settings'):
                 self.callbacks['save_column_settings']()
             if self.callbacks.get('save_dtype_settings'):
                 self.callbacks['save_dtype_settings']()
+
+            # ลบไฟล์เก่า (ป้องกันไฟล์ซ้ำ)
+            if self.callbacks.get('delete_file_type'):
+                self.callbacks['delete_file_type'](old_type)
 
             self.refresh_file_type_tabs()
             messagebox.showinfo("Success", f"Renamed file type {old_type} to {new_type}")

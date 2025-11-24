@@ -23,12 +23,9 @@ class DatabaseConstants:
     SUPPORTED_DTYPES: List[str] = [
         "NVARCHAR(MAX)",
         "INT",
-        "BIGINT",
-        "DECIMAL(18,2)",
         "FLOAT",
         "DATE",
-        "DATETIME",
-        "BIT"
+        "DATETIME"
     ]
 
 

@@ -1,10 +1,11 @@
 """
 Boolean data validation module
+NOTE: This validator is no longer used as BIT type has been removed.
+Boolean data is now stored as INT (0/1).
 """
 
 from typing import List, Dict
 from sqlalchemy import text
-from sqlalchemy.types import Boolean as SA_Boolean
 
 from .base_validator import BaseValidator
 
@@ -118,19 +119,18 @@ class BooleanValidator(BaseValidator):
     def get_boolean_columns(self, required_cols: Dict) -> List[str]:
         """
         ดึงรายชื่อคอลัมน์ที่เป็นประเภท boolean
-        
+
+        NOTE: Always returns empty list as BIT type has been removed.
+        Boolean data is now stored as INT (0/1).
+
         Args:
             required_cols: Dictionary ของคอลัมน์และ data types
-            
+
         Returns:
-            List[str]: List of boolean column names
+            List[str]: List of boolean column names (always empty)
         """
-        boolean_columns = []
-        for col, dtype in required_cols.items():
-            if isinstance(dtype, SA_Boolean):
-                boolean_columns.append(col)
-        
-        return boolean_columns
+        # BIT type no longer supported, boolean data stored as INT
+        return []
     
     def validate_custom_boolean_values(self, conn, staging_table: str, schema_name: str, 
                                      col: str, true_values: List[str], false_values: List[str],

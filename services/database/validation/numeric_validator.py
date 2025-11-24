@@ -4,7 +4,7 @@ Numeric data validation module
 
 from typing import List, Dict
 from sqlalchemy import text
-from sqlalchemy.types import Integer as SA_Integer, SmallInteger as SA_SmallInteger, Float as SA_Float, DECIMAL as SA_DECIMAL
+from sqlalchemy.types import Integer as SA_Integer, Float as SA_Float
 
 from .base_validator import BaseValidator
 
@@ -118,9 +118,9 @@ class NumericValidator(BaseValidator):
         """
         numeric_columns = []
         for col, dtype in required_cols.items():
-            if isinstance(dtype, (SA_Integer, SA_SmallInteger, SA_Float, SA_DECIMAL)):
+            if isinstance(dtype, (SA_Integer, SA_Float)):
                 numeric_columns.append(col)
-        
+
         return numeric_columns
     
     def validate_numeric_range(self, conn, staging_table: str, schema_name: str, 

@@ -18,14 +18,11 @@ from services.settings_manager import settings_manager
 from sqlalchemy.types import (
     DateTime,
     Integer as SA_Integer,
-    SmallInteger as SA_SmallInteger,
     Float as SA_Float,
-    DECIMAL as SA_DECIMAL,
     DATE as SA_DATE,
     DateTime as SA_DateTime,
     NVARCHAR as SA_NVARCHAR,
     Text as SA_Text,
-    Boolean as SA_Boolean,
     LargeBinary,
 )
 
@@ -303,23 +300,12 @@ class DataUploadService:
             return "NVARCHAR(MAX)"
         elif isinstance(sa_type, SA_Integer):
             return "INT"
-        elif isinstance(sa_type, SA_SmallInteger):
-            return "SMALLINT"
         elif isinstance(sa_type, SA_Float):
             return "FLOAT"
-        elif isinstance(sa_type, SA_DECIMAL):
-            if hasattr(sa_type, 'precision') and hasattr(sa_type, 'scale'):
-                precision = sa_type.precision or 18
-                scale = sa_type.scale or 0
-                return f"DECIMAL({precision},{scale})"
-            else:
-                return "DECIMAL(18,0)"
         elif isinstance(sa_type, SA_DATE):
             return "DATE"
         elif isinstance(sa_type, SA_DateTime):
             return "DATETIME2"
-        elif isinstance(sa_type, SA_Boolean):
-            return "BIT"
         elif isinstance(sa_type, LargeBinary):
             return "VARBINARY(16)"  # For _upsert_hash
         else:
@@ -343,10 +329,6 @@ class DataUploadService:
                 return f"{data_type}({col_info['max_length']})"
             else:
                 return data_type
-        elif data_type in ['DECIMAL', 'NUMERIC']:
-            precision = col_info['precision'] or 18
-            scale = col_info['scale'] or 0
-            return f"{data_type}({precision},{scale})"
         else:
             return data_type
     
@@ -380,13 +362,11 @@ class DataUploadService:
         
         def _type_category(type_str: str) -> str:
             t = (type_str or '').upper()
-            if any(x in t for x in ['INT', 'BIGINT', 'SMALLINT', 'FLOAT', 'DECIMAL', 'NUMERIC', 'REAL', 'MONEY']):
+            if any(x in t for x in ['INT', 'FLOAT']):
                 return 'NUMERIC'
-            if any(x in t for x in ['DATE', 'DATETIME', 'SMALLDATETIME', 'DATETIME2', 'TIME']):
+            if any(x in t for x in ['DATE', 'DATETIME', 'DATETIME2']):
                 return 'DATETIME'
-            if any(x in t for x in ['BIT', 'BOOLEAN']):
-                return 'BOOLEAN'
-            if any(x in t for x in ['CHAR', 'NCHAR', 'VARCHAR', 'NVARCHAR', 'TEXT']):
+            if any(x in t for x in ['NVARCHAR', 'TEXT']):
                 return 'STRING'
             return 'OTHER'
 
@@ -400,10 +380,9 @@ class DataUploadService:
             """Check if type can be ALTERed instead of requiring table recreation"""
             # อนุญาต ALTER สำหรับการเปลี่ยนแปลงเหล่านี้
             alterable_changes = [
-                ('STRING', 'STRING'),    # VARCHAR → NVARCHAR, size changes, etc.
-                ('NUMERIC', 'NUMERIC'),  # INT → BIGINT, DECIMAL changes, etc.
-                ('DATETIME', 'DATETIME'), # DATETIME → DATETIME2, etc.
-                ('BOOLEAN', 'BOOLEAN'),  # BIT changes
+                ('STRING', 'STRING'),    # Size changes, etc.
+                ('NUMERIC', 'NUMERIC'),  # INT ↔ FLOAT changes
+                ('DATETIME', 'DATETIME'), # DATETIME ↔ DATE, etc.
             ]
             return (from_cat, to_cat) in alterable_changes
 
@@ -693,8 +672,8 @@ class DataUploadService:
             col_ref = f"[{col_name}]"
             # Basic cleaning for most data types
             base = f"NULLIF(LTRIM(RTRIM({col_ref})), '')"
-            
-            if isinstance(sa_type_obj, (SA_Integer, SA_SmallInteger)):
+
+            if isinstance(sa_type_obj, SA_Integer):
                 # Use shared numeric cleaning function for consistency
                 cleaned = get_numeric_cleaning_expression(col_name)
                 return f"TRY_CONVERT(INT, {cleaned})"
@@ -702,27 +681,14 @@ class DataUploadService:
                 # Use shared numeric cleaning function for consistency
                 cleaned = get_numeric_cleaning_expression(col_name)
                 return f"TRY_CONVERT(FLOAT, {cleaned})"
-            if isinstance(sa_type_obj, SA_DECIMAL):
-                precision = getattr(sa_type_obj, 'precision', 18) or 18
-                scale = getattr(sa_type_obj, 'scale', 2) or 2
-                # Use shared numeric cleaning function for consistency
-                cleaned = get_numeric_cleaning_expression(col_name)
-                return f"TRY_CONVERT(DECIMAL({precision},{scale}), {cleaned})"
             if isinstance(sa_type_obj, (SA_DATE, SA_DateTime)):
                 # Enhanced date cleaning to handle tab characters and special characters
                 date_cleaned = f"NULLIF(LTRIM(RTRIM(REPLACE(REPLACE(REPLACE({col_ref}, CHAR(9), ''), CHAR(10), ''), CHAR(13), ''))), '')"
-                
+
                 if date_format == 'UK':  # DD-MM format priority
                     return f"COALESCE(TRY_CONVERT(DATETIME, {date_cleaned}, 103), TRY_CONVERT(DATETIME, {date_cleaned}, 121), TRY_CONVERT(DATETIME, {date_cleaned}, 101))"
                 else:  # US format - MM-DD priority
                     return f"COALESCE(TRY_CONVERT(DATETIME, {date_cleaned}, 101), TRY_CONVERT(DATETIME, {date_cleaned}, 121), TRY_CONVERT(DATETIME, {date_cleaned}, 103))"
-            if isinstance(sa_type_obj, SA_Boolean):
-                return (
-                    "CASE "
-                    f"WHEN UPPER(LTRIM(RTRIM({col_ref}))) IN ('1','TRUE','Y','YES') THEN 1 "
-                    f"WHEN UPPER(LTRIM(RTRIM({col_ref}))) IN ('0','FALSE','N','NO') THEN 0 "
-                    "ELSE NULL END"
-                )
             target = 'NVARCHAR(MAX)' if isinstance(sa_type_obj, SA_Text) else str(sa_type_obj).upper()
             return f"TRY_CONVERT({target}, {col_ref})"
 
@@ -857,7 +823,7 @@ class DataUploadService:
                 if col not in df_local.columns:
                     continue
                 
-                if isinstance(dtype, (SA_Integer, SA_SmallInteger, SA_Float, SA_DECIMAL)):
+                if isinstance(dtype, (SA_Integer, SA_Float)):
                     numeric_series = pd.to_numeric(df_local[col], errors="coerce")
                     mask = numeric_series.isna() & df_local[col].notna()
                     bad_count = int(mask.sum())

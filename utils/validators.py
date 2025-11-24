@@ -187,23 +187,8 @@ def _is_supported_dtype(dtype_str: str) -> bool:
         
     dtype_upper = dtype_str.upper()
     
-    # ตรวจสอบ exact match
-    if dtype_upper in [dt.upper() for dt in DatabaseConstants.SUPPORTED_DTYPES]:
-        return True
-        
-    # ตรวจสอบ pattern match สำหรับ NVARCHAR, DECIMAL etc.
-    supported_patterns = [
-        r'^NVARCHAR\(\d+\)$',
-        r'^VARCHAR\(\d+\)$', 
-        r'^DECIMAL\(\d+,\d+\)$',
-        r'^CHAR\(\d+\)$'
-    ]
-    
-    for pattern in supported_patterns:
-        if re.match(pattern, dtype_upper):
-            return True
-            
-    return False
+    # ตรวจสอบ exact match เท่านั้น (no backward compatibility)
+    return dtype_upper in [dt.upper() for dt in DatabaseConstants.SUPPORTED_DTYPES]
 
 
 def validate_json_config(config_data: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[bool, str]:

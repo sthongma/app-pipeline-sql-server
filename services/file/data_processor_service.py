@@ -14,8 +14,8 @@ from typing import Any, Dict, Optional
 import pandas as pd
 from dateutil import parser
 from sqlalchemy.types import (
-    DECIMAL, DATE, Boolean, DateTime, Float, Integer,
-    NVARCHAR, SmallInteger, Text
+    DATE, DateTime, Float, Integer,
+    NVARCHAR, Text
 )
 
 from constants import PathConstants, ProcessingConstants
@@ -105,7 +105,7 @@ class DataProcessorService:
     def _convert_dtype_to_sqlalchemy(self, dtype_str):
         """Convert string dtype to SQLAlchemy type object (cached)"""
         if not isinstance(dtype_str, str):
-            return NVARCHAR(255)
+            return Text()
             
         # Use cache for converted dtypes
         cache_key = str(dtype_str).upper()
@@ -119,25 +119,16 @@ class DataProcessorService:
             if dtype_str.startswith('NVARCHAR'):
                 # Always use Text() for NVARCHAR (maps to NVARCHAR(MAX) in SQL Server)
                 result = Text()
-            elif dtype_str.startswith('DECIMAL'):
-                precision, scale = map(int, dtype_str.split('(')[1].split(')')[0].split(','))
-                result = DECIMAL(precision, scale)
             elif dtype_str == 'INT':
                 result = Integer()
-            elif dtype_str == 'BIGINT':
-                result = Integer()
-            elif dtype_str == 'SMALLINT':
-                result = SmallInteger()
             elif dtype_str == 'FLOAT':
                 result = Float()
             elif dtype_str == 'DATE':
                 result = DATE()
             elif dtype_str == 'DATETIME':
                 result = DateTime()
-            elif dtype_str == 'BIT':
-                result = Boolean()
             else:
-                result = NVARCHAR(500)
+                result = Text()
                 
             # Store in cache
             with self._cache_lock:
@@ -145,7 +136,7 @@ class DataProcessorService:
             return result
             
         except Exception:
-            result = NVARCHAR(500)
+            result = Text()
             with self._cache_lock:
                 self._settings_cache[cache_key] = result
             return result
@@ -406,7 +397,7 @@ class DataProcessorService:
         try:
             total_rows, non_null_rows, null_rows = self._get_series_row_counts(series)
 
-            if isinstance(expected_dtype, (Integer, Float, DECIMAL, SmallInteger)):
+            if isinstance(expected_dtype, (Integer, Float)):
                 issues = self._validate_numeric_column(series, expected_dtype, total_rows)
 
             elif isinstance(expected_dtype, (DATE, DateTime)):
@@ -458,10 +449,10 @@ class DataProcessorService:
             if col not in df.columns:
                 continue
                 
-            if isinstance(dtype, (Integer, Float, DECIMAL, SmallInteger)):
+            if isinstance(dtype, (Integer, Float)):
                 numeric_series = pd.to_numeric(df[col], errors='coerce')
                 mask = numeric_series.isna() & df[col].notna()
-                
+
                 if mask.any():
                     validation_report['has_issues'] = True
                     invalid_count = mask.sum()

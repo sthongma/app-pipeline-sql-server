@@ -232,9 +232,9 @@ python auto_process_cli.py "C:\daily\reports"
 {
     "sales_data": {
         "Date": "DATE",
-        "Product": "NVARCHAR(255)",
-        "Amount": "DECIMAL(18,2)",
-        "Customer": "NVARCHAR(500)"
+        "Product": "NVARCHAR(MAX)",
+        "Amount": "FLOAT",
+        "Customer": "NVARCHAR(MAX)"
     }
 }
 ```
