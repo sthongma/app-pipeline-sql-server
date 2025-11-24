@@ -188,14 +188,15 @@ class MainWindow(ctk.CTkToplevel):
         # Create settings tab with callbacks
         callbacks = {
             'save_column_settings': self._save_column_settings,
-            'save_dtype_settings': self._save_dtype_settings
+            'save_dtype_settings': self._save_dtype_settings,
+            'delete_file_type': self._delete_file_type
         }
-        
+
         self.settings_tab_ui = SettingsTab(
-            parent, 
-            self.column_settings, 
-            self.dtype_settings, 
-            self.supported_dtypes, 
+            parent,
+            self.column_settings,
+            self.dtype_settings,
+            self.supported_dtypes,
             callbacks,
             ui_progress_callback,
             on_all_ui_built=(lambda: self._on_all_ui_built(on_ready_callback)) if on_ready_callback else None
@@ -220,14 +221,15 @@ class MainWindow(ctk.CTkToplevel):
         # Create settings tab with callbacks
         callbacks = {
             'save_column_settings': self._save_column_settings,
-            'save_dtype_settings': self._save_dtype_settings
+            'save_dtype_settings': self._save_dtype_settings,
+            'delete_file_type': self._delete_file_type
         }
-        
+
         self.settings_tab_ui = SettingsTab(
-            parent, 
-            self.column_settings, 
-            self.dtype_settings, 
-            self.supported_dtypes, 
+            parent,
+            self.column_settings,
+            self.dtype_settings,
+            self.supported_dtypes,
             callbacks,
             ui_progress_callback
         )
@@ -244,7 +246,14 @@ class MainWindow(ctk.CTkToplevel):
         self.settings_handler.save_dtype_settings(self.dtype_settings)
         # รีโหลดการตั้งค่าใน services ทั้งหมด
         self._reload_settings_in_services()
-    
+
+    def _delete_file_type(self, file_type):
+        """Delete file type configuration"""
+        from services.settings_manager import settings_manager
+        settings_manager.delete_file_type(file_type)
+        # รีโหลดการตั้งค่าใน services ทั้งหมด
+        self._reload_settings_in_services()
+
     def _toggle_select_all(self):
         """Toggle select all files"""
         self.main_tab_ui.toggle_select_all()
