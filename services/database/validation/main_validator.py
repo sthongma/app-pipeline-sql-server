@@ -103,14 +103,14 @@ class MainValidator(BaseValidator):
                 return validation_results
             
             if log_func:
-                log_func(f"📊 Validating {total_rows:,} rows in staging table")
+                log_func(f"Validating {total_rows:,} rows in staging table")
             
             # Phase 2: Create temporary indexes for performance
             if progress_callback:
                 progress_callback(0.15, "Index Creation", "Creating temporary indexes for faster validation...")
             
             if log_func:
-                log_func(f"   🚀 Creating temporary indexes for better performance...")
+                log_func(f"   Creating temporary indexes for better performance...")
             
             index_count = self.index_manager.create_temp_indexes(staging_table, required_cols, schema_name, log_func)
             
@@ -119,7 +119,7 @@ class MainValidator(BaseValidator):
                 progress_callback(0.2, "Schema Check", "Verifying column compatibility...")
             
             if log_func:
-                log_func(f"   🔍 Checking schema compatibility...")
+                log_func(f"   Checking schema compatibility...")
             
             schema_issues = self.schema_validator.validate_schema_compatibility(
                 staging_table, required_cols, schema_name, log_func
@@ -131,7 +131,7 @@ class MainValidator(BaseValidator):
             validation_phases = self._build_validation_phases(required_cols, date_format)
             
             if log_func and validation_phases:
-                log_func(f"   📋 Running {len(validation_phases)} validation phases...")
+                log_func(f"   Running {len(validation_phases)} validation phases...")
             
             # Phase 5-8: Run validation phases
             phase_progress_step = 0.6 / len(validation_phases) if validation_phases else 0
@@ -144,7 +144,7 @@ class MainValidator(BaseValidator):
                     progress_callback(current_progress, f"Validation Phase {i}", f"Running {phase_name}...")
                 
                 if log_func:
-                    log_func(f"   ⏳ Phase {i}/{len(validation_phases)}: {phase_name}...")
+                    log_func(f"   Phase {i}/{len(validation_phases)}: {phase_name}...")
                 
                 phase_issues = self._run_validation_phase(
                     phase_name, phase_data, schema_name, staging_table, 
@@ -167,7 +167,7 @@ class MainValidator(BaseValidator):
             
             # Cleanup: ลบ temporary indexes
             if log_func:
-                log_func(f"   🧹 Cleaning up temporary indexes...")
+                log_func(f"   Cleaning up temporary indexes...")
             
             self.index_manager.drop_temp_indexes(staging_table, required_cols, schema_name, log_func)
             
@@ -184,7 +184,7 @@ class MainValidator(BaseValidator):
                 'summary': f"Error validating data: {str(e)}"
             }
             if log_func:
-                log_func(f"❌ {validation_results['summary']}")
+                log_func(f"Error: {validation_results['summary']}")
             return validation_results
     
     def _get_total_rows(self, staging_table: str, schema_name: str) -> int:
@@ -294,21 +294,21 @@ class MainValidator(BaseValidator):
             # Log results
             if issues:
                 if log_func:
-                    log_func(f"      ❌ Found {len(issues)} issue type(s) in {phase_name}")
+                    log_func(f"      Error: Found {len(issues)} issue type(s) in {phase_name}")
                 
                 for issue in issues:
                     if log_func and issue['error_count'] > 0:
-                        status = "❌" if issue['percentage'] > 10 else "⚠️"
+                        status = "Error: " if issue['percentage'] > 10 else "Warning: "
                         column_name = issue['column'] if isinstance(issue['column'], str) else str(issue['column'])
                         examples = issue['examples'][:100] if isinstance(issue['examples'], str) else str(issue['examples'])[:100]
                         log_func(f"      {status} {column_name}: {issue['error_count']:,} invalid rows ({issue['percentage']}%) Examples: {examples}")
             else:
                 if log_func:
-                    log_func(f"      ✅ {phase_name} - No issues found")
+                    log_func(f"      {phase_name} - No issues found")
                     
         except Exception as phase_error:
             if log_func:
-                log_func(f"      ⚠️ Could not run {phase_name}: {phase_error}")
+                log_func(f"      Warning: Could not run {phase_name}: {phase_error}")
         
         return issues
     
@@ -349,7 +349,7 @@ class MainValidator(BaseValidator):
             max_workers = min(len(columns), 3)  # จำกัดจำนวน threads ไม่เกิน 3
             
             if log_func:
-                log_func(f"      🔄 Processing {len(columns)} columns in parallel ({max_workers} threads)...")
+                log_func(f"      Processing {len(columns)} columns in parallel ({max_workers} threads)...")
             
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # ส่งงานแต่ละคอลัมน์ไปยัง thread แยกกัน
@@ -365,14 +365,14 @@ class MainValidator(BaseValidator):
                             log_func(f"        ✓ Column '{col}': {len(issues)} issue(s)")
                     except Exception as e:
                         if log_func:
-                            log_func(f"        ❌ Error validating column '{col}': {e}")
+                            log_func(f"        Error: Error validating column '{col}': {e}")
             
             if log_func:
-                log_func(f"      ✅ Parallel validation completed: {len(all_issues)} total issue(s)")
+                log_func(f"      Parallel validation completed: {len(all_issues)} total issue(s)")
                 
         except Exception as e:
             if log_func:
-                log_func(f"      ⚠️ Parallel validation failed, falling back to sequential: {e}")
+                log_func(f"      Warning: Parallel validation failed, falling back to sequential: {e}")
             # Fallback เป็นแบบปกติ
             with self.engine.connect() as conn:
                 all_issues = validator.validate(
@@ -401,11 +401,11 @@ class MainValidator(BaseValidator):
             warnings_count = len(validation_results['warnings'])
             summary = f"Found {warnings_count} warnings; data can be imported"
             if log_func:
-                log_func(f"✅ Data validation passed (with {warnings_count} warnings)")
+                log_func(f"Data validation passed (with {warnings_count} warnings)")
         else:
             summary = "All data valid"
             if log_func:
-                log_func(f"✅ All data passed validation")
+                log_func(f"All data passed validation")
         
         return summary
     

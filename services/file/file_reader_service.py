@@ -450,13 +450,13 @@ class FileReaderService:
             if df.empty:
                 return False, "File is empty"
 
-            self.log_callback(f"✅ Read File Success: {os.path.basename(file_path)} ({len(df):,} rows, {len(df.columns)} columns)")
+            self.log_callback(f"Read File Success: {os.path.basename(file_path)} ({len(df):,} rows, {len(df.columns)} columns)")
 
             return True, df
 
         except Exception as e:
             error_msg = f"Cannot read file {os.path.basename(file_path)}: {str(e)}"
-            self.log_callback(f"❌ {error_msg}")
+            self.log_callback(f"Error: {error_msg}")
             return False, error_msg
 
     def read_file_with_mapping(self, file_path, logic_type):
@@ -481,14 +481,14 @@ class FileReaderService:
             # Apply column mapping (เลือกทิศทางอัตโนมัติให้ตรงกับ header)
             col_map = self.build_rename_mapping_for_dataframe(df.columns, logic_type)
             if col_map:
-                self.log_callback(f"🔄 Apply column mapping ({len(col_map)} columns)")
+                self.log_callback(f"Apply column mapping ({len(col_map)} columns)")
                 df.rename(columns=col_map, inplace=True)
 
             return True, df
 
         except Exception as e:
             error_msg = f"Cannot process mapping for {os.path.basename(file_path)}: {str(e)}"
-            self.log_callback(f"❌ {error_msg}")
+            self.log_callback(f"Error: {error_msg}")
             return False, error_msg
 
     def peek_file_structure(self, file_path, num_rows=5):

@@ -173,23 +173,23 @@ class FileOrchestrator:
             # Apply column mapping (พิจารณาทิศทาง mapping ให้ตรงกับ header ของไฟล์)
             col_map = self.file_reader.build_rename_mapping_for_dataframe(df.columns, logic_type)
             if col_map:
-                self.log_callback(f"🔄 Renamed columns by mapping ({len(col_map)} columns)")
+                self.log_callback(f"Renamed columns by mapping ({len(col_map)} columns)")
                 df.rename(columns=col_map, inplace=True)
             
             # ปรับปรุง memory usage
             df = self.performance_optimizer.optimize_memory_usage(df)
             
             # หมายเหตุ: การตรวจสอบข้อมูลจะทำใน staging table ด้วย SQL แทน pandas
-            self.log_callback(f"🔄 Ingest as NVARCHAR(MAX) first, then validate/convert using SQL")
+            self.log_callback(f"Ingest as NVARCHAR(MAX) first, then validate/convert using SQL")
             
             # ทำความสะอาด memory
             self.performance_optimizer.cleanup_memory()
             
-            self.log_callback(f"🎉 File processing completed")
+            self.log_callback(f"File processing completed")
             return True, df
             
         except Exception as e:
-            error_msg = f"❌ Error while reading file: {e}"
+            error_msg = f"Error: Error while reading file: {e}"
             self.log_callback(error_msg)
             return False, error_msg
     
@@ -344,7 +344,7 @@ class FileOrchestrator:
             return success, upload_msg
             
         except Exception as e:
-            error_msg = f"❌ Error during upload: {e}"
+            error_msg = f"Error: Error during upload: {e}"
             self.log_callback(error_msg)
             return False, error_msg
 
@@ -353,11 +353,11 @@ class FileOrchestrator:
         """Display detailed data validation report (legacy method)"""
         # สร้างรายงานแบบละเอียด
         self.log_callback("\n" + "="*80)
-        self.log_callback("🔍 Detailed data validation report")
+        self.log_callback("Detailed data validation report")
         self.log_callback("="*80)
         
         # ข้อมูลพื้นฐาน
-        self.log_callback(f"📊 Basic info:")
+        self.log_callback(f"Basic info:")
         self.log_callback(f"   • Total rows: {len(df):,}")
         self.log_callback(f"   • Total columns: {len(df.columns)}")
         self.log_callback(f"   • File type: {logic_type}")
@@ -366,7 +366,7 @@ class FileOrchestrator:
         validation_result = self.comprehensive_data_validation(df, logic_type)
         
         if validation_result['summary']:
-            self.log_callback("\n📋 Validation summary:")
+            self.log_callback("\nValidation summary:")
             for msg in validation_result['summary']:
                 self.log_callback(f"   • {msg}")
         

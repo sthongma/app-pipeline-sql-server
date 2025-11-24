@@ -44,9 +44,6 @@ class LogTab:
         # กล่องข้อความสำหรับแสดง Log
         self.log_textbox = ctk.CTkTextbox(self.parent)
         self.log_textbox.pack(pady=8, padx=10, fill="both", expand=True)
-
-        # กำหนดสีสำหรับ log ต่างๆ (terminal-like colors)
-        self._setup_log_colors()
     
     def _copy_log_to_clipboard(self):
         """Copy all log text to clipboard"""
@@ -102,57 +99,9 @@ class LogTab:
             if 'enable_controls' in self.callbacks:
                 self.callbacks['enable_controls']()
     
-    def _get_emoji_color_map(self):
-        """แมป emoji กับสี (shared with main_window.py)"""
-        return {
-            '✅': 'emoji_success',
-            '❌': 'emoji_error',
-            '⚠️': 'emoji_warning',
-            '📊': 'emoji_info',
-            '📁': 'emoji_info',
-            'ℹ️': 'emoji_info',
-            '🔍': 'emoji_search',
-            '🎉': 'emoji_highlight',
-            '📋': 'emoji_phase',
-            '⏳': 'emoji_phase',
-            '📦': 'emoji_file',
-            '📤': 'emoji_file',
-            '⏱️': 'emoji_time',
-            '🔄': 'emoji_phase',
-            '🚀': 'emoji_highlight',
-            '💾': 'emoji_info',
-            '🧹': 'emoji_search',
-            '🏷️': 'emoji_phase',
-        }
-
-    def _setup_log_colors(self):
-        """กำหนดสีสำหรับ emoji/icon เท่านั้น"""
-        text_widget = self.log_textbox._textbox
-
-        # กำหนด tags สำหรับสีต่างๆ (เฉพาะ emoji)
-        text_widget.tag_config("emoji_success", foreground="#00FF00")    # เขียว
-        text_widget.tag_config("emoji_error", foreground="#FF4444")      # แดง
-        text_widget.tag_config("emoji_warning", foreground="#FFA500")    # ส้ม
-        text_widget.tag_config("emoji_info", foreground="#00BFFF")       # ฟ้า
-        text_widget.tag_config("emoji_search", foreground="#888888")     # เทา
-        text_widget.tag_config("emoji_highlight", foreground="#FFD700")  # ทอง
-        text_widget.tag_config("emoji_phase", foreground="#FF69B4")      # ชมพู
-        text_widget.tag_config("emoji_file", foreground="#00CED1")       # ฟ้าเข้ม
-        text_widget.tag_config("emoji_time", foreground="#9370DB")       # ม่วง
-
     def add_log(self, message):
-        """เพิ่มข้อความลงใน log textbox โดยให้เฉพาะ emoji มีสี"""
-        text_widget = self.log_textbox._textbox
-        emoji_colors = self._get_emoji_color_map()
-
-        # แยกข้อความและระบุสีเฉพาะ emoji
-        for char in message:
-            if char in emoji_colors:
-                text_widget.insert("end", char, emoji_colors[char])
-            else:
-                text_widget.insert("end", char)
-
-        # เลื่อนไปท้ายสุด
+        """เพิ่มข้อความลงใน log textbox"""
+        self.log_textbox.insert("end", message)
         self.log_textbox.see("end")
 
     def _load_log_folder_setting(self):

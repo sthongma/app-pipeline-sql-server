@@ -49,7 +49,7 @@ class SafeOperation:
         try:
             return func()
         except Exception as e:
-            error_msg = f"❌ {operation_name} failed: {str(e)}"
+            error_msg = f"Error: {operation_name} failed: {str(e)}"
 
             if log_callback:
                 log_callback(error_msg)
@@ -96,7 +96,7 @@ class SafeOperation:
             error_msg = f"{operation_name} failed: {str(e)}"
 
             if log_callback:
-                log_callback(f"❌ {error_msg}")
+                log_callback(f"Error: {error_msg}")
             else:
                 logging.error(error_msg)
 

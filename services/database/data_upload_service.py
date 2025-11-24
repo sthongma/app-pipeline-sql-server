@@ -102,11 +102,11 @@ class DataUploadService:
             )
 
         if log_func:
-            log_func("✅ Database access permissions are correct")
+            log_func("Database access permissions are correct")
             strategy_name = "Upsert (Incremental)" if update_strategy == "upsert" else "Replace (Full)"
-            log_func(f"📋 Update Strategy: {strategy_name}")
+            log_func(f"Update Strategy: {strategy_name}")
             if update_strategy == "upsert" and upsert_keys:
-                log_func(f"🔑 Upsert Keys: {', '.join(upsert_keys)}")
+                log_func(f"Upsert Keys: {', '.join(upsert_keys)}")
         
         try:
             if df is None or df.empty:
@@ -146,9 +146,9 @@ class DataUploadService:
                 db_cols = [col['name'] for col in insp.get_columns(table_name, schema=schema_name)]
                 db_col_types = {col['name']: str(col['type']).upper() for col in insp.get_columns(table_name, schema=schema_name)}
                 config_cols = list(required_cols.keys())
-                
+
                 if set(db_cols) != set(config_cols):
-                    msg = f"❌ Table {schema_name}.{table_name} columns do not match config"
+                    msg = f"Error: Table {schema_name}.{table_name} columns do not match config"
                     needs_recreate = True
                 else:
                     needs_recreate = self._check_type_compatibility(db_col_types, required_cols, log_func)
@@ -159,7 +159,7 @@ class DataUploadService:
             staging_cols = [col for col in required_cols.keys() if col not in metadata_cols]
             
             if log_func:
-                log_func(f"📋 Creating staging table {schema_name}.{staging_table}")
+                log_func(f"Creating staging table {schema_name}.{staging_table}")
             self._create_staging_table(staging_table, staging_cols, schema_name, log_func)
 
             # เพิ่ม metadata columns ลง DataFrame ก่อน upload เข้า staging
@@ -171,7 +171,7 @@ class DataUploadService:
             df_with_metadata['_upsert_hash'] = None  # จะคำนวณทีหลังถ้าเป็น upsert mode
 
             if log_func:
-                log_func(f"📤 Uploading {len(df):,} rows to staging table (with metadata)")
+                log_func(f"Uploading {len(df):,} rows to staging table (with metadata)")
             self._upload_to_staging(df_with_metadata, staging_table, staging_cols, schema_name, log_func)
             
             # โหลดการตั้งค่า date format
@@ -180,13 +180,13 @@ class DataUploadService:
                 if logic_type in self.dtype_settings:
                     date_format = self.dtype_settings[logic_type].get('_date_format', 'UK')
                     if log_func:
-                        log_func(f"📅 Using Date Format: {date_format}")
+                        log_func(f"Using Date Format: {date_format}")
             except Exception as e:
                 if log_func:
-                    log_func(f"⚠️ Could not load date format: {e}")
+                    log_func(f"Warning: Could not load date format: {e}")
             
             if log_func:
-                log_func(f"🔍 Validating data in staging table")
+                log_func(f"Validating data in staging table")
             validation_results = self.validation_service.validate_data_in_staging(
                 staging_table, logic_type, required_cols, schema_name, log_func, 
                 progress_callback=None, date_format=date_format
@@ -208,7 +208,7 @@ class DataUploadService:
             )
             
             if log_func:
-                log_func(f"🔄 Transferring data from staging to main table {schema_name}.{table_name}")
+                log_func(f"Transferring data from staging to main table {schema_name}.{table_name}")
             self._transfer_data_from_staging(
                 staging_table, table_name, required_cols, schema_name, log_func, date_format,
                 batch_id=batch_id, source_file=source_file, upsert_keys=upsert_keys,
@@ -217,11 +217,11 @@ class DataUploadService:
 
             # Keep staging table for debugging - it will be cleaned up when new data comes
             if log_func:
-                log_func(f"✅ Keeping staging table {schema_name}.{staging_table} for debugging")
+                log_func(f"Keeping staging table {schema_name}.{staging_table} for debugging")
 
             # Create indexes after successful upload
             if log_func:
-                log_func(f"🔍 Creating indexes on final table")
+                log_func(f"Creating indexes on final table")
             self._create_indexes_after_upload(
                 table_name, schema_name, upsert_keys, log_func
             )
@@ -248,7 +248,7 @@ class DataUploadService:
                 error_msg = f"Database error: {short_msg}"
 
             if log_func:
-                log_func(f"❌ {error_msg}")
+                log_func(f"Error: {error_msg}")
             return False, error_msg
 
     def _fix_column_types(self, table_name: str, required_cols: Dict, 
@@ -286,12 +286,12 @@ class DataUploadService:
                     # มีการเปลี่ยนแปลง ต้อง ALTER
                     alter_sql = f"ALTER TABLE {schema_name}.{table_name} ALTER COLUMN [{col_name}] {target_sql_type}"
                     if log_func:
-                        log_func(f"🔧 ALTER column '{col_name}': {current_type_str} → {target_sql_type}")
+                        log_func(f"ALTER column '{col_name}': {current_type_str} → {target_sql_type}")
                     conn.execute(text(alter_sql))
-                    
+
         except Exception as e:
             if log_func:
-                log_func(f"⚠️ Unable to alter column types: {e}")
+                log_func(f"Warning: Unable to alter column types: {e}")
     
     def _get_sql_server_type(self, sa_type) -> str:
         """Convert SQLAlchemy type to SQL Server type string"""
@@ -395,7 +395,7 @@ class DataUploadService:
             # ตรวจสอบว่าสามารถ ALTER ได้หรือต้อง recreate table
             if cat_db != cat_expected and not _can_alter_type(cat_db, cat_expected):
                 if log_func:
-                    log_func(f"❌ Data type mismatch for column '{col_name}' (DB: {db_type} | Expected: {expected_str})")
+                    log_func(f"Error: Data type mismatch for column '{col_name}' (DB: {db_type} | Expected: {expected_str})")
                 needs_recreate = True
                 break
 
@@ -427,7 +427,7 @@ class DataUploadService:
 
             conn.execute(text(f"CREATE TABLE {schema_name}.{staging_table} ({all_cols_sql})"))
             if log_func:
-                log_func(f"📦 Created staging table: {schema_name}.{staging_table} (business cols + metadata cols)")
+                log_func(f"Created staging table: {schema_name}.{staging_table} (business cols + metadata cols)")
 
     def _upload_to_staging(self, df, staging_table: str, staging_cols: list, schema_name: str, log_func=None):
         """Upload data to staging table (including metadata columns)"""
@@ -437,7 +437,7 @@ class DataUploadService:
 
         if len(df) > 10000:
             if log_func:
-                log_func(f"📊 Large file ({len(df):,} rows) - uploading in chunks to staging")
+                log_func(f"Large file ({len(df):,} rows) - uploading in chunks to staging")
             chunk_size = 5000
             total_chunks = (len(df) + chunk_size - 1) // chunk_size
             for i in range(0, len(df), chunk_size):
@@ -451,10 +451,10 @@ class DataUploadService:
                 )
                 chunk_num = (i // chunk_size) + 1
                 if log_func:
-                    log_func(f"📤 Uploaded staging chunk {chunk_num}/{total_chunks}: {len(chunk):,} rows")
+                    log_func(f"Uploaded staging chunk {chunk_num}/{total_chunks}: {len(chunk):,} rows")
         else:
             if log_func:
-                log_func(f"📤 Uploaded data: {len(df):,} rows → {schema_name}.{staging_table}")
+                log_func(f"Uploaded data: {len(df):,} rows → {schema_name}.{staging_table}")
             df[all_cols].to_sql(
                 name=staging_table,
                 con=self.engine,
@@ -486,7 +486,7 @@ class DataUploadService:
         """
         if not upsert_keys:
             if log_func:
-                log_func("⚠️ No upsert keys specified, skipping delete")
+                log_func("Warning: No upsert keys specified, skipping delete")
             return
 
         # Validate upsert keys exist in staging table
@@ -519,7 +519,7 @@ class DataUploadService:
                         )
         except Exception as e:
             if log_func:
-                log_func(f"❌ Validation failed: {e}")
+                log_func(f"Error: Validation failed: {e}")
             raise
 
         # Staging table มี _upsert_hash column อยู่แล้ว (สร้างตอน create table)
@@ -552,17 +552,17 @@ class DataUploadService:
 
                 if log_func:
                     keys_str = ", ".join(upsert_keys)
-                    log_func(f"🗑️ Deleting existing rows using MD5 hash of keys: {keys_str}")
+                    log_func(f"Deleting existing rows using MD5 hash of keys: {keys_str}")
 
                 result = conn.execute(text(delete_sql))
                 deleted_count = result.rowcount
 
                 if log_func:
-                    log_func(f"✅ Deleted {deleted_count:,} existing rows")
+                    log_func(f"Deleted {deleted_count:,} existing rows")
 
             except Exception as e:
                 if log_func:
-                    log_func(f"❌ Delete failed: {e}")
+                    log_func(f"Error: Delete failed: {e}")
                 raise
 
     def _create_or_recreate_final_table(self, table_name: str, required_cols: Dict, schema_name: str,
@@ -591,9 +591,9 @@ class DataUploadService:
 
         if needs_recreate or not insp.has_table(table_name, schema=schema_name):
             if needs_recreate and log_func:
-                log_func(f"🛠️ Creating table {schema_name}.{table_name} to match data type settings")
+                log_func(f"Creating table {schema_name}.{table_name} to match data type settings")
             elif log_func:
-                log_func(f"📋 Creating table {schema_name}.{table_name} from data type settings")
+                log_func(f"Creating table {schema_name}.{table_name} from data type settings")
 
             # สร้าง empty DataFrame ที่มีเฉพาะคอลัมน์ที่มีอยู่ใน df (ไม่รวม metadata columns)
             metadata_cols = {'_loaded_at', '_created_at', '_source_file', '_batch_id', '_upsert_hash'}
@@ -627,13 +627,13 @@ class DataUploadService:
             elif clear_existing:
                 # Replace: TRUNCATE table
                 if log_func:
-                    log_func(f"🧹 Truncating existing data in table {schema_name}.{table_name}")
+                    log_func(f"Truncating existing data in table {schema_name}.{table_name}")
                 with self.engine.begin() as conn:
                     conn.execute(text(f"TRUNCATE TABLE {schema_name}.{table_name}"))
             else:
                 # Append mode
                 if log_func:
-                    log_func(f"📋 Appending to existing table {schema_name}.{table_name}")
+                    log_func(f"Appending to existing table {schema_name}.{table_name}")
 
     def _transfer_data_from_staging(self, staging_table: str, table_name: str, required_cols: Dict,
                                   schema_name: str, log_func=None, date_format: str = 'UK',
@@ -663,10 +663,10 @@ class DataUploadService:
                 result = conn.execute(text(f"SELECT COUNT(*) FROM {schema_name}.{staging_table}"))
                 total_rows = result.scalar()
                 if log_func:
-                    log_func(f"📊 Preparing to transfer {total_rows:,} rows with type conversion")
+                    log_func(f"Preparing to transfer {total_rows:,} rows with type conversion")
         except Exception as e:
             if log_func:
-                log_func(f"⚠️ Could not get row count: {e}")
+                log_func(f"Warning: Could not get row count: {e}")
             total_rows = "unknown"
         def _sql_type_and_expr(col_name: str, sa_type_obj) -> str:
             col_ref = f"[{col_name}]"
@@ -712,8 +712,8 @@ class DataUploadService:
                 f"SELECT {select_sql} FROM {schema_name}.{staging_table}"
             )
             if log_func:
-                log_func(f"📝 Executing data transfer with type conversion...")
-                log_func(f"⏳ This may take a while for large datasets, please wait...")
+                log_func(f"Executing data transfer with type conversion...")
+                log_func(f"This may take a while for large datasets, please wait...")
 
             # Execute with timeout monitoring
             import time
@@ -727,15 +727,15 @@ class DataUploadService:
                 inserted_rows = count_result.scalar()
 
                 if log_func:
-                    log_func(f"✅ Data transfer completed successfully in {execution_time:.1f} seconds")
-                    log_func(f"📊 Inserted {inserted_rows:,} rows")
+                    log_func(f"Data transfer completed successfully in {execution_time:.1f} seconds")
+                    log_func(f"Inserted {inserted_rows:,} rows")
 
                 return None
 
             except Exception as e:
                 execution_time = time.time() - start_time
                 if log_func:
-                    log_func(f"❌ Data transfer failed after {execution_time:.1f} seconds: {str(e)[:100]}...")
+                    log_func(f"Error: Data transfer failed after {execution_time:.1f} seconds: {str(e)[:100]}...")
                 raise
 
     def _create_indexes_after_upload(self, table_name: str, schema_name: str,
@@ -770,7 +770,7 @@ class DataUploadService:
                 """
                 conn.execute(text(create_idx_upsert))
                 if log_func:
-                    log_func(f"✅ Created index on _upsert_hash")
+                    log_func(f"Created index on _upsert_hash")
 
                 # Index 2: _loaded_at (for querying by load date)
                 idx_loaded_at = f"IX_{table_name}_loaded_at"
@@ -785,7 +785,7 @@ class DataUploadService:
                 """
                 conn.execute(text(create_idx_loaded))
                 if log_func:
-                    log_func(f"✅ Created index on _loaded_at")
+                    log_func(f"Created index on _loaded_at")
 
                 # Note: We don't create indexes on individual upsert key columns because:
                 # - We use _upsert_hash for matching (which already has an index)
@@ -794,7 +794,7 @@ class DataUploadService:
 
         except Exception as e:
             if log_func:
-                log_func(f"⚠️ Warning: Could not create some indexes: {e}")
+                log_func(f"Warning: Could not create some indexes: {e}")
             # Don't fail the upload if index creation fails
             pass
 

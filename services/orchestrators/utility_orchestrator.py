@@ -74,7 +74,7 @@ class UtilityOrchestrator:
             Dict: ผลการตรวจสอบระบบ
         """
         try:
-            self.log_callback("🔍 Starting comprehensive system check...")
+            self.log_callback("Starting comprehensive system check...")
             
             system_check_results = {
                 'overall_success': True,
@@ -89,7 +89,7 @@ class UtilityOrchestrator:
             }
             
             # 1. Permission Check
-            self.log_callback("  🔐 Checking database permissions...")
+            self.log_callback("  Checking database permissions...")
             permission_results = self.check_database_permissions(schema_name)
             system_check_results['permission_check'] = permission_results
             system_check_results['total_checks'] += 1
@@ -101,7 +101,7 @@ class UtilityOrchestrator:
                 system_check_results['overall_success'] = False
             
             # 2. Performance Check
-            self.log_callback("  ⚡ Checking system performance...")
+            self.log_callback("  Checking system performance...")
             performance_results = self.check_system_performance()
             system_check_results['performance_check'] = performance_results
             system_check_results['total_checks'] += 1
@@ -125,7 +125,7 @@ class UtilityOrchestrator:
                     system_check_results['overall_success'] = False
             
             # 4. File System Check
-            self.log_callback("  📁 Checking file system...")
+            self.log_callback("  Checking file system...")
             file_results = self.check_file_system()
             system_check_results['file_system_check'] = file_results
             system_check_results['total_checks'] += 1
@@ -139,16 +139,16 @@ class UtilityOrchestrator:
             system_check_results['recommendations'] = self._generate_system_recommendations(system_check_results)
             
             if system_check_results['overall_success']:
-                self.log_callback("✅ Comprehensive system check completed successfully")
+                self.log_callback("Comprehensive system check completed successfully")
             else:
-                self.log_callback(f"⚠️ System check completed with {system_check_results['failed_checks']} failed checks")
+                self.log_callback(f"Warning: System check completed with {system_check_results['failed_checks']} failed checks")
             
             return system_check_results
             
         except Exception as e:
             error_msg = f"Error in comprehensive system check: {str(e)}"
             self.logger.error(error_msg)
-            self.log_callback(f"❌ {error_msg}")
+            self.log_callback(f"Error: {error_msg}")
             return {
                 'overall_success': False,
                 'error': error_msg
@@ -335,7 +335,7 @@ class UtilityOrchestrator:
             Tuple[DataFrame, Dict]: (optimized_df, optimization_info)
         """
         try:
-            self.log_callback("⚡ Optimizing DataFrame memory usage...")
+            self.log_callback("Optimizing DataFrame memory usage...")
             
             original_memory = df.memory_usage(deep=True).sum()
             
@@ -352,7 +352,7 @@ class UtilityOrchestrator:
                 'reduction_percent': (memory_saved / original_memory) * 100 if original_memory > 0 else 0
             }
             
-            self.log_callback(f"✅ Memory optimization completed - {optimization_info['reduction_percent']:.1f}% reduction")
+            self.log_callback(f"Memory optimization completed - {optimization_info['reduction_percent']:.1f}% reduction")
             
             return optimized_df, optimization_info
             
@@ -376,7 +376,7 @@ class UtilityOrchestrator:
             logger = setup_logging(log_level)
             
             if logger:
-                self.log_callback(f"✅ Application logging setup completed - Level: {log_level}")
+                self.log_callback(f"Application logging setup completed - Level: {log_level}")
                 return True, f"Logging setup successful with level {log_level}"
             else:
                 return False, "Failed to setup logging"
@@ -400,12 +400,12 @@ class UtilityOrchestrator:
         # คำแนะนำด้านสิทธิ์
         permission_check = results.get('permission_check', {})
         if not permission_check.get('success', True):
-            recommendations.append("🔐 ตรวจสอบและแก้ไขสิทธิ์ฐานข้อมูล")
+            recommendations.append("ตรวจสอบและแก้ไขสิทธิ์ฐานข้อมูล")
         
         # คำแนะนำด้านประสิทธิภาพ
         performance_check = results.get('performance_check', {})
         if performance_check.get('memory_usage', {}).get('percent', 0) > 80:
-            recommendations.append("💾 ลด memory usage โดยปิดโปรแกรมอื่นๆ")
+            recommendations.append("ลด memory usage โดยปิดโปรแกรมอื่นๆ")
         
         # คำแนะนำด้านฐานข้อมูล
         database_check = results.get('database_check', {})
@@ -415,10 +415,10 @@ class UtilityOrchestrator:
         # คำแนะนำด้านไฟล์
         file_check = results.get('file_system_check', {})
         if not file_check.get('success', True):
-            recommendations.append("📁 ตรวจสอบพื้นที่ดิสก์และไฟล์ config")
+            recommendations.append("ตรวจสอบพื้นที่ดิสก์และไฟล์ config")
         
         if not recommendations:
-            recommendations.append("✅ ระบบพร้อมใช้งาน")
+            recommendations.append("ระบบพร้อมใช้งาน")
         
         return recommendations
     

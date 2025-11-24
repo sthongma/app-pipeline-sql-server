@@ -92,7 +92,7 @@ class BaseValidator(ABC):
             return result
         except Exception as e:
             if log_func:
-                log_func(f"⚠️ {error_message}: {e}")
+                log_func(f"Warning: {error_message}: {e}")
             return None
     
     def get_sample_examples(self, conn, staging_table: str, schema_name: str, 
@@ -183,9 +183,9 @@ class BaseValidator(ABC):
             
         if issues:
             for issue in issues:
-                status = "❌" if issue['percentage'] > 10 else "⚠️"
+                status = "Error" if issue['percentage'] > 10 else "Warning"
                 column_name = issue['column'] if isinstance(issue['column'], str) else str(issue['column'])
                 examples = issue['examples'][:100] if isinstance(issue['examples'], str) else str(issue['examples'])[:100]
-                log_func(f"      {status} {column_name}: {issue['error_count']:,} invalid rows ({issue['percentage']}%) Examples: {examples}")
+                log_func(f"      {status}: {column_name}: {issue['error_count']:,} invalid rows ({issue['percentage']}%) Examples: {examples}")
         else:
-            log_func(f"      ✅ {column} - No issues found")
+            log_func(f"      {column} - No issues found")

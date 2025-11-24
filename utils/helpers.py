@@ -159,9 +159,9 @@ def format_error_message(error: Exception, context: str = "") -> str:
     error_msg = str(error)
     
     if context:
-        return f"❌ {context}: {error_msg}"
+        return f"Error: {context}: {error_msg}"
     else:
-        return f"❌ Error: {error_msg}"
+        return f"Error: {error_msg}"
 
 
 def safe_json_load(file_path: str, default: dict = None) -> dict:

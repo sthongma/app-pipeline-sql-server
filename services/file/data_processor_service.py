@@ -174,7 +174,7 @@ class DataProcessorService:
             return df
         
         # Return original DataFrame as conversion will be done in SQL
-        self.log_with_time(f"🔄 Conversion will be performed in the staging table using SQL")
+        self.log_with_time(f"Conversion will be performed in the staging table using SQL")
         return df
 
     def clean_and_validate_datetime_columns(self, df, file_type):
@@ -183,7 +183,7 @@ class DataProcessorService:
             return df
 
         # คืนค่า DataFrame เดิม เนื่องจากการ validation จะทำใน SQL แล้ว
-        self.log_with_time(f"🔍 Date validation will be performed in the staging table using SQL")
+        self.log_with_time(f"Date validation will be performed in the staging table using SQL")
         return df
 
     def clean_numeric_columns(self, df, file_type):
@@ -192,7 +192,7 @@ class DataProcessorService:
             return df
 
         # คืนค่า DataFrame เดิม เนื่องจากการ cleaning จะทำใน SQL แล้ว
-        self.log_with_time(f"🧹 Numeric cleaning will be performed in the staging table using SQL")
+        self.log_with_time(f"Numeric cleaning will be performed in the staging table using SQL")
         return df
 
     def truncate_long_strings(self, df, logic_type):
@@ -228,12 +228,12 @@ class DataProcessorService:
                 if validation_report['missing_columns']:
                     validation_report['status'] = False
                     validation_report['summary'].append(
-                        f"❌ Missing columns: {', '.join(validation_report['missing_columns'])}"
+                        f"Error: Missing columns: {', '.join(validation_report['missing_columns'])}"
                     )
                 
                 if validation_report['extra_columns']:
                     validation_report['summary'].append(
-                        f"⚠️  Extra columns not defined: {', '.join(validation_report['extra_columns'])}"
+                        f"Warning: Extra columns not defined: {', '.join(validation_report['extra_columns'])}"
                     )
             
             # ตรวจสอบชนิดข้อมูลแต่ละคอลัมน์
@@ -247,7 +247,7 @@ class DataProcessorService:
                         validation_report['status'] = False
                         
                         # เพิ่มข้อความสรุป
-                        issue_summary = f"❌ Column '{col}': {issues['summary']}"
+                        issue_summary = f"Error: Column '{col}': {issues['summary']}"
                         validation_report['summary'].append(issue_summary)
             
             # สรุปภาพรวม
@@ -260,7 +260,7 @@ class DataProcessorService:
             
         except Exception as e:
             validation_report['status'] = False
-            validation_report['summary'].append(f"❌ An error occurred during validation: {str(e)}")
+            validation_report['summary'].append(f"Error: An error occurred during validation: {str(e)}")
         
         return validation_report
 
@@ -429,10 +429,10 @@ class DataProcessorService:
         validation_result = self.validate_columns(df, logic_type)
         
         if not validation_result[0]:
-            self.log_callback(f"❌ Column issues: {validation_result[1]}")
+            self.log_callback(f"Error: Column issues: {validation_result[1]}")
             return False
         else:
-            self.log_callback("✅ Basic column check passed - detailed checks will be performed in staging table using SQL")
+            self.log_callback("Basic column check passed - detailed checks will be performed in staging table using SQL")
             return True
 
     def check_invalid_numeric(self, df, logic_type):
@@ -470,7 +470,7 @@ class DataProcessorService:
                         'problem_rows': [r + 2 for r in problem_rows]  # +2 เพราะ header + 0-indexed
                     }
                     
-                    summary_msg = (f"❌ Column '{col}' requires numeric data ({str(dtype)}) "
+                    summary_msg = (f"Error: Column '{col}' requires numeric data ({str(dtype)}) "
                                  f"but found non-numeric data in {invalid_count:,} rows "
                                  f"({validation_report['invalid_data'][col]['percentage']}%)")
                     validation_report['summary'].append(summary_msg)
@@ -518,10 +518,10 @@ class DataProcessorService:
         if log['successful_conversions']:
             # แสดงเฉพาะจำนวนคอลัมน์ที่แปลงสำเร็จ ไม่แสดงรายชื่อทั้งหมด
             success_count = len(log['successful_conversions'])
-            self.log_with_time(f"✅ Successfully converted: {success_count} columns")
+            self.log_with_time(f"Successfully converted: {success_count} columns")
         
         if log['failed_conversions']:
-            self.log_with_time(f"\n❌ Found issues with data conversion:")
+            self.log_with_time(f"\nError: Found issues with data conversion:")
             for col, details in log['failed_conversions'].items():
                 self.log_callback(f"   🔸 Column '{col}':")
                 self.log_callback(f"      - Expected data type: {details['expected_type']}")
@@ -533,7 +533,7 @@ class DataProcessorService:
                     self.log_callback(f"      - Error: {details['error']}")
         
         if log['warnings']:
-            self.log_with_time(f"\n⚠️ Warning: {', '.join(log['warnings'])}")
+            self.log_with_time(f"\nWarning: Warning: {', '.join(log['warnings'])}")
 
     def _reset_log_flags(self):
         """Reset log flags to show new logs for next file"""
@@ -568,7 +568,7 @@ class DataProcessorService:
             
             # แสดง log เฉพาะครั้งแรก
             if not hasattr(self, '_chunk_log_shown'):
-                self.log_with_time(f"📊 Processing in chunks ({chunk_size:,} rows per chunk)")
+                self.log_with_time(f"Processing in chunks ({chunk_size:,} rows per chunk)")
                 self._chunk_log_shown = True
                 
             chunks = []
@@ -583,7 +583,7 @@ class DataProcessorService:
                 
                 # แสดง progress เฉพาะบางครั้ง (ทุก 5 chunks หรือ chunk สุดท้าย)
                 if chunk_num % 5 == 0 or chunk_num == total_chunks:
-                    self.log_with_time(f"📊 Processed chunk {chunk_num}/{total_chunks}")
+                    self.log_with_time(f"Processed chunk {chunk_num}/{total_chunks}")
                 
                 # ปล่อย memory ทุก 5 chunks
                 if chunk_num % 5 == 0:
@@ -599,5 +599,5 @@ class DataProcessorService:
             return result
             
         except Exception as e:
-            self.log_with_time(f"❌ Error processing in chunks: {e}")
+            self.log_with_time(f"Error: Error processing in chunks: {e}")
             return df

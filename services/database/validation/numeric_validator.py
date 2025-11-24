@@ -45,7 +45,7 @@ class NumericValidator(BaseValidator):
                     issues.append(issue)
             except Exception as e:
                 if log_func:
-                    log_func(f"        ⚠️ Error checking column {col}: {e}")
+                    log_func(f"        Warning: Error checking column {col}: {e}")
         
         return issues
     

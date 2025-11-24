@@ -359,7 +359,7 @@ Notes:
     
     # Log environment variables status
     env_vars = ['DB_SERVER', 'DB_NAME', 'DB_USERNAME', 'DB_PASSWORD']
-    logging.info("🔧 Environment Variables Status:")
+    logging.info("Environment Variables Status:")
     for var in env_vars:
         value = os.getenv(var)
         if value:

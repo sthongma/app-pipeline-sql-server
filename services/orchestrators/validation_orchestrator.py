@@ -78,7 +78,7 @@ class ValidationOrchestrator:
             Dict: ผลการตรวจสอบแบบครอบคลุม
         """
         try:
-            self.log_callback("🔍 Starting comprehensive data validation...")
+            self.log_callback("Starting comprehensive data validation...")
             
             validation_results = {
                 'overall_success': True,
@@ -92,7 +92,7 @@ class ValidationOrchestrator:
             }
             
             # 1. Column Structure Validation
-            self.log_callback("  📋 Validating column structure...")
+            self.log_callback("  Validating column structure...")
             column_valid, column_msg = self.main_validator.validate_columns(df, logic_type)
             validation_results['column_validation'] = {
                 'success': column_valid,
@@ -114,7 +114,7 @@ class ValidationOrchestrator:
             
             # 3. Schema Validation (if engine available)
             if self.engine:
-                self.log_callback("  🏗️ Validating database schema...")
+                self.log_callback("  Validating database schema...")
                 schema_validation = self._validate_schema_compatibility(schema_name, logic_type)
                 validation_results['schema_validation'] = schema_validation
                 
@@ -123,7 +123,7 @@ class ValidationOrchestrator:
                     validation_results['total_issues'] += 1
                 
                 # 4. Index Validation
-                self.log_callback("  📊 Validating database indexes...")
+                self.log_callback("  Validating database indexes...")
                 index_validation = self._validate_indexes(schema_name, logic_type)
                 validation_results['index_validation'] = index_validation
                 
@@ -135,16 +135,16 @@ class ValidationOrchestrator:
             validation_results['recommendations'] = self._generate_recommendations(validation_results)
             
             if validation_results['overall_success']:
-                self.log_callback("✅ Comprehensive validation completed successfully")
+                self.log_callback("Comprehensive validation completed successfully")
             else:
-                self.log_callback(f"⚠️ Validation completed with {validation_results['total_issues']} issues")
+                self.log_callback(f"Warning: Validation completed with {validation_results['total_issues']} issues")
             
             return validation_results
             
         except Exception as e:
             error_msg = f"Error in comprehensive validation: {str(e)}"
             self.logger.error(error_msg)
-            self.log_callback(f"❌ {error_msg}")
+            self.log_callback(f"Error: {error_msg}")
             return {
                 'overall_success': False,
                 'error': error_msg,
@@ -272,22 +272,22 @@ class ValidationOrchestrator:
         
         # คำแนะนำสำหรับปัญหาคอลัมน์
         if not results['column_validation'].get('success', True):
-            recommendations.append("🔧 ตรวจสอบและแก้ไขโครงสร้างคอลัมน์ให้ตรงตามมาตรฐาน")
+            recommendations.append("ตรวจสอบและแก้ไขโครงสร้างคอลัมน์ให้ตรงตามมาตรฐาน")
         
         # คำแนะนำสำหรับปัญหาข้อมูล
         if not results['data_validation'].get('success', True):
-            recommendations.append("📝 ทำความสะอาดข้อมูลก่อนนำเข้าฐานข้อมูล")
+            recommendations.append("ทำความสะอาดข้อมูลก่อนนำเข้าฐานข้อมูล")
         
         # คำแนะนำสำหรับปัญหา schema
         if not results['schema_validation'].get('success', True):
-            recommendations.append("🏗️ ตรวจสอบและสร้าง schema ที่จำเป็น")
+            recommendations.append("ตรวจสอบและสร้าง schema ที่จำเป็น")
         
         # คำแนะนำสำหรับปัญหา index
         if not results['index_validation'].get('success', True):
-            recommendations.append("📊 ตรวจสอบและสร้าง indexes ที่จำเป็น")
+            recommendations.append("ตรวจสอบและสร้าง indexes ที่จำเป็น")
         
         if not recommendations:
-            recommendations.append("✅ ข้อมูลพร้อมสำหรับการนำเข้าฐานข้อมูล")
+            recommendations.append("ข้อมูลพร้อมสำหรับการนำเข้าฐานข้อมูล")
         
         return recommendations
     
@@ -335,7 +335,7 @@ class ValidationOrchestrator:
             Tuple[bool, str, Dict]: (is_ready, message, validation_details)
         """
         try:
-            self.log_callback("🔍 Pre-upload validation...")
+            self.log_callback("Pre-upload validation...")
             
             # ตรวจสอบแบบครอบคลุม
             validation_results = self.comprehensive_validation(df, logic_type, schema_name)

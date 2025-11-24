@@ -143,7 +143,7 @@ class PermissionCheckerService:
                             results['missing_optional'].append(permission['name'])
 
                     # ไม่แสดงข้อความแต่ละสิทธิ์ใน GUI
-                    # status = "✅" if has_permission else ("❌" if permission['critical'] else "⚠️")
+                    # status = "" if has_permission else ("Error: " if permission['critical'] else "Warning: ")
                     # self.log_callback(f"  {status} {permission['name']}: {permission['description']}")
 
                 except Exception as e:
@@ -413,37 +413,37 @@ class PermissionCheckerService:
             return recommendations
         
         # คำแนะนำทั่วไป
-        recommendations.append("💡 คำแนะนำการแก้ไขสิทธิ์:")
+        recommendations.append("คำแนะนำการแก้ไขสิทธิ์:")
         recommendations.append("")
-        
+
         # ตรวจสอบ role ปัจจุบัน
         if user_info.get('is_sysadmin'):
-            recommendations.append("⚠️ ผู้ใช้เป็น sysadmin แล้ว แต่ยังมีปัญหาสิทธิ์ - อาจเป็นปัญหาการเชื่อมต่อ")
+            recommendations.append("Warning: ผู้ใช้เป็น sysadmin แล้ว แต่ยังมีปัญหาสิทธิ์ - อาจเป็นปัญหาการเชื่อมต่อ")
         elif user_info.get('is_db_owner'):
-            recommendations.append("⚠️ ผู้ใช้เป็น db_owner แล้ว แต่ยังมีปัญหาสิทธิ์ - ตรวจสอบ schema permission")
+            recommendations.append("Warning: ผู้ใช้เป็น db_owner แล้ว แต่ยังมีปัญหาสิทธิ์ - ตรวจสอบ schema permission")
         else:
-            recommendations.append("1. 🔑 เพิ่ม User ใน Database Role:")
+            recommendations.append("1. เพิ่ม User ใน Database Role:")
             recommendations.append("   • db_owner (แนะนำ - ให้สิทธิ์เต็ม)")
             recommendations.append("   • หรือ db_ddladmin + db_datawriter + db_datareader")
-            
+
         recommendations.append("")
-        recommendations.append("2. 📝 คำสั่ง SQL สำหรับ DBA:")
+        recommendations.append("2. คำสั่ง SQL สำหรับ DBA:")
         recommendations.append(f"   USE [{user_info.get('database_name', 'YourDatabase')}]")
         recommendations.append(f"   ALTER ROLE db_owner ADD MEMBER [{user_info.get('login_name', 'YourUser')}]")
-        
+
         recommendations.append("")
-        recommendations.append("3. 🔧 หรือให้สิทธิ์เฉพาะที่จำเป็น:")
+        recommendations.append("3. หรือให้สิทธิ์เฉพาะที่จำเป็น:")
         if 'CREATE SCHEMA' in missing:
             recommendations.append("   GRANT CREATE SCHEMA TO [YourUser]")
         if 'CREATE TABLE' in missing:
             recommendations.append("   GRANT CREATE TABLE TO [YourUser]")
         if 'ALTER TABLE' in missing:
             recommendations.append("   -- สิทธิ์ ALTER รวมอยู่ใน db_ddladmin")
-        
+
         recommendations.append("")
-        recommendations.append("4. ⚡ วิธีที่เร็วที่สุด (สำหรับ Development):")
+        recommendations.append("4. วิธีที่เร็วที่สุด (สำหรับ Development):")
         recommendations.append(f"   ALTER SERVER ROLE sysadmin ADD MEMBER [{user_info.get('login_name', 'YourUser')}]")
-        recommendations.append("   ⚠️ ใช้เฉพาะ Development เท่านั้น!")
+        recommendations.append("   Warning: ใช้เฉพาะ Development เท่านั้น!")
         
         return recommendations
     
@@ -453,44 +453,44 @@ class PermissionCheckerService:
         
         report = []
         report.append("=" * 70)
-        report.append("🔐 รายงานการตรวจสอบสิทธิ์ SQL Server")
+        report.append("รายงานการตรวจสอบสิทธิ์ SQL Server")
         report.append("=" * 70)
-        
+
         # ข้อมูลผู้ใช้
         user_info = results.get('user_info', {})
         if user_info and 'error' not in user_info:
-            report.append(f"👤 ผู้ใช้: {user_info.get('login_name', 'ไม่ระบุ')}")
-            report.append(f"🏷️ Database User: {user_info.get('user_name', 'ไม่ระบุ')}")
-            report.append(f"🔑 System Admin: {'✅' if user_info.get('is_sysadmin') else '❌'}")
-            report.append(f"🏗️ DB Creator: {'✅' if user_info.get('is_dbcreator') else '❌'}")
-            report.append(f"👑 DB Owner: {'✅' if user_info.get('is_db_owner') else '❌'}")
-            report.append(f"🛠️ DDL Admin: {'✅' if user_info.get('is_db_ddladmin') else '❌'}")
-            report.append(f"✏️ Data Writer: {'✅' if user_info.get('is_db_datawriter') else '❌'}")
-            report.append(f"📖 Data Reader: {'✅' if user_info.get('is_db_datareader') else '❌'}")
-        
+            report.append(f"ผู้ใช้: {user_info.get('login_name', 'ไม่ระบุ')}")
+            report.append(f"Database User: {user_info.get('user_name', 'ไม่ระบุ')}")
+            report.append(f"System Admin: {'Yes' if user_info.get('is_sysadmin') else 'No'}")
+            report.append(f"DB Creator: {'Yes' if user_info.get('is_dbcreator') else 'No'}")
+            report.append(f"DB Owner: {'Yes' if user_info.get('is_db_owner') else 'No'}")
+            report.append(f"DDL Admin: {'Yes' if user_info.get('is_db_ddladmin') else 'No'}")
+            report.append(f"Data Writer: {'Yes' if user_info.get('is_db_datawriter') else 'No'}")
+            report.append(f"Data Reader: {'Yes' if user_info.get('is_db_datareader') else 'No'}")
+
         report.append("")
-        report.append("📋 สิทธิ์ที่ตรวจสอบ:")
+        report.append("สิทธิ์ที่ตรวจสอบ:")
         report.append("-" * 50)
-        
+
         # รายละเอียดสิทธิ์
         for perm in results.get('permissions', []):
-            status = "✅" if perm['granted'] else ("❌" if perm['critical'] else "⚠️")
+            status = "[OK]" if perm['granted'] else ("[ERROR]" if perm['critical'] else "[WARNING]")
             critical = "จำเป็น" if perm['critical'] else "เสริม"
             report.append(f"{status} {perm['name']} ({critical})")
             report.append(f"    {perm['description']}")
-        
+
         report.append("")
-        
+
         # สรุปผล
         if results.get('success'):
-            report.append("🎉 ผลการตรวจสอบ: ผ่าน")
-            report.append("✅ ผู้ใช้มีสิทธิ์ครบถ้วนสำหรับการใช้งานแอปพลิเคชัน")
+            report.append("ผลการตรวจสอบ: ผ่าน")
+            report.append("ผู้ใช้มีสิทธิ์ครบถ้วนสำหรับการใช้งานแอปพลิเคชัน")
         else:
-            report.append("❌ ผลการตรวจสอบ: ไม่ผ่าน")
-            report.append(f"🚫 สิทธิ์ที่จำเป็นขาดหายไป: {', '.join(results.get('missing_critical', []))}")
-        
+            report.append("Error: ผลการตรวจสอบ: ไม่ผ่าน")
+            report.append(f"สิทธิ์ที่จำเป็นขาดหายไป: {', '.join(results.get('missing_critical', []))}")
+
         if results.get('missing_optional'):
-            report.append(f"⚠️ สิทธิ์เสริมที่ขาดหายไป: {', '.join(results.get('missing_optional', []))}")
+            report.append(f"Warning: สิทธิ์เสริมที่ขาดหายไป: {', '.join(results.get('missing_optional', []))}")
         
         # คำแนะนำ
         recommendations = results.get('recommendations', [])

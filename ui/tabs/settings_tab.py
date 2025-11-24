@@ -557,7 +557,17 @@ class SettingsTab:
         controls_container = ctk.CTkFrame(strategy_frame, fg_color="transparent")
         controls_container.pack(side="right", padx=(0, 15), pady=12)
 
-        # Dropdown
+        # Settings button (ไอคอนอยู่ซ้าย)
+        settings_btn = ctk.CTkButton(
+            controls_container,
+            text="",
+            image=get_icon('settings', size=18),
+            width=40,
+            command=lambda: self._open_upsert_keys_dialog(file_type)
+        )
+        settings_btn.pack(side="left", padx=(0, 5))
+
+        # Dropdown (dropdown อยู่ขวา)
         strategy_menu = ctk.CTkOptionMenu(
             controls_container,
             values=["Replace", "Upsert (Incremental)"],
@@ -568,17 +578,7 @@ class SettingsTab:
             '_update_strategy', 'replace'
         )
         strategy_menu.set("Upsert (Incremental)" if current_strategy == "upsert" else "Replace")
-        strategy_menu.pack(side="left", padx=(0, 5))
-
-        # Settings button
-        settings_btn = ctk.CTkButton(
-            controls_container,
-            text="",
-            image=get_icon('settings', size=18),
-            width=40,
-            command=lambda: self._open_upsert_keys_dialog(file_type)
-        )
-        settings_btn.pack(side="left")
+        strategy_menu.pack(side="left")
 
         # เก็บ reference
         if not hasattr(self, 'strategy_menus'):
@@ -589,9 +589,17 @@ class SettingsTab:
         self.strategy_menus[file_type] = strategy_menu
         self.settings_buttons[file_type] = settings_btn
 
-        # Disable settings button if Replace mode
+        # ตั้งค่าสีของปุ่มตาม initial state
         if current_strategy == "replace":
-            settings_btn.configure(state="disabled")
+            settings_btn.configure(
+                state="disabled",
+                fg_color="gray40"  # สีเทาเมื่อ disabled
+            )
+        else:
+            settings_btn.configure(
+                state="normal",
+                fg_color=["#3B8ED0", "#1F6AA5"]  # สีปกติเมื่อ enabled
+            )
 
         return strategy_menu
 
@@ -599,12 +607,20 @@ class SettingsTab:
         """เมื่อเปลี่ยน strategy"""
         strategy_value = "upsert" if "Upsert" in strategy_display_name else "replace"
 
-        # Enable/disable settings button
+        # Enable/disable settings button with visual feedback
         if file_type in self.settings_buttons:
             if strategy_value == "upsert":
-                self.settings_buttons[file_type].configure(state="normal")
+                # ปกติ: ปุ่มใช้งานได้
+                self.settings_buttons[file_type].configure(
+                    state="normal",
+                    fg_color=["#3B8ED0", "#1F6AA5"]  # สีปกติ
+                )
             else:
-                self.settings_buttons[file_type].configure(state="disabled")
+                # Disabled: ปุ่มเป็นสีเทา
+                self.settings_buttons[file_type].configure(
+                    state="disabled",
+                    fg_color="gray40"  # สีเทาชัดเจน
+                )
 
     def _open_upsert_keys_dialog(self, file_type):
         """เปิด dialog สำหรับเลือก upsert keys"""
@@ -674,7 +690,7 @@ class SettingsTab:
 
         warning_label = ctk.CTkLabel(
             warning_frame,
-            text="⚠️ At least one upsert key must be selected for Upsert mode",
+            text="Warning: At least one upsert key must be selected for Upsert mode",
             font=("", 11),
             text_color=("orange", "yellow")
         )

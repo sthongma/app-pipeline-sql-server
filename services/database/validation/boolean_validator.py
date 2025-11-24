@@ -54,7 +54,7 @@ class BooleanValidator(BaseValidator):
                     issues.append(issue)
             except Exception as e:
                 if log_func:
-                    log_func(f"        ⚠️ Error checking column {col}: {e}")
+                    log_func(f"        Warning: Error checking column {col}: {e}")
         
         return issues
     
@@ -314,11 +314,11 @@ class BooleanValidator(BaseValidator):
             rows_affected = result.rowcount
             
             if log_func:
-                log_func(f"    ✅ Converted {rows_affected:,} boolean values in column {col}")
+                log_func(f"    Converted {rows_affected:,} boolean values in column {col}")
             
             return True
             
         except Exception as e:
             if log_func:
-                log_func(f"    ❌ Error converting boolean values in column {col}: {e}")
+                log_func(f"    Error: Error converting boolean values in column {col}: {e}")
             return False

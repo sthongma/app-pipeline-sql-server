@@ -54,9 +54,6 @@ class FileConstants:
 class ProcessingConstants:
     """Data processing and validation constants"""
 
-    # String validation thresholds
-    DEFAULT_STRING_LENGTH = 255
-
     # Null value thresholds (percentage)
     NULL_WARNING_THRESHOLD = 50  # Warn if more than 50% nulls
 

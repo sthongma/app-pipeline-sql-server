@@ -25,7 +25,7 @@ from services.file import FileManagementService
 from config.database import DatabaseConfig
 from constants import AppConstants, DatabaseConstants
 from utils.logger import create_gui_log_handler, setup_file_logging
-from utils.ui_helpers import get_emoji_color_map, setup_emoji_colors, insert_colored_message
+from utils.ui_helpers import format_elapsed_time
 from ui.ui_callbacks import UICallbacks
 from typing import Optional, Dict, Any, Callable
 
@@ -415,17 +415,9 @@ class MainWindow(ctk.CTkToplevel):
         
 
     def _update_textbox(self, message):
-        """Update textbox in main tab with colored emoji"""
+        """Update textbox in main tab"""
         if hasattr(self, 'textbox') and self.textbox:
-            text_widget = self.textbox._textbox
-
-            # Setup colors ครั้งแรก
-            if not hasattr(self, '_emoji_colors_setup_main'):
-                setup_emoji_colors(text_widget)
-                self._emoji_colors_setup_main = True
-
-            # แทรกข้อความพร้อมสี
-            insert_colored_message(text_widget, message, get_emoji_color_map())
+            self.textbox.insert("end", message)
             self.textbox.see("end")
         
     def _update_log_textbox(self, message):
@@ -464,7 +456,7 @@ class MainWindow(ctk.CTkToplevel):
         database = os.getenv('DB_NAME', 'Not set')
         schema = os.getenv('DB_SCHEMA', 'bronze')  # default schema
 
-        logging.info("📊 Database Configuration:")
+        logging.info("Database Configuration:")
         logging.info(f"  Server: {server}")
         logging.info(f"  Database: {database}")
         logging.info(f"  Schema: {schema}")
@@ -523,14 +515,14 @@ class MainWindow(ctk.CTkToplevel):
                 if progress_callback:
                     progress_callback("SQL Server connected", 9, mark_done=True)
             else:
-                self.log("❌ " + message)
+                self.log("Error: " + message)
                 return False
 
-            self.log("🚀 System ready")
+            self.log("System ready")
             return True
 
         except Exception as e:
-            self.log(f"❌ Initialization error: {str(e)}")
+            self.log(f"Error: Initialization error: {str(e)}")
             return False
 
     # ===== Synchronous Initialization Helpers =====
@@ -565,17 +557,17 @@ class MainWindow(ctk.CTkToplevel):
                             self.current_file_handler = handler
                             break
 
-                    self.log(f"📁 Log file will be saved to: {log_file_path}")
+                    self.log(f"Log file will be saved to: {log_file_path}")
                 else:
-                    self.log("⚠️ Failed to setup log file")
+                    self.log("Warning: Failed to setup log file")
         except Exception as e:
-            self.log(f"❌ Error setting up log file: {e}")
+            self.log(f"Error: Error setting up log file: {e}")
 
     def _initialize_input_folder_if_needed_sync(self, input_folder_path: str) -> None:
         """Initialize input folder if user has previously set it (synchronous)"""
         try:
             if input_folder_path and os.path.exists(input_folder_path):
-                self.log(f"📁 Input folder updated: {input_folder_path}")
+                self.log(f"Input folder updated: {input_folder_path}")
         except Exception:
             pass
 
@@ -601,6 +593,6 @@ class MainWindow(ctk.CTkToplevel):
                 if hasattr(self, 'file_service') and hasattr(self.file_service, 'file_manager'):
                     self.file_service.file_manager.set_output_folder(output_folder_path)
 
-                self.log(f"📁 Output folder updated: {output_folder_path}")
+                self.log(f"Output folder updated: {output_folder_path}")
         except Exception as e:
-            self.log(f"❌ Error updating output folder: {e}")
+            self.log(f"Error: Error updating output folder: {e}")

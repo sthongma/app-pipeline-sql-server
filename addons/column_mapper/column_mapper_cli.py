@@ -244,7 +244,7 @@ class ColumnMapperCLI:
     def _show_detailed_suggestions(self, suggestions: Dict[str, List[Dict]], column_analysis: Dict[str, List[str]]):
         """Show detailed suggestions in auto mode"""
         self.log("")
-        self.log("📊 COLUMN ANALYSIS SUMMARY:")
+        self.log("COLUMN ANALYSIS SUMMARY:")
         self.log(f"   • Missing columns (expected but not found): {len(column_analysis['missing'])}")
         self.log(f"   • Extra columns (found but not expected): {len(column_analysis['extra'])}")
         self.log(f"   • Total columns in file: {len(column_analysis['actual'])}")
@@ -252,7 +252,7 @@ class ColumnMapperCLI:
         
         if column_analysis['missing']:
             self.log("")
-            self.log("❌ MISSING COLUMNS:")
+            self.log("Error: MISSING COLUMNS:")
             for col in column_analysis['missing']:
                 self.log(f"   • {col}")
         
@@ -264,19 +264,19 @@ class ColumnMapperCLI:
         
         if suggestions:
             self.log("")
-            self.log("🔍 ML MAPPING SUGGESTIONS:")
+            self.log("ML MAPPING SUGGESTIONS:")
             for missing_col, sug_list in suggestions.items():
                 self.log(f"\n📌 Missing column: '{missing_col}'")
                 if sug_list:
                     for i, sug in enumerate(sug_list[:3], 1):  # Top 3 suggestions
-                        confidence_level = "🔥 HIGH" if sug['confidence'] > 70 else "⚡ MED" if sug['confidence'] > 50 else "💡 LOW"
+                        confidence_level = "HIGH" if sug['confidence'] > 70 else "MED" if sug['confidence'] > 50 else "LOW"
                         self.log(f"   {i}. {sug['target_column']} ({sug['confidence']:.1f}% - {confidence_level})")
-                        self.log(f"      📝 Reason: {sug['reasoning']}")
+                        self.log(f"      Reason: {sug['reasoning']}")
                 else:
                     self.log("   ❓ No suggestions found")
         
         self.log("")
-        self.log("💡 TIP: Use interactive mode to apply these suggestions!")
+        self.log("TIP: Use interactive mode to apply these suggestions!")
         self.log("   Run without --auto flag to select mappings interactively")
     
     def update_column_settings(self, file_type: str, new_mappings: Dict[str, str]) -> bool:
@@ -399,7 +399,7 @@ class ColumnMapperCLI:
             # Interactive selection (if not in auto mode)
             if hasattr(self, 'auto_mode') and self.auto_mode:
                 # Auto mode - show detailed suggestions and auto-apply high confidence mappings
-                self.log("🤖 Auto Mode - Showing ML suggestions:")
+                self.log("Auto Mode - Showing ML suggestions:")
                 self._show_detailed_suggestions(suggestions, column_analysis)
                 
                 # Auto-apply high confidence suggestions (>70%)
@@ -408,11 +408,11 @@ class ColumnMapperCLI:
                     if sug_list and sug_list[0]['confidence'] > 70:
                         best_sug = sug_list[0]
                         selected_mappings[missing_col] = best_sug['target_column']
-                        self.log(f"✅ Auto-applied: '{missing_col}' → '{best_sug['target_column']}' ({best_sug['confidence']:.1f}%)")
+                        self.log(f"Auto-applied: '{missing_col}' → '{best_sug['target_column']}' ({best_sug['confidence']:.1f}%)")
                 
                 if not selected_mappings:
-                    self.log("⚠️ No high-confidence mappings found for auto-application (threshold >70%)")
-                    self.log("💡 Run in interactive mode (without --auto) to review and apply these suggestions")
+                    self.log("Warning: No high-confidence mappings found for auto-application (threshold >70%)")
+                    self.log("Run in interactive mode (without --auto) to review and apply these suggestions")
             else:
                 selected_mappings = self.interactive_mapping_selection(suggestions)
             
@@ -420,15 +420,15 @@ class ColumnMapperCLI:
                 # Auto mode - skip confirmation, Interactive mode - ask for confirmation
                 if hasattr(self, 'auto_mode') and self.auto_mode:
                     # Auto apply without confirmation
-                    self.log(f"\n🔄 Updating column_settings.json for {file_type}:")
+                    self.log(f"\nUpdating column_settings.json for {file_type}:")
                     for old_key, new_key in selected_mappings.items():
                         self.log(f"   '{old_key}' → '{new_key}'")
                     
                     success = self.update_column_settings(file_type, selected_mappings)
                     if success:
-                        self.log("✅ Settings updated automatically!")
+                        self.log("Settings updated automatically!")
                     else:
-                        self.log("❌ Failed to update settings.", 'error')
+                        self.log("Error: Failed to update settings.", 'error')
                 else:
                     # Interactive confirmation
                     print(f"\nSelected mappings for {file_type}:")

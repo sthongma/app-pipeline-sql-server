@@ -76,11 +76,11 @@ class IndexManager(BaseValidator):
                 conn.commit()
                 
                 if log_func and index_count > 0:
-                    log_func(f"   ✅ Created {index_count} temporary indexes for validation")
+                    log_func(f"   Created {index_count} temporary indexes for validation")
                     
         except Exception as e:
             if log_func:
-                log_func(f"   ⚠️ Unable to create temporary indexes: {e}")
+                log_func(f"   Warning: Unable to create temporary indexes: {e}")
         
         return index_count
     
@@ -243,11 +243,11 @@ class IndexManager(BaseValidator):
                 conn.commit()
                 
                 if log_func and dropped_count > 0:
-                    log_func(f"   🗑️ Cleaned up {dropped_count} temporary indexes")
+                    log_func(f"   Cleaned up {dropped_count} temporary indexes")
                     
         except Exception as e:
             if log_func:
-                log_func(f"   ⚠️ Unable to drop temporary indexes: {e}")
+                log_func(f"   Warning: Unable to drop temporary indexes: {e}")
         
         return dropped_count
     
@@ -318,11 +318,11 @@ class IndexManager(BaseValidator):
                 conn.commit()
                 
                 if log_func and cleaned_count > 0:
-                    log_func(f"   🧹 Cleaned up {cleaned_count} temporary indexes")
+                    log_func(f"   Cleaned up {cleaned_count} temporary indexes")
                     
         except Exception as e:
             if log_func:
-                log_func(f"   ⚠️ Error during cleanup: {e}")
+                log_func(f"   Warning: Error during cleanup: {e}")
         
         return cleaned_count
     
