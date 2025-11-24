@@ -270,6 +270,9 @@ class FileHandler:
 
                 df = read_result
 
+            # Add source file tracking to each row
+            df['_source_file'] = os.path.basename(file_path)
+
             # Successful validation
             result['success'] = True
             result['df'] = df

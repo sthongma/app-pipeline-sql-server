@@ -118,7 +118,7 @@ class DataUploadService:
             # เพิ่ม metadata columns ที่จะถูกเพิ่มโดย SQL ในขั้นตอนสุดท้าย
             required_cols['_loaded_at'] = DateTime()
             required_cols['_created_at'] = DateTime()
-            required_cols['_source_file'] = SA_NVARCHAR(500)
+            required_cols['_source_file'] = SA_NVARCHAR(max)
             required_cols['_batch_id'] = SA_NVARCHAR(50)
             required_cols['_upsert_hash'] = LargeBinary(16)
             
@@ -166,7 +166,9 @@ class DataUploadService:
             df_with_metadata = df.copy()
             df_with_metadata['_loaded_at'] = datetime.now()
             df_with_metadata['_created_at'] = datetime.now()
-            df_with_metadata['_source_file'] = source_file or 'unknown'
+            # _source_file already exists in df from file_handler
+            if '_source_file' not in df_with_metadata.columns:
+                df_with_metadata['_source_file'] = source_file or 'unknown'
             df_with_metadata['_batch_id'] = batch_id
             df_with_metadata['_upsert_hash'] = None  # จะคำนวณทีหลังถ้าเป็น upsert mode
 
@@ -417,7 +419,7 @@ class DataUploadService:
             metadata_cols_sql = """
                 [_loaded_at] DATETIME2 NULL,
                 [_created_at] DATETIME2 NULL,
-                [_source_file] NVARCHAR(500) NULL,
+                [_source_file] NVARCHAR(MAX) NULL,
                 [_batch_id] NVARCHAR(50) NULL,
                 [_upsert_hash] VARBINARY(16) NULL
             """
@@ -610,7 +612,7 @@ class DataUploadService:
             with self.engine.begin() as conn:
                 conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_loaded_at] DATETIME2 NULL"))
                 conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_created_at] DATETIME2 NULL"))
-                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_source_file] NVARCHAR(500) NULL"))
+                conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_source_file] NVARCHAR(MAX) NULL"))
                 conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_batch_id] NVARCHAR(50) NULL"))
                 conn.execute(text(f"ALTER TABLE {schema_name}.{table_name} ADD [_upsert_hash] VARBINARY(16) NULL"))
         else:
