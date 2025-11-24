@@ -413,37 +413,37 @@ class PermissionCheckerService:
             return recommendations
         
         # คำแนะนำทั่วไป
-        recommendations.append("คำแนะนำการแก้ไขสิทธิ์:")
+        recommendations.append("Permission Fix Recommendations:")
         recommendations.append("")
 
         # ตรวจสอบ role ปัจจุบัน
         if user_info.get('is_sysadmin'):
-            recommendations.append("Warning: ผู้ใช้เป็น sysadmin แล้ว แต่ยังมีปัญหาสิทธิ์ - อาจเป็นปัญหาการเชื่อมต่อ")
+            recommendations.append("Warning: User is already sysadmin but still has permission issues - may be a connection problem")
         elif user_info.get('is_db_owner'):
-            recommendations.append("Warning: ผู้ใช้เป็น db_owner แล้ว แต่ยังมีปัญหาสิทธิ์ - ตรวจสอบ schema permission")
+            recommendations.append("Warning: User is already db_owner but still has permission issues - check schema permissions")
         else:
-            recommendations.append("1. เพิ่ม User ใน Database Role:")
-            recommendations.append("   • db_owner (แนะนำ - ให้สิทธิ์เต็ม)")
-            recommendations.append("   • หรือ db_ddladmin + db_datawriter + db_datareader")
+            recommendations.append("1. Add User to Database Role:")
+            recommendations.append("   • db_owner (Recommended - Full permissions)")
+            recommendations.append("   • Or db_ddladmin + db_datawriter + db_datareader")
 
         recommendations.append("")
-        recommendations.append("2. คำสั่ง SQL สำหรับ DBA:")
+        recommendations.append("2. SQL Command for DBA:")
         recommendations.append(f"   USE [{user_info.get('database_name', 'YourDatabase')}]")
         recommendations.append(f"   ALTER ROLE db_owner ADD MEMBER [{user_info.get('login_name', 'YourUser')}]")
 
         recommendations.append("")
-        recommendations.append("3. หรือให้สิทธิ์เฉพาะที่จำเป็น:")
+        recommendations.append("3. Or grant specific permissions:")
         if 'CREATE SCHEMA' in missing:
             recommendations.append("   GRANT CREATE SCHEMA TO [YourUser]")
         if 'CREATE TABLE' in missing:
             recommendations.append("   GRANT CREATE TABLE TO [YourUser]")
         if 'ALTER TABLE' in missing:
-            recommendations.append("   -- สิทธิ์ ALTER รวมอยู่ใน db_ddladmin")
+            recommendations.append("   -- ALTER permission included in db_ddladmin")
 
         recommendations.append("")
-        recommendations.append("4. วิธีที่เร็วที่สุด (สำหรับ Development):")
+        recommendations.append("4. Quickest method (For Development only):")
         recommendations.append(f"   ALTER SERVER ROLE sysadmin ADD MEMBER [{user_info.get('login_name', 'YourUser')}]")
-        recommendations.append("   Warning: ใช้เฉพาะ Development เท่านั้น!")
+        recommendations.append("   Warning: Use only for Development!")
         
         return recommendations
     
@@ -453,14 +453,14 @@ class PermissionCheckerService:
         
         report = []
         report.append("=" * 70)
-        report.append("รายงานการตรวจสอบสิทธิ์ SQL Server")
+        report.append("SQL Server Permission Check Report")
         report.append("=" * 70)
 
         # ข้อมูลผู้ใช้
         user_info = results.get('user_info', {})
         if user_info and 'error' not in user_info:
-            report.append(f"ผู้ใช้: {user_info.get('login_name', 'ไม่ระบุ')}")
-            report.append(f"Database User: {user_info.get('user_name', 'ไม่ระบุ')}")
+            report.append(f"Login: {user_info.get('login_name', 'Not specified')}")
+            report.append(f"Database User: {user_info.get('user_name', 'Not specified')}")
             report.append(f"System Admin: {'Yes' if user_info.get('is_sysadmin') else 'No'}")
             report.append(f"DB Creator: {'Yes' if user_info.get('is_dbcreator') else 'No'}")
             report.append(f"DB Owner: {'Yes' if user_info.get('is_db_owner') else 'No'}")
@@ -469,13 +469,13 @@ class PermissionCheckerService:
             report.append(f"Data Reader: {'Yes' if user_info.get('is_db_datareader') else 'No'}")
 
         report.append("")
-        report.append("สิทธิ์ที่ตรวจสอบ:")
+        report.append("Permissions Checked:")
         report.append("-" * 50)
 
         # รายละเอียดสิทธิ์
         for perm in results.get('permissions', []):
             status = "[OK]" if perm['granted'] else ("[ERROR]" if perm['critical'] else "[WARNING]")
-            critical = "จำเป็น" if perm['critical'] else "เสริม"
+            critical = "Required" if perm['critical'] else "Optional"
             report.append(f"{status} {perm['name']} ({critical})")
             report.append(f"    {perm['description']}")
 
@@ -483,14 +483,14 @@ class PermissionCheckerService:
 
         # สรุปผล
         if results.get('success'):
-            report.append("ผลการตรวจสอบ: ผ่าน")
-            report.append("ผู้ใช้มีสิทธิ์ครบถ้วนสำหรับการใช้งานแอปพลิเคชัน")
+            report.append("Check Result: Passed")
+            report.append("User has all required permissions for application")
         else:
-            report.append("Error: ผลการตรวจสอบ: ไม่ผ่าน")
-            report.append(f"สิทธิ์ที่จำเป็นขาดหายไป: {', '.join(results.get('missing_critical', []))}")
+            report.append("Error: Check Result: Failed")
+            report.append(f"Missing critical permissions: {', '.join(results.get('missing_critical', []))}")
 
         if results.get('missing_optional'):
-            report.append(f"Warning: สิทธิ์เสริมที่ขาดหายไป: {', '.join(results.get('missing_optional', []))}")
+            report.append(f"Warning: Missing optional permissions: {', '.join(results.get('missing_optional', []))}")
         
         # คำแนะนำ
         recommendations = results.get('recommendations', [])

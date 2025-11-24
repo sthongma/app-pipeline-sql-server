@@ -593,7 +593,7 @@ class SettingsTab:
         if current_strategy == "replace":
             settings_btn.configure(
                 state="disabled",
-                fg_color="gray40"  # สีเทาเมื่อ disabled
+                fg_color="gray20"  # สีเทาเมื่อ disabled
             )
         else:
             settings_btn.configure(
@@ -619,7 +619,7 @@ class SettingsTab:
                 # Disabled: ปุ่มเป็นสีเทา
                 self.settings_buttons[file_type].configure(
                     state="disabled",
-                    fg_color="gray40"  # สีเทาชัดเจน
+                    fg_color="gray20"  # สีเทาชัดเจน
                 )
 
     def _open_upsert_keys_dialog(self, file_type):
