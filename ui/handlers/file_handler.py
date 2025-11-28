@@ -558,23 +558,37 @@ class FileHandler:
         batch_id = str(uuid.uuid4())
         self.log(f"Batch ID: {batch_id}")
 
-        # Conditional branching based on upload mode
-        if upload_mode == 'upsert':
-            # NEW: Sequential Processing for Upsert Mode
-            self.log("Using Sequential Processing (files processed one-by-one, oldest first)")
+        # Separate files by mode (Upsert vs Replace)
+        upsert_files = []
+        replace_files = []
+
+        for (file_path, logic_type), chk in selected_files:
+            if logic_type in strategies:
+                if strategies[logic_type]['strategy'] == 'upsert':
+                    upsert_files.append(((file_path, logic_type), chk))
+                else:
+                    replace_files.append(((file_path, logic_type), chk))
+
+        total_files = len(upsert_files) + len(replace_files)
+        self.log(f"Files breakdown: {len(upsert_files)} Upsert, {len(replace_files)} Replace")
+
+        # Process Upsert files first (sequential)
+        if upsert_files:
+            self.log(f"=== Processing {len(upsert_files)} Upsert files (Sequential Mode) ===")
 
             # Get files with metadata and sort by modification time
-            files_with_metadata = self._get_files_with_metadata(selected_files)
+            files_with_metadata = self._get_files_with_metadata(upsert_files)
             sorted_files = self._sort_files_by_modification_time(files_with_metadata)
-            total_files = len(sorted_files)
 
             # แสดงสถานะเริ่มต้น
-            ui_callbacks['set_progress_status']("Starting upload", f"Processing {total_files} files sequentially")
+            ui_callbacks['set_progress_status']("Starting upload", f"Processing {len(sorted_files)} Upsert files sequentially")
 
             # Process files sequentially
             self._upload_files_sequentially_upsert(sorted_files, batch_id, ui_callbacks, upload_stats)
 
-            # Final summary
+        # Process Replace files (batch mode)
+        if not replace_files:
+            # No replace files, finish up
             total_upload_time = time.time() - upload_start_time
             upload_stats['total_time'] = total_upload_time
             ui_callbacks['update_progress'](1.0, "Upload completed", f"Processed {total_files} files")
@@ -582,19 +596,18 @@ class FileHandler:
             ui_callbacks['enable_controls']()
             return
 
-        # EXISTING: Batch Processing for Replace Mode (or mixed mode)
-        self.log("Using Batch Processing (files combined and uploaded together)")
+        self.log(f"=== Processing {len(replace_files)} Replace files (Batch Mode) ===")
 
         # จัดกลุ่มไฟล์และเตรียม stats
-        files_by_type = self._group_files_by_type(selected_files)
-        total_files = sum(len(files) for files in files_by_type.values())
+        files_by_type = self._group_files_by_type(replace_files)
+        replace_total_files = sum(len(files) for files in files_by_type.values())
         total_types = len(files_by_type)
 
         # แสดงสถานะเริ่มต้น
-        ui_callbacks['set_progress_status']("Starting upload", f"Found {total_files} files from {total_types} types")
+        ui_callbacks['set_progress_status']("Processing Replace files", f"Found {replace_total_files} Replace files from {total_types} types")
 
-        # Phase 1: Read and validate all files with PARALLEL PROCESSING
-        self.log("Phase 1: Reading and validating all files in parallel...")
+        # Phase 1: Read and validate Replace files with PARALLEL PROCESSING
+        self.log("Phase 1: Reading and validating Replace files in parallel...")
         self.log(f"Using {self.max_workers} parallel workers for optimal performance")
         all_validated_data = {}  # {logic_type: (combined_df, files_info, required_cols)}
 
@@ -635,7 +648,7 @@ class FileHandler:
 
                         try:
                             processed_files += 1
-                            file_progress = (processed_files - 1) / total_files
+                            file_progress = (processed_files - 1) / replace_total_files
 
                             # Get validation result
                             validation_result = future.result()
@@ -651,7 +664,7 @@ class FileHandler:
                                 ui_callbacks['update_progress'](
                                     file_progress,
                                     f"Validated: {os.path.basename(file_path)}",
-                                    f"File {processed_files} of {total_files}"
+                                    f"File {processed_files} of {replace_total_files}"
                                 )
                             else:
                                 error = validation_result['error']
@@ -665,7 +678,7 @@ class FileHandler:
                                 ui_callbacks['update_progress'](
                                     file_progress,
                                     f"Failed: {os.path.basename(file_path)}",
-                                    f"File {processed_files} of {total_files}"
+                                    f"File {processed_files} of {replace_total_files}"
                                 )
 
                         except Exception as e:
@@ -735,7 +748,7 @@ class FileHandler:
                     # Clear existing data only for the first upload of each table
                     success, message = self.db_service.upload_data(
                         combined_df, logic_type, required_cols,
-                        log_func=self.log, clear_existing=True
+                        log_func=self.log, clear_existing=True, batch_id=batch_id
                     )
 
                     if success:
@@ -819,7 +832,7 @@ class FileHandler:
         # อัปเดต progress เป็น 100% เมื่อเสร็จสิ้น
         ui_callbacks['update_progress'](1.0, "Upload completed", f"Processed {total_files} files successfully")
 
-        # แสดงรายงานสรุป
+        # แสดงรายงานสรุป (total_files = upsert + replace)
         self._display_upload_summary(upload_stats, total_files)
 
         # เปิดปุ่มทั้งหมดกลับมา
