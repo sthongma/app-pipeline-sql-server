@@ -598,7 +598,7 @@ class SettingsTab:
         else:
             settings_btn.configure(
                 state="normal",
-                fg_color=["#3B8ED0", "#1F6AA5"]  # สีปกติเมื่อ enabled
+                fg_color=("#1f538d", "#1f538d")  # ใช้สีน้ำเงินจากธีม
             )
 
         return strategy_menu
@@ -613,7 +613,7 @@ class SettingsTab:
                 # ปกติ: ปุ่มใช้งานได้
                 self.settings_buttons[file_type].configure(
                     state="normal",
-                    fg_color=["#3B8ED0", "#1F6AA5"]  # สีปกติ
+                    fg_color=("#1f538d", "#1f538d")  # ใช้สีน้ำเงินจากธีม
                 )
             else:
                 # Disabled: ปุ่มเป็นสีเทา
