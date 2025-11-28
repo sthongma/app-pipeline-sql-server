@@ -286,22 +286,309 @@ class FileHandler:
 
         return result
 
+    def _determine_upload_mode(self, selected_files):
+        """
+        ตรวจสอบว่าทุกไฟล์ใช้โหมดเดียวกันหรือไม่
+
+        Args:
+            selected_files: List of ((file_path, logic_type), checkbox) tuples
+
+        Returns:
+            Tuple[str, Dict]: (mode, strategies)
+            - mode: 'upsert', 'replace', or 'mixed'
+            - strategies: {logic_type: {'strategy': str, 'keys': list}}
+        """
+        from services.settings_manager import settings_manager
+
+        strategies = {}
+        for (file_path, logic_type), chk in selected_files:
+            if logic_type not in strategies:
+                dtype_cfg = settings_manager.get_dtype_settings(logic_type)
+                strategy = dtype_cfg.get('_update_strategy', 'replace')
+                upsert_keys = dtype_cfg.get('_upsert_keys', [])
+                strategies[logic_type] = {
+                    'strategy': strategy,
+                    'keys': upsert_keys
+                }
+
+        # Determine overall mode
+        strategy_set = set(s['strategy'] for s in strategies.values())
+        if len(strategy_set) == 1 and 'upsert' in strategy_set:
+            return 'upsert', strategies
+        elif len(strategy_set) == 1 and 'replace' in strategy_set:
+            return 'replace', strategies
+        else:
+            return 'mixed', strategies
+
+    def _get_files_with_metadata(self, selected_files):
+        """
+        ดึง metadata ของไฟล์ รวมถึงเวลา modification
+
+        Args:
+            selected_files: List of ((file_path, logic_type), checkbox) tuples
+
+        Returns:
+            List[Dict]: [{
+                'file_path': str,
+                'logic_type': str,
+                'chk': widget,
+                'mod_time': float,
+                'mod_time_str': str,
+                'filename': str
+            }]
+        """
+        files_with_metadata = []
+
+        for (file_path, logic_type), chk in selected_files:
+            try:
+                file_stats = os.stat(file_path)
+                mod_time = file_stats.st_mtime
+                mod_time_str = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d %H:%M:%S')
+
+                files_with_metadata.append({
+                    'file_path': file_path,
+                    'logic_type': logic_type,
+                    'chk': chk,
+                    'mod_time': mod_time,
+                    'mod_time_str': mod_time_str,
+                    'filename': os.path.basename(file_path)
+                })
+            except Exception as e:
+                self.log(f"Error getting metadata for {file_path}: {e}")
+                # Still add file without metadata (default to epoch)
+                files_with_metadata.append({
+                    'file_path': file_path,
+                    'logic_type': logic_type,
+                    'chk': chk,
+                    'mod_time': 0,
+                    'mod_time_str': 'Unknown',
+                    'filename': os.path.basename(file_path)
+                })
+
+        return files_with_metadata
+
+    def _sort_files_by_modification_time(self, files_with_metadata):
+        """
+        เรียงไฟล์ตามเวลา modified (น้อยสุดก่อน)
+
+        Args:
+            files_with_metadata: List of file metadata dicts
+
+        Returns:
+            List[Dict]: Sorted list (oldest first)
+        """
+        return sorted(files_with_metadata, key=lambda x: x['mod_time'])
+
+    def _upload_single_file_upsert(self, file_metadata, batch_id, file_index, total_files, ui_callbacks, upload_stats):
+        """
+        Upload ไฟล์เดียวในโหมด Upsert (validation → upload → move)
+
+        Args:
+            file_metadata: Dict with file metadata
+            batch_id: Batch ID for this upload session
+            file_index: Current file index (1-based)
+            total_files: Total number of files
+            ui_callbacks: UI callback functions
+            upload_stats: Upload statistics dict
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        file_path = file_metadata['file_path']
+        logic_type = file_metadata['logic_type']
+        chk = file_metadata['chk']
+        filename = file_metadata['filename']
+        mod_time_str = file_metadata['mod_time_str']
+
+        # Initialize type stats if needed
+        if logic_type not in upload_stats['by_type']:
+            upload_stats['by_type'][logic_type] = self._init_type_stats(1, time.time())
+
+        self.log(f"[{file_index}/{total_files}] Processing: {filename} (Modified: {mod_time_str})")
+
+        try:
+            # Phase 1: Validation
+            progress = (file_index - 1) / total_files
+            ui_callbacks['update_progress'](
+                progress,
+                f"Validating: {filename}",
+                f"File {file_index} of {total_files}"
+            )
+
+            validation_result = self._validate_single_file((file_path, logic_type))
+
+            if not validation_result['success']:
+                error = validation_result['error']
+                self.log(f"[{file_index}/{total_files}] Validation failed: {filename}: {error}")
+                upload_stats['by_type'][logic_type]['failed_files'] += 1
+                upload_stats['by_type'][logic_type]['failed_file_list'].append(filename)
+                upload_stats['by_type'][logic_type]['errors'].append(f"{filename}: {error}")
+                upload_stats['failed_files'] += 1
+                return False
+
+            df = validation_result['df']
+
+            # Phase 2: Upload
+            progress = (file_index - 0.5) / total_files
+            ui_callbacks['update_progress'](
+                progress,
+                f"Uploading: {filename}",
+                f"File {file_index} of {total_files}"
+            )
+
+            required_cols = self.file_service.get_required_dtypes(logic_type)
+            if not required_cols:
+                error = f"No data type configuration found for {logic_type}"
+                self.log(f"[{file_index}/{total_files}] Error: {error}")
+                upload_stats['by_type'][logic_type]['failed_files'] += 1
+                upload_stats['by_type'][logic_type]['failed_file_list'].append(filename)
+                upload_stats['by_type'][logic_type]['errors'].append(f"{filename}: {error}")
+                upload_stats['failed_files'] += 1
+                return False
+
+            success, message = self.db_service.upload_data(
+                df, logic_type, required_cols,
+                log_func=self.log,
+                clear_existing=True,
+                batch_id=batch_id
+            )
+
+            if not success:
+                # Handle upload failure
+                if isinstance(message, dict):
+                    summary = message.get('summary', 'Upload failed')
+                    self.log(f"[{file_index}/{total_files}] Error: {summary}")
+                    upload_stats['by_type'][logic_type]['errors'].append(f"{filename}: {summary}")
+                else:
+                    self.log(f"[{file_index}/{total_files}] Error: {message}")
+                    upload_stats['by_type'][logic_type]['errors'].append(f"{filename}: {message}")
+
+                upload_stats['by_type'][logic_type]['failed_files'] += 1
+                upload_stats['by_type'][logic_type]['failed_file_list'].append(filename)
+                upload_stats['failed_files'] += 1
+                return False
+
+            # Phase 3: Move file immediately on success
+            self.log(f"[{file_index}/{total_files}] Success: {message}")
+            upload_stats['by_type'][logic_type]['summary_message'] = message
+
+            try:
+                move_success, move_result = self.file_mgmt_service.move_uploaded_files([file_path], [logic_type])
+                if move_success:
+                    for original_path, new_path in move_result:
+                        self.log(f"[{file_index}/{total_files}] Moved to: {new_path}")
+                    ui_callbacks['disable_checkbox'](chk)
+                    ui_callbacks['set_file_uploaded'](file_path)
+                else:
+                    self.log(f"[{file_index}/{total_files}] Warning: Upload succeeded but move failed: {move_result}")
+            except Exception as move_error:
+                self.log(f"[{file_index}/{total_files}] Warning: Upload succeeded but move error: {move_error}")
+
+            # Update stats
+            upload_stats['by_type'][logic_type]['successful_files'] += 1
+            upload_stats['by_type'][logic_type]['successful_file_list'].append(filename)
+            upload_stats['successful_files'] += 1
+
+            # Complete progress
+            progress = file_index / total_files
+            ui_callbacks['update_progress'](
+                progress,
+                f"Completed: {filename}",
+                f"File {file_index} of {total_files}"
+            )
+
+            return True
+
+        except Exception as e:
+            error_msg = f"Error processing {filename}: {e}"
+            self.log(f"[{file_index}/{total_files}] {error_msg}")
+            upload_stats['by_type'][logic_type]['failed_files'] += 1
+            upload_stats['by_type'][logic_type]['failed_file_list'].append(filename)
+            upload_stats['by_type'][logic_type]['errors'].append(f"{filename}: {str(e)}")
+            upload_stats['failed_files'] += 1
+            return False
+
+    def _upload_files_sequentially_upsert(self, sorted_files, batch_id, ui_callbacks, upload_stats):
+        """
+        ประมวลผลไฟล์ทีละไฟล์ในโหมด Upsert
+
+        Args:
+            sorted_files: List of file metadata dicts (sorted by modification time)
+            batch_id: Batch ID for this upload session
+            ui_callbacks: UI callback functions
+            upload_stats: Upload statistics dict
+        """
+        total_files = len(sorted_files)
+
+        self.log(f"Sequential Upsert Mode: Processing {total_files} files (oldest first)")
+        self.log(f"Batch ID: {batch_id}")
+
+        for file_index, file_metadata in enumerate(sorted_files, start=1):
+            try:
+                success = self._upload_single_file_upsert(
+                    file_metadata, batch_id, file_index, total_files,
+                    ui_callbacks, upload_stats
+                )
+                # Continue regardless of success
+            except Exception as e:
+                file_path = file_metadata['file_path']
+                filename = os.path.basename(file_path)
+                self.log(f"[{file_index}/{total_files}] Unexpected error: {filename}: {e}")
+                upload_stats['failed_files'] += 1
+                # Continue to next file
+                continue
+
     def _upload_selected_files(self, selected_files, ui_callbacks):
         """
-        อัปโหลดไฟล์ที่เลือกไปยัง SQL Server (Enhanced with parallel processing)
+        อัปโหลดไฟล์ที่เลือกไปยัง SQL Server
 
-        แบ่งเป็น 2 phases:
-        - Phase 1: อ่านและ validate ไฟล์แบบ parallel
-        - Phase 2: อัปโหลดข้อมูลที่ validated แล้ว
+        รองรับ 2 modes:
+        - Upsert Mode: Sequential processing (ทีละไฟล์ตามลำดับเวลา modified)
+        - Replace Mode: Batch processing (รวมไฟล์แล้ว upload ครั้งเดียว)
         """
+        import uuid
         upload_start_time = time.time()
+        upload_stats = self._init_upload_stats(upload_start_time)
+
+        # Determine upload mode
+        upload_mode, strategies = self._determine_upload_mode(selected_files)
+        self.log(f"Upload Mode: {upload_mode.upper()}")
+
+        # Generate single batch_id for entire session
+        batch_id = str(uuid.uuid4())
+        self.log(f"Batch ID: {batch_id}")
+
+        # Conditional branching based on upload mode
+        if upload_mode == 'upsert':
+            # NEW: Sequential Processing for Upsert Mode
+            self.log("Using Sequential Processing (files processed one-by-one, oldest first)")
+
+            # Get files with metadata and sort by modification time
+            files_with_metadata = self._get_files_with_metadata(selected_files)
+            sorted_files = self._sort_files_by_modification_time(files_with_metadata)
+            total_files = len(sorted_files)
+
+            # แสดงสถานะเริ่มต้น
+            ui_callbacks['set_progress_status']("Starting upload", f"Processing {total_files} files sequentially")
+
+            # Process files sequentially
+            self._upload_files_sequentially_upsert(sorted_files, batch_id, ui_callbacks, upload_stats)
+
+            # Final summary
+            total_upload_time = time.time() - upload_start_time
+            upload_stats['total_time'] = total_upload_time
+            ui_callbacks['update_progress'](1.0, "Upload completed", f"Processed {total_files} files")
+            self._display_upload_summary(upload_stats, total_files)
+            ui_callbacks['enable_controls']()
+            return
+
+        # EXISTING: Batch Processing for Replace Mode (or mixed mode)
+        self.log("Using Batch Processing (files combined and uploaded together)")
 
         # จัดกลุ่มไฟล์และเตรียม stats
         files_by_type = self._group_files_by_type(selected_files)
         total_files = sum(len(files) for files in files_by_type.values())
         total_types = len(files_by_type)
-
-        upload_stats = self._init_upload_stats(upload_start_time)
 
         # แสดงสถานะเริ่มต้น
         ui_callbacks['set_progress_status']("Starting upload", f"Found {total_files} files from {total_types} types")

@@ -68,7 +68,7 @@ class DataUploadService:
             self.dtype_settings = {}
 
     def upload_data(self, df, logic_type: str, required_cols: Dict, schema_name: str = 'bronze',
-                   log_func=None, force_recreate: bool = False, clear_existing: bool = True, source_file: str = None):
+                   log_func=None, force_recreate: bool = False, clear_existing: bool = True, source_file: str = None, batch_id: str = None):
         """
         Upload data to database with support for Replace or Upsert strategies
 
@@ -86,8 +86,8 @@ class DataUploadService:
         # โหลด dtype_settings ใหม่ทุกครั้งเพื่อให้ได้ค่าล่าสุดหลัง Save
         self._load_dtype_settings()
 
-        # สร้าง batch_id สำหรับการ upload ครั้งนี้
-        batch_id = str(uuid.uuid4())
+        # สร้าง batch_id สำหรับการ upload ครั้งนี้ (หรือใช้ที่ส่งมา)
+        batch_id = batch_id or str(uuid.uuid4())
 
         # อ่าน update strategy และ upsert keys
         update_strategy = "replace"  # default
