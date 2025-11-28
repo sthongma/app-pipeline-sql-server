@@ -28,6 +28,10 @@ wheels/
 *.egg
 MANIFEST
 
+# Build artifacts and installers
+installer_output/
+*.exe
+
 # Virtual environments
 venv/
 env/
