@@ -6,6 +6,7 @@ This file contains various constants used throughout the project for better main
 
 from typing import List
 import os
+import sys
 
 # === DATABASE CONSTANTS ===
 class DatabaseConstants:
@@ -83,13 +84,6 @@ class UIConstants:
     COLOR_TEXT_LIGHT = "#888888"
     COLOR_BACKGROUND_DARK = "#2B2B2B"
 
-    # Emoji colors
-    COLOR_EMOJI_SUCCESS = "#41AA41"
-    COLOR_EMOJI_ERROR = "#FF4444"
-    COLOR_EMOJI_WARNING = "#FFA500"
-    COLOR_EMOJI_INFO = "#00BFFF"
-    COLOR_EMOJI_HIGHLIGHT = "#FFD700"
-
 
 # === APPLICATION CONSTANTS ===
 class AppConstants:
@@ -107,8 +101,14 @@ class AppConstants:
 class PathConstants:
     """Path and file constants"""
 
-    # Base directory (where this constants.py file is located)
-    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    # Base directory - different for bundled exe vs source
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        # Use executable's directory for user data (persistent across runs)
+        _BASE_DIR = os.path.dirname(sys.executable)
+    else:
+        # Running from source
+        _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
     # Configuration files (sql_config.json no longer used - using environment variables)
     CONFIG_DIR = os.path.join(_BASE_DIR, "config")

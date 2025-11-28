@@ -16,11 +16,58 @@ from constants import DatabaseConstants
 from utils.validators import validate_database_config
 
 
-def load_env_file(env_file_path: str = ".env") -> None:
+def get_env_file_path() -> str:
+    """Get the correct path for .env file based on execution context."""
+    import sys
+    from constants import PathConstants
+
+    # For bundled exe, use the config directory relative to executable
+    # For source, use the config directory relative to project root
+    env_path = os.path.join(PathConstants.CONFIG_DIR, ".env")
+
+    # Ensure config directory exists with proper permissions
+    try:
+        os.makedirs(PathConstants.CONFIG_DIR, exist_ok=True)
+
+        # Migration: Check if old .env exists in root directory and move it
+        if getattr(sys, 'frozen', False):
+            old_env_path = os.path.join(os.path.dirname(sys.executable), ".env")
+            if os.path.exists(old_env_path) and not os.path.exists(env_path):
+                try:
+                    import shutil
+                    shutil.move(old_env_path, env_path)
+                    import logging
+                    logging.info(f"Migrated .env file from {old_env_path} to {env_path}")
+                except Exception as e:
+                    import logging
+                    logging.warning(f"Failed to migrate .env file: {e}")
+
+        # Test write permissions by creating a test file
+        test_file = os.path.join(PathConstants.CONFIG_DIR, ".write_test")
+        try:
+            with open(test_file, 'w') as f:
+                f.write("test")
+            os.remove(test_file)
+        except (IOError, OSError) as e:
+            # If we can't write to config directory, log it
+            import logging
+            logging.warning(f"Cannot write to config directory: {PathConstants.CONFIG_DIR}. Error: {e}")
+
+    except Exception as e:
+        import logging
+        logging.error(f"Error creating config directory: {e}")
+
+    return env_path
+
+
+def load_env_file(env_file_path: Optional[str] = None) -> None:
     """Load environment variables from .env file."""
+    if env_file_path is None:
+        env_file_path = get_env_file_path()
+
     if not os.path.exists(env_file_path):
         return
-    
+
     try:
         with open(env_file_path, 'r', encoding='utf-8') as f:
             for line in f:
@@ -225,7 +272,8 @@ class DatabaseConfig:
             bool: Success status
         """
         try:
-            env_file_path = ".env"
+            # Use the correct path for .env file
+            env_file_path = get_env_file_path()
 
             # Prepare new values
             new_values = {
@@ -235,16 +283,16 @@ class DatabaseConfig:
                 'DB_USERNAME': username if auth_type == "SQL Server" else '',
                 'DB_PASSWORD': password if auth_type == "SQL Server" else ''
             }
-            
+
             if os.path.exists(env_file_path):
                 # Read existing .env file
                 with open(env_file_path, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
-                
+
                 # Update existing values
                 updated_lines = []
                 updated_keys = set()
-                
+
                 for line in lines:
                     line = line.rstrip()
                     if '=' in line and not line.strip().startswith('#'):
@@ -256,7 +304,7 @@ class DatabaseConfig:
                             updated_lines.append(line + '\n')
                     else:
                         updated_lines.append(line + '\n')
-                
+
                 # Add missing keys
                 for key, value in new_values.items():
                     if key not in updated_keys:
@@ -274,19 +322,28 @@ class DatabaseConfig:
                     "# Logging Configuration\n",
                     "STRUCTURED_LOGGING=false\n"
                 ]
-            
+
             # Write back to file
             with open(env_file_path, 'w', encoding='utf-8') as f:
                 f.writelines(updated_lines)
-            
+
             # Update environment variables in current process
             for key, value in new_values.items():
                 os.environ[key] = value
-            
+
             # Reload config
             self.load_config()
-            
+
+            import logging
+            logging.info(f"Successfully saved configuration to: {env_file_path}")
+
             return True
-            
+
+        except (IOError, OSError) as e:
+            import logging
+            logging.error(f"Failed to save configuration to {env_file_path}. Permission denied or file system error: {e}")
+            return False
         except Exception as e:
+            import logging
+            logging.error(f"Failed to save configuration: {e}")
             return False
