@@ -121,9 +121,12 @@ class MainTab:
         self.check_btn.configure(state="normal")
         self.file_list.enable_all_checkboxes()
         
-        # เปิด Settings tab ระหว่างไม่อัปโหลด
+        # เปิด tab buttons ระหว่างไม่อัปโหลด (ใช้ _segmented_button แทน tabview.state)
         if hasattr(self, 'parent_tabview'):
-            self.parent_tabview.configure(state="normal")
+            try:
+                self.parent_tabview._segmented_button.configure(state="normal")
+            except Exception:
+                pass
     
     def disable_controls(self):
         """ปิดการใช้งานปุ่มทั้งหมด"""
@@ -134,14 +137,14 @@ class MainTab:
         self.check_btn.configure(state="disabled")
         self.file_list.disable_all_checkboxes()
 
-        # ปิด Settings tab ระหว่างอัปโหลด เพื่อป้องกันการเปลี่ยนแปลงการตั้งค่า
+        # ปิด tab buttons ระหว่างอัปโหลด (ใช้ _segmented_button แทน tabview.state เพื่อป้องกันกรอบหาย)
         if hasattr(self, 'parent_tabview'):
             try:
                 # บังคับให้อยู่ที่ Main tab และปิดการเปลี่ยน tab
                 current_tab = self.parent_tabview.get()
                 if current_tab != "Main":
                     self.parent_tabview.set("Main")
-                self.parent_tabview.configure(state="disabled")
+                self.parent_tabview._segmented_button.configure(state="disabled")
             except Exception:
                 # ถ้าเกิด error ให้ข้ามไป (widget อาจถูก destroy แล้ว)
                 pass
