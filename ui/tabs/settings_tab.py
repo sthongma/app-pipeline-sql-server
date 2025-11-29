@@ -4,6 +4,7 @@ from tkinter import messagebox, filedialog
 import pandas as pd
 from constants import DatabaseConstants, FileConstants
 from ui.icon_manager import get_icon
+from ui.components.input_dialog import InputDialog
 from utils.ui_helpers import set_window_icon
 
 
@@ -248,7 +249,11 @@ class SettingsTab:
             inferred_dtypes = self._infer_dtypes(df)
 
             # ให้ผู้ใช้ตั้งชื่อประเภทไฟล์ใหม่
-            file_type = ctk.CTkInputDialog(text="New file type name:").get_input()
+            file_type = InputDialog(
+                parent=self.parent,
+                title="New File Type",
+                text="New file type name:"
+            ).get_input()
             if not file_type:
                 return
 
@@ -356,7 +361,9 @@ class SettingsTab:
                 messagebox.showwarning("Warning", "Please select a file type from the dropdown first")
                 return
 
-            new_type = ctk.CTkInputDialog(
+            new_type = InputDialog(
+                parent=self.parent,
+                title="Rename File Type",
                 text=f"Enter a new name for '{old_type}':"
             ).get_input()
 
