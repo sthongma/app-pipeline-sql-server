@@ -172,6 +172,10 @@ class SettingsTab:
         unused_types = cached_file_types - current_file_types
         
         for file_type in unused_types:
+            # ถ้าประเภทไฟล์ที่ลบตรงกับที่กำลังแสดงอยู่ ให้ reset
+            if self.current_file_type == file_type:
+                self.current_file_type = None
+            
             # ลบ UI elements
             if 'scroll_frame' in self.ui_cache[file_type]:
                 self.ui_cache[file_type]['scroll_frame'].destroy()
@@ -179,9 +183,24 @@ class SettingsTab:
             # ลบจากแคช
             del self.ui_cache[file_type]
             
-            # ลบจาก menus
+            # ลบจาก menus ทั้งหมด
             self.dtype_menus.pop(file_type, None)
             self.date_format_menus.pop(file_type, None)
+            if hasattr(self, 'strategy_menus'):
+                self.strategy_menus.pop(file_type, None)
+            if hasattr(self, 'settings_buttons'):
+                self.settings_buttons.pop(file_type, None)
+        
+        # ล้าง widget ที่เหลืออยู่ใน content_frame ที่ไม่ได้อยู่ใน cache
+        if hasattr(self, 'content_frame'):
+            for child in self.content_frame.winfo_children():
+                # ตรวจสอบว่า widget นี้ไม่ได้อยู่ใน cache ที่ยังใช้อยู่
+                is_cached = any(
+                    cached.get('scroll_frame') == child 
+                    for cached in self.ui_cache.values()
+                )
+                if not is_cached:
+                    child.destroy()
     
     def _update_cached_ui(self):
         """อัปเดต UI ที่แคชไว้ให้ตรงกับข้อมูลใหม่"""
@@ -308,7 +327,12 @@ class SettingsTab:
                 if self.callbacks.get('save_dtype_settings'):
                     self.callbacks['save_dtype_settings']()
 
+                # ลบไฟล์ JSON ของประเภทไฟล์นี้
+                if self.callbacks.get('delete_file_type'):
+                    self.callbacks['delete_file_type'](file_type)
+
                 self.refresh_file_type_tabs()
+                messagebox.showinfo("Success", f"Removed file type: {file_type}")
         finally:
             # Always re-enable button
             self.del_type_btn.configure(state='normal')
@@ -442,9 +466,21 @@ class SettingsTab:
         self.current_file_type = file_type
     
     def _hide_all_cached_ui(self):
-        """ซ่อน UI ที่แคชไว้ทั้งหมด"""
+        """ซ่อน UI ที่แคชไว้ทั้งหมดและลบ widget ที่ไม่ได้อยู่ใน cache"""
+        # ซ่อน UI ที่แคชไว้
         for cached_ui in self.ui_cache.values():
             cached_ui['scroll_frame'].pack_forget()
+        
+        # ลบ widget ที่ไม่ได้อยู่ใน cache (เช่น loading_frame, error_frame)
+        if hasattr(self, 'content_frame'):
+            cached_scroll_frames = {
+                cached.get('scroll_frame') 
+                for cached in self.ui_cache.values() 
+                if cached.get('scroll_frame')
+            }
+            for child in self.content_frame.winfo_children():
+                if child not in cached_scroll_frames:
+                    child.destroy()
     
     def _create_ui_lazy(self, file_type):
         """สร้าง UI แบบ lazy loading พร้อม progress indicator"""
@@ -785,10 +821,11 @@ class SettingsTab:
             file_types = sorted(file_types)
             values = ["Select a file type..."] + file_types
             self.file_type_selector.configure(values=values)
-            # ถ้ามีเพียงประเภทเดียว ให้เลือกอัตโนมัติ
-            if len(file_types) == 1:
-                self.file_type_var.set(file_types[0])
-                self._show_file_type_content(file_types[0])
+            
+            # ถ้าประเภทไฟล์ที่เลือกไว้ถูกลบไปแล้ว ให้ reset
+            if self.current_file_type and self.current_file_type not in file_types:
+                self.file_type_var.set("Select a file type...")
+                self.current_file_type = None
             else:
                 self.file_type_var.set("Select a file type...")
         else:
