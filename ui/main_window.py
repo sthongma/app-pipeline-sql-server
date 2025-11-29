@@ -25,7 +25,7 @@ from services.file import FileManagementService
 from config.database import DatabaseConfig
 from constants import AppConstants, DatabaseConstants
 from utils.logger import create_gui_log_handler, setup_file_logging
-from utils.ui_helpers import format_elapsed_time
+from utils.ui_helpers import format_elapsed_time, set_window_icon
 from ui.ui_callbacks import UICallbacks
 from typing import Optional, Dict, Any, Callable
 
@@ -44,6 +44,7 @@ class MainWindow(ctk.CTkToplevel):
         self.title("PIPELINE SQL SERVER")
         self.geometry(f"{AppConstants.MAIN_WINDOW_SIZE[0]}x{AppConstants.MAIN_WINDOW_SIZE[1]}")
         self.resizable(False, False)
+        set_window_icon(self, delay_ms=200)
 
         # กำหนดประเภทข้อมูลที่รองรับ (SQL Server data types)
         self.supported_dtypes = DatabaseConstants.SUPPORTED_DTYPES

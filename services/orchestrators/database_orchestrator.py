@@ -132,7 +132,7 @@ class DatabaseOrchestrator:
         """Check and create schemas as specified if they don't exist"""
         return self.schema_service.ensure_schemas_exist(schema_names)
 
-    def upload_data(self, df, logic_type, required_cols, schema_name='bronze', log_func=None, force_recreate=False, clear_existing=True):
+    def upload_data(self, df, logic_type, required_cols, schema_name='bronze', log_func=None, force_recreate=False, clear_existing=True, batch_id=None):
         """
         อัปโหลดข้อมูลไปยังฐานข้อมูล: สร้างตารางใหม่ตาม config, insert เฉพาะคอลัมน์ที่ตั้งค่าไว้, ถ้า schema DB ไม่ตรงให้ drop และสร้างตารางใหม่
         
@@ -144,9 +144,10 @@ class DatabaseOrchestrator:
             log_func: ฟังก์ชันสำหรับ log
             force_recreate: บังคับสร้างตารางใหม่ (ใช้เมื่อมีการปรับปรุงชนิดข้อมูลอัตโนมัติ)
             clear_existing: ล้างข้อมูลเดิมหรือไม่ (default True เพื่อความเข้ากันได้แบบเดิม)
+            batch_id: ID ของ batch สำหรับ tracking การ upload
         """
         return self.upload_service.upload_data(
-            df, logic_type, required_cols, schema_name, log_func, force_recreate, clear_existing
+            df, logic_type, required_cols, schema_name, log_func, force_recreate, clear_existing, batch_id=batch_id
         )
 
     def validate_data_in_staging(self, staging_table, logic_type, required_cols, 

@@ -74,7 +74,7 @@ Get-Service -Name MSSQL*
 ### ขั้นตอนที่ 1: ดาวน์โหลด Installer
 
 ดาวน์โหลดไฟล์ `SQLServerPipeline_v1.0.0_Setup.exe` จาก:
-- GitHub Releases: [releases page](https://github.com/ST-415/PIPELINE_SQLSERVER/releases)
+- GitHub Releases: [releases page](https://github.com/sthongma/app-pipeline-sql-server/releases)
 - หรือแหล่งที่ได้รับ installer file
 
 ### ขั้นตอนที่ 2: รัน Installer
@@ -303,7 +303,7 @@ You will also need ODBC Driver 17 or 18 for SQL Server installed.
 
 ### ค้นหาความช่วยเหลือเพิ่มเติม
 
-- **GitHub Issues**: [Report issues](https://github.com/ST-415/PIPELINE_SQLSERVER/issues)
+- **GitHub Issues**: [Report issues](https://github.com/sthongma/app-pipeline-sql-server/issues)
 - **README**: ดูรายละเอียดฟีเจอร์ใน `README.md`
 
 ---

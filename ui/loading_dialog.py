@@ -2,6 +2,7 @@ import customtkinter as ctk
 import threading
 import time
 from typing import Callable, Any
+from utils.ui_helpers import set_window_icon
 
 class LoadingDialog(ctk.CTkToplevel):
     """Loading dialog for displaying loading status with step list, tips and timing"""
@@ -58,6 +59,7 @@ class LoadingDialog(ctk.CTkToplevel):
         # ใช้ขนาดเท่าเดิม ไม่ยืดตาม steps
         self.geometry("380x160")
         self.resizable(False, False)
+        set_window_icon(self, delay_ms=200)
         self.transient(parent)  # ทำให้เป็น dialog ของ parent
         self.grab_set()  # ทำให้ dialog เป็น modal
         

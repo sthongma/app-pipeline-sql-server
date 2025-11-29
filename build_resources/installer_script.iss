@@ -6,9 +6,9 @@
 AppName=SQL Server Data Pipeline
 AppVersion=1.0.0
 AppPublisher=PIPELINE_SQLSERVER Development Team
-AppPublisherURL=https://github.com/ST-415/PIPELINE_SQLSERVER
-AppSupportURL=https://github.com/ST-415/PIPELINE_SQLSERVER/issues
-AppUpdatesURL=https://github.com/ST-415/PIPELINE_SQLSERVER/releases
+AppPublisherURL=https://github.com/sthongma/app-pipeline-sql-server
+AppSupportURL=https://github.com/sthongma/app-pipeline-sql-server/issues
+AppUpdatesURL=https://github.com/sthongma/app-pipeline-sql-server/releases
 
 ; Installation Directories
 DefaultDirName={autopf}\SQL Server Pipeline

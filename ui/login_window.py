@@ -9,6 +9,7 @@ from constants import AppConstants
 from config.database import DatabaseConfig
 from config.json_manager import json_manager
 from ui.utils.button_utils import ProcessingFlag
+from utils.ui_helpers import set_window_icon
 import logging
 
 class LoginWindow(ctk.CTk):
@@ -19,6 +20,8 @@ class LoginWindow(ctk.CTk):
         self.title("Login SQL Server")
         self.geometry(f"{AppConstants.LOGIN_WINDOW_SIZE[0]}x{AppConstants.LOGIN_WINDOW_SIZE[1]}")
         self.resizable(False, False)
+        set_window_icon(self)
+        
         # มินิมอลโทน: เพิ่มระยะห่างทั่วๆ ไป
         self._base_padx = 12
         self._base_pady = 10

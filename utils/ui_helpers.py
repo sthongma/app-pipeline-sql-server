@@ -3,6 +3,43 @@ UI Helper Functions
 
 Common utilities for UI components
 """
+import os
+
+# Cache สำหรับ icon path
+_app_icon_path = None
+
+
+def get_app_icon_path() -> str:
+    """
+    Get the path to app_icon.ico
+    
+    Returns:
+        Path to app_icon.ico or empty string if not found
+    """
+    global _app_icon_path
+    if _app_icon_path is None:
+        # หา path จาก utils folder ไปยัง build_resources
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        _app_icon_path = os.path.join(base_dir, "build_resources", "app_icon.ico")
+        if not os.path.exists(_app_icon_path):
+            _app_icon_path = ""
+    return _app_icon_path
+
+
+def set_window_icon(window, delay_ms: int = 0) -> None:
+    """
+    Set window icon to app_icon.ico
+    
+    Args:
+        window: Tkinter/CTk window instance
+        delay_ms: Delay in milliseconds before setting icon (useful for CTkToplevel)
+    """
+    icon_path = get_app_icon_path()
+    if icon_path:
+        if delay_ms > 0:
+            window.after(delay_ms, lambda: window.iconbitmap(icon_path))
+        else:
+            window.iconbitmap(icon_path)
 
 
 def format_elapsed_time(total_seconds: float) -> str:

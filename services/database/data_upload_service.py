@@ -465,6 +465,50 @@ class DataUploadService:
                 index=False
             )
 
+    def _calculate_upsert_hash_in_staging(self, staging_table: str, upsert_keys: list, 
+                                          schema_name: str, log_func=None):
+        """
+        Calculate MD5 hash of upsert keys in staging table
+        
+        This is called for ALL uploads when upsert_keys are defined, not just upsert mode.
+        This ensures the final table always has hash values for future upsert operations.
+        
+        Args:
+            staging_table: Staging table name
+            upsert_keys: List of column names to hash
+            schema_name: Database schema
+            log_func: Logging function
+        """
+        if not upsert_keys:
+            return
+            
+        with self.engine.begin() as conn:
+            try:
+                # Build hash expression using cleaned key values
+                cleaned_keys = []
+                for key in upsert_keys:
+                    cleaned = get_basic_cleaning_expression(key)
+                    cleaned_keys.append(f"COALESCE({cleaned}, '')")
+
+                concat_expr = " + '|' + ".join(cleaned_keys)
+                hash_expr = f"HASHBYTES('MD5', {concat_expr})"
+
+                update_sql = f"""
+                    UPDATE {schema_name}.{staging_table}
+                    SET [_upsert_hash] = {hash_expr}
+                """
+                conn.execute(text(update_sql))
+                
+                if log_func:
+                    keys_str = ", ".join(upsert_keys)
+                    log_func(f"Calculated _upsert_hash from keys: {keys_str}")
+                    
+            except Exception as e:
+                if log_func:
+                    log_func(f"Warning: Could not calculate upsert hash: {e}")
+                # Don't raise - hash calculation failure shouldn't fail the entire upload
+                # It will just mean upsert matching won't work for this data
+
     def _delete_by_keys(self, staging_table: str, final_table: str,
                        upsert_keys: list, schema_name: str, log_func=None):
         """
@@ -524,26 +568,11 @@ class DataUploadService:
                 log_func(f"Error: Validation failed: {e}")
             raise
 
-        # Staging table มี _upsert_hash column อยู่แล้ว (สร้างตอน create table)
-        # เพียงแค่คำนวณ hash และ DELETE
+        # Hash ถูกคำนวณใน staging table แล้วโดย _calculate_upsert_hash_in_staging()
+        # ที่นี่เพียงทำ DELETE โดยใช้ hash ที่คำนวณไว้
         with self.engine.begin() as conn:
             try:
-                # Calculate and populate _upsert_hash in staging table
-                cleaned_keys = []
-                for key in upsert_keys:
-                    cleaned = get_basic_cleaning_expression(key)
-                    cleaned_keys.append(f"COALESCE({cleaned}, '')")
-
-                concat_expr = " + '|' + ".join(cleaned_keys)
-                hash_expr = f"HASHBYTES('MD5', {concat_expr})"
-
-                update_sql = f"""
-                    UPDATE {schema_name}.{staging_table}
-                    SET [_upsert_hash] = {hash_expr}
-                """
-                conn.execute(text(update_sql))
-
-                # Now perform DELETE using _upsert_hash
+                # Perform DELETE using _upsert_hash
                 delete_sql = f"""
                     DELETE T
                     FROM {schema_name}.{final_table} T
@@ -590,6 +619,12 @@ class DataUploadService:
         """
         upsert_keys = upsert_keys or []
         insp = inspect(self.engine)
+        staging_table = f"{table_name}__stg"
+
+        # คำนวณ _upsert_hash ใน staging table ถ้ามี upsert_keys (ทำเสมอไม่ว่าจะ replace หรือ upsert)
+        # เพื่อให้ final table มี hash พร้อมใช้งานสำหรับ upsert ในอนาคต
+        if upsert_keys:
+            self._calculate_upsert_hash_in_staging(staging_table, upsert_keys, schema_name, log_func)
 
         if needs_recreate or not insp.has_table(table_name, schema=schema_name):
             if needs_recreate and log_func:
@@ -621,8 +656,7 @@ class DataUploadService:
 
             # เลือก strategy
             if update_strategy == "upsert":
-                # Incremental: DELETE by keys
-                staging_table = f"{table_name}__stg"
+                # Incremental: DELETE by keys (hash ถูกคำนวณไว้แล้วด้านบน)
                 self._delete_by_keys(
                     staging_table, table_name, upsert_keys, schema_name, log_func
                 )

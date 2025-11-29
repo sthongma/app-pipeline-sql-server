@@ -4,6 +4,7 @@ from tkinter import messagebox, filedialog
 import pandas as pd
 from constants import DatabaseConstants, FileConstants
 from ui.icon_manager import get_icon
+from utils.ui_helpers import set_window_icon
 
 
 class SettingsTab:
@@ -297,7 +298,7 @@ class SettingsTab:
         return inferred_dtypes
     
     def _delete_file_type(self):
-        """ลบประเภทไฟล์ - with double-click protection"""
+        """ลบประเภทไฟล์ที่เลือกอยู่ใน dropdown - with double-click protection"""
         # Check if button is already disabled
         if self.del_type_btn.cget('state') == 'disabled':
             return  # Already processing, ignore this click
@@ -310,15 +311,13 @@ class SettingsTab:
                 messagebox.showinfo("No data", "No file types to remove")
                 return
 
-            file_types = list(self.column_settings.keys())
-            file_type = ctk.CTkInputDialog(
-                text=f"Enter the file type name to remove (e.g., {file_types[0]}):"
-            ).get_input()
-
-            if not file_type or file_type not in self.column_settings:
+            # ใช้ไฟล์ที่เลือกอยู่ใน dropdown แทนการพิมพ์
+            file_type = self.file_type_var.get()
+            if file_type == "Select a file type..." or file_type not in self.column_settings:
+                messagebox.showwarning("Warning", "Please select a file type from the dropdown first")
                 return
 
-            if messagebox.askyesno("Confirm", f"Remove file type {file_type}?"):
+            if messagebox.askyesno("Confirm", f"Remove file type '{file_type}'?"):
                 self.column_settings.pop(file_type)
                 self.dtype_settings.pop(file_type, None)
 
@@ -338,7 +337,7 @@ class SettingsTab:
             self.del_type_btn.configure(state='normal')
     
     def _edit_file_type(self):
-        """แก้ไขชื่อประเภทไฟล์ - with double-click protection"""
+        """แก้ไขชื่อประเภทไฟล์ที่เลือกอยู่ใน dropdown - with double-click protection"""
         # Check if button is already disabled
         if self.edit_type_btn.cget('state') == 'disabled':
             return  # Already processing, ignore this click
@@ -351,20 +350,23 @@ class SettingsTab:
                 messagebox.showinfo("No data", "No file types to edit")
                 return
 
-            file_types = list(self.column_settings.keys())
-            old_type = ctk.CTkInputDialog(
-                text=f"Enter the file type name to edit (e.g., {file_types[0]}):"
-            ).get_input()
-
-            if not old_type or old_type not in self.column_settings:
+            # ใช้ไฟล์ที่เลือกอยู่ใน dropdown แทนการพิมพ์
+            old_type = self.file_type_var.get()
+            if old_type == "Select a file type..." or old_type not in self.column_settings:
+                messagebox.showwarning("Warning", "Please select a file type from the dropdown first")
                 return
 
             new_type = ctk.CTkInputDialog(
-                text=f"Enter a new file type name (from: {old_type}):"
+                text=f"Enter a new name for '{old_type}':"
             ).get_input()
 
-            if not new_type or new_type in self.column_settings:
-                messagebox.showwarning("Duplicate", "File type already exists or invalid name")
+            # ถ้าผู้ใช้กดยกเลิกหรือปิด dialog ให้ออกเฉยๆ
+            if not new_type:
+                return
+            
+            # ตรวจสอบว่าชื่อซ้ำหรือไม่
+            if new_type in self.column_settings:
+                messagebox.showwarning("Duplicate", f"File type '{new_type}' already exists")
                 return
 
             # เปลี่ยนชื่อ key ใน column_settings และ dtype_settings
@@ -673,6 +675,7 @@ class SettingsTab:
         dialog.title("Upsert Configuration")
         dialog.geometry("400x700")
         dialog.resizable(False, False)
+        set_window_icon(dialog, delay_ms=200)
         dialog.transient(self.parent)
         dialog.grab_set()
 
