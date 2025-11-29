@@ -77,7 +77,7 @@
 **ใช้ Windows Installer - ไม่ต้องติดตั้ง Python!**
 
 1. **ดาวน์โหลด Installer**
-   - ไปที่ [Releases](https://github.com/ST-415/PIPELINE_SQLSERVER/releases)
+   - ไปที่ [Releases](https://github.com/sthongma/app-pipeline-sql-server/releases)
    - ดาวน์โหลด `SQLServerPipeline_v1.0.0_Setup.exe`
 
 2. **รัน Installer**
@@ -109,8 +109,8 @@
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/ST-415/PIPELINE_SQLSERVER.git
-cd PIPELINE_SQLSERVER
+git clone https://github.com/sthongma/app-pipeline-sql-server.git
+cd app-pipeline-sql-server
 
 # 2. ติดตั้ง dependencies
 pip install -r requirements.txt
@@ -121,7 +121,7 @@ python install_requirements.py
 
 #### ขั้นตอนที่ 2: ตั้งค่าฐานข้อมูล
 
-แก้ไขไฟล์ `.env` ที่ถูกสร้างขึ้นมา:
+แก้ไขไฟล์ `config/.env` (หรือ `.env` ที่ root folder):
 
 ```env
 # ข้อมูลการเชื่อมต่อฐานข้อมูล
@@ -146,7 +146,7 @@ DB_PASSWORD=
 python pipeline_gui_app.py
 
 # หรือดับเบิลคลิกไฟล์
-run_pipeline_gui.bat
+pipeline_gui_app.bat
 ```
 
 **แบบ CLI (สำหรับระบบอัตโนมัติ):**
@@ -156,7 +156,7 @@ run_pipeline_gui.bat
 python auto_process_cli.py "C:\path\to\your\data"
 
 # หรือดับเบิลคลิกไฟล์
-run_auto_process.bat
+auto_process_cli.bat
 ```
 
 ---
@@ -165,34 +165,67 @@ run_auto_process.bat
 
 ### การใช้งานแบบ GUI
 
-1. **เลือกโฟลเดอร์ข้อมูล (Input Folder)**
-   - เลือกโฟลเดอร์ที่เก็บไฟล์ Excel/CSV
+#### 1. **แท็บ Main - การนำเข้าข้อมูล**
 
-2. **ตั้งค่า Output Folder**
-   - เลือกโฟลเดอร์สำหรับเก็บไฟล์ที่ประมวลผลแล้ว
+**ปุ่มควบคุมหลัก:**
 
-3. **กำหนด Column Mapping (ถ้าต้องการ)**
-   - ตั้งชื่อคอลัมน์ที่จะใช้ในฐานข้อมูล
-   - กำหนด Data Type สำหรับแต่ละคอลัมน์
+- **Select all / Deselect all** - เลือก/ยกเลิกการเลือกไฟล์ทั้งหมด
+- **Check Files** - ค้นหาไฟล์ Excel/CSV ในโฟลเดอร์ที่กำหนด
+- **Upload Files** - อัปโหลดไฟล์ที่เลือกไปยัง SQL Server
+- **Input Folder** - เลือกโฟลเดอร์ที่เก็บไฟล์ต้นฉบับ
+- **Output Folder** - เลือกโฟลเดอร์สำหรับเก็บไฟล์ที่ประมวลผลแล้ว
 
-4. **กดปุ่ม "ตรวจสอบไฟล์"**
-   - โปรแกรมจะค้นหาไฟล์ในโฟลเดอร์
+**ขั้นตอนการใช้งาน:**
 
-5. **เลือกไฟล์ที่จะนำเข้า**
-   - เลือกไฟล์ที่ต้องการประมวลผล
+1. กด **Input Folder** เลือกโฟลเดอร์ที่มีไฟล์ Excel/CSV
+2. กด **Output Folder** เลือกโฟลเดอร์ปลายทาง (ไฟล์จะถูกย้ายไปหลังอัปโหลดสำเร็จ)
+3. กด **Check Files** เพื่อค้นหาไฟล์ที่ตรงกับประเภทไฟล์ที่ตั้งค่าไว้
+4. เลือกไฟล์ที่ต้องการอัปโหลด (หรือกด Select all)
+5. กด **Upload Files** เพื่อนำเข้าข้อมูล
+6. ตรวจสอบ Progress Bar และ Log ในหน้าจอ
 
-6. **กดปุ่ม "นำเข้าข้อมูล"**
-   - โปรแกรมจะทำงานอัตโนมัติ:
-     - ตรวจสอบและทำความสะอาดข้อมูล
-     - สร้าง/อัปเดตตารางในฐานข้อมูล
-     - นำเข้าข้อมูลเข้า SQL Server
-     - ย้ายไฟล์ไปโฟลเดอร์ที่กำหนด
-     - เพิ่ม timestamp ให้ไฟล์
-     - บันทึก log
+#### 2. **แท็บ Settings - การตั้งค่าประเภทไฟล์**
 
-7. **ตรวจสอบผลลัพธ์**
-   - ดูสถานะและ log ในโปรแกรม
-   - ส่งออก log เป็นไฟล์ได้
+**ปุ่มควบคุม:**
+
+- **Add File Type** - เพิ่มประเภทไฟล์ใหม่โดยเลือกไฟล์ตัวอย่าง (Excel/CSV)
+- **Remove** - ลบประเภทไฟล์ที่เลือก
+- **Save Settings** - บันทึกการตั้งค่าชนิดข้อมูลที่แก้ไข
+- **Rename** - เปลี่ยนชื่อประเภทไฟล์
+- **Dropdown** - เลือกประเภทไฟล์ที่ต้องการแก้ไข
+
+**การตั้งค่าในแต่ละประเภทไฟล์:**
+
+1. **Date Format** - รูปแบบวันที่ในไฟล์
+   - `UK` = DD-MM-YYYY (วัน-เดือน-ปี)
+   - `US` = MM-DD-YYYY (เดือน-วัน-ปี)
+
+2. **Update Strategy** - กลยุทธ์การอัปเดตข้อมูล
+   - `Replace` - ลบข้อมูลเก่าทั้งหมดแล้วนำเข้าใหม่ (เหมาะกับการอัปโหลดข้อมูลทดแทน)
+   - `Upsert (Incremental)` - อัปเดตแบบเพิ่มเติม (ตรวจสอบซ้ำด้วย key ที่กำหนด)
+     - กดปุ่ม ⚙️ เพื่อเลือก Upsert Keys (คอลัมน์ที่ใช้ระบุตัวตนของแถวข้อมูล)
+
+3. **Column Data Types** - กำหนดชนิดข้อมูลสำหรับแต่ละคอลัมน์
+   - `NVARCHAR(MAX)` - ข้อความ Unicode
+   - `INT` - จำนวนเต็ม
+   - `FLOAT` - ทศนิยม
+   - `DATE` - วันที่
+   - `DATETIME` - วันที่และเวลา
+   - `BIT` - Boolean (0/1)
+
+**การเพิ่มประเภทไฟล์ใหม่:**
+
+1. กด **Add File Type**
+2. เลือกไฟล์ตัวอย่าง (Excel หรือ CSV)
+3. ตั้งชื่อประเภทไฟล์
+4. โปรแกรมจะอ่านคอลัมน์และกำหนด Data Type อัตโนมัติ
+5. แก้ไข Data Type ตามต้องการ
+6. กด **Save Settings** เพื่อบันทึก
+
+#### 3. **แท็บ Logs - ดู Log การทำงาน**
+
+- แสดงประวัติการทำงานทั้งหมด
+- สามารถส่งออก Log เป็นไฟล์ได้
 
 ### การใช้งานแบบ CLI (Automation)
 
@@ -229,6 +262,117 @@ python auto_process_cli.py "C:\daily\reports"
 
 ---
 
+## โหมดการอัปโหลดข้อมูล (Upload Modes)
+
+โปรแกรมรองรับ 2 โหมดการอัปโหลดข้อมูล ซึ่งสามารถตั้งค่าได้ในแท็บ Settings สำหรับแต่ละประเภทไฟล์:
+
+### 1. Replace Mode (ค่าเริ่มต้น)
+
+**ลักษณะการทำงาน:**
+
+- **ลบข้อมูลเก่าทั้งหมด** ในตารางก่อนนำเข้าข้อมูลใหม่ (TRUNCATE TABLE)
+- นำเข้าข้อมูลใหม่ทั้งหมดจากไฟล์
+- **เหมาะสำหรับ:** ข้อมูลที่ต้องการแทนที่ทั้งหมด เช่น รายงานประจำวัน, ข้อมูล Master Data
+
+**ขั้นตอนการทำงาน:**
+
+1. สร้าง Staging Table ชั่วคราว
+2. อัปโหลดข้อมูลดิบเข้า Staging Table (เป็น NVARCHAR ทั้งหมด)
+3. ตรวจสอบความถูกต้องของข้อมูล (Data Validation)
+4. **TRUNCATE** ตารางหลัก (ลบข้อมูลเก่าทั้งหมด)
+5. แปลง Data Type และนำข้อมูลจาก Staging ไปยังตารางหลัก
+6. สร้าง Index
+
+**ข้อดี:**
+
+- ข้อมูลสะอาด ไม่มีข้อมูลซ้ำ
+- ง่ายในการจัดการ
+- เหมาะกับข้อมูลที่ต้องการ refresh ทั้งหมด
+
+### 2. Upsert Mode (Incremental)
+
+**ลักษณะการทำงาน:**
+
+- **ตรวจสอบซ้ำ** ด้วย Upsert Keys ที่กำหนด
+- ลบเฉพาะแถวที่มี Key ตรงกัน แล้วแทรกข้อมูลใหม่
+- **เหมาะสำหรับ:** ข้อมูลที่ต้องการอัปเดตเพิ่มเติม เช่น ข้อมูล Transaction, Log Files
+
+**ขั้นตอนการทำงาน:**
+
+1. สร้าง Staging Table ชั่วคราว
+2. อัปโหลดข้อมูลดิบเข้า Staging Table
+3. ตรวจสอบความถูกต้องของข้อมูล
+4. คำนวณ **MD5 Hash** จาก Upsert Keys (เพื่อเปรียบเทียบข้อมูล)
+5. **DELETE** เฉพาะแถวที่มี Hash ตรงกัน (ข้อมูลเดิมที่จะถูกอัปเดต)
+6. **INSERT** ข้อมูลใหม่ทั้งหมดจาก Staging
+7. สร้าง Index
+
+**ข้อดี:**
+
+- เก็บข้อมูลเก่าที่ไม่มีการอัปเดต
+- รองรับไฟล์หลายไฟล์ที่มี Key ซ้ำกัน (ไฟล์ใหม่จะแทนที่ไฟล์เก่า)
+- **Sequential Processing:** ประมวลผลไฟล์ทีละไฟล์ตามลำดับเวลา Modified (เก่าสุดก่อน)
+
+**การตั้งค่า Upsert Keys:**
+
+1. ไปที่แท็บ Settings
+2. เลือกประเภทไฟล์
+3. เปลี่ยน Update Strategy เป็น "Upsert (Incremental)"
+4. กดปุ่ม ⚙️ เพื่อเลือก Upsert Keys
+5. เลือกคอลัมน์ที่จะใช้ระบุตัวตนของแถวข้อมูล (เช่น `order_id`, `transaction_id`)
+6. กด Save Settings
+
+---
+
+## การทำงานภายในของระบบ (How It Works)
+
+### Staging Table Architecture
+
+โปรแกรมใช้ **Staging Table** เป็นตัวกลางในการประมวลผลข้อมูล:
+
+```text
+┌──────────────┐    ┌─────────────────┐    ┌──────────────┐
+│  Excel/CSV   │───►│  Staging Table  │───►│ Final Table  │
+│    File      │    │  (NVARCHAR ALL) │    │ (Typed Data) │
+└──────────────┘    └─────────────────┘    └──────────────┘
+                           │
+                           ▼
+                    ┌─────────────────┐
+                    │  Data Validation │
+                    │  - Type Check    │
+                    │  - NULL Check    │
+                    │  - Format Check  │
+                    └─────────────────┘
+```
+
+**ขั้นตอนการทำงาน:**
+
+1. **อ่านไฟล์** → อัปโหลดข้อมูลดิบเข้า Staging Table (ทุกคอลัมน์เป็น `NVARCHAR(MAX)`)
+2. **ตรวจสอบข้อมูล** → ใช้ SQL `TRY_CONVERT` ตรวจสอบว่าข้อมูลแปลงได้ถูกต้องตาม Data Type
+3. **แปลงข้อมูล** → ถ้าผ่านการตรวจสอบ จะแปลง Data Type และย้ายไป Final Table
+4. **เพิ่ม Metadata** → เพิ่มคอลัมน์ `_loaded_at`, `_source_file`, `_batch_id`, `_upsert_hash`
+
+### Metadata Columns
+
+โปรแกรมจะเพิ่มคอลัมน์ Metadata อัตโนมัติในทุกตาราง:
+
+| คอลัมน์ | ชนิดข้อมูล | คำอธิบาย |
+|---------|-----------|----------|
+| `_loaded_at` | DATETIME2 | วันเวลาที่นำเข้าข้อมูล |
+| `_created_at` | DATETIME2 | วันเวลาที่สร้างแถว |
+| `_source_file` | NVARCHAR(MAX) | ชื่อไฟล์ต้นทาง |
+| `_batch_id` | NVARCHAR(50) | รหัส Batch สำหรับติดตาม |
+| `_upsert_hash` | VARBINARY(16) | MD5 Hash สำหรับ Upsert Mode |
+
+### Parallel vs Sequential Processing
+
+| โหมด | การประมวลผล | เหมาะสำหรับ |
+|------|-------------|-------------|
+| **Replace** | **Parallel** - รวมไฟล์ทั้งหมดแล้วอัปโหลดครั้งเดียว | ข้อมูลที่ต้องการ refresh ทั้งหมด |
+| **Upsert** | **Sequential** - ทีละไฟล์ตามลำดับเวลา | ข้อมูลที่ต้องการอัปเดตเพิ่มเติม |
+
+---
+
 ## ความต้องการของระบบ (System Requirements)
 
 - **Python**: 3.8 ขึ้นไป
@@ -242,103 +386,120 @@ python auto_process_cli.py "C:\daily\reports"
 
 โปรแกรมใช้ไฟล์ JSON สำหรับเก็บการตั้งค่าต่างๆ ที่สามารถปรับแต่งได้:
 
-### 1. Column Mapping (`config/column_settings.json`)
+### 1. App Settings (`config/app_settings.json`)
 
-กำหนดการแปลงชื่อคอลัมน์จากไฟล์ → ชื่อในฐานข้อมูล
-
-```json
-{
-    "sales_data": {
-        "Date": "sale_date",
-        "Product": "product_name",
-        "Amount": "amount",
-        "Customer": "customer_name"
-    }
-}
-```
-
-### 2. Data Types (`config/dtype_settings.json`)
-
-กำหนด Data Type สำหรับแต่ละคอลัมน์
+การตั้งค่าหลักของแอปพลิเคชัน รวมถึง folders และ file management
 
 ```json
 {
-    "sales_data": {
-        "Date": "DATE",
-        "Product": "NVARCHAR(MAX)",
-        "Amount": "FLOAT",
-        "Customer": "NVARCHAR(MAX)"
-    }
+  "window_size": [900, 780],
+  "theme": "system",
+  "backup_enabled": true,
+  "log_level": "INFO",
+  "folders": {
+    "input_folder": "C:/path/to/input",
+    "output_folder": "C:/path/to/output",
+    "log_folder": "C:/path/to/logs"
+  },
+  "file_management": {
+    "auto_move_enabled": true,
+    "organize_by_date": false
+  }
 }
 ```
 
-### 3. Input Folder (`config/input_folder_config.json`)
+### 2. File Types Configuration (`config/file_types/*.json`)
 
-บันทึกโฟลเดอร์ที่ใช้ค้นหาไฟล์ล่าสุด
+กำหนด Column Mapping และ Data Type สำหรับแต่ละประเภทไฟล์
 
-### 4. Output Folder (`config/output_folder_config.json`)
+```json
+{
+  "file_type_name": "sales_data",
+  "table_name": "tbl_sales",
+  "column_mappings": {
+    "Date": "sale_date",
+    "Product": "product_name",
+    "Amount": "amount"
+  },
+  "data_types": {
+    "sale_date": "DATE",
+    "product_name": "NVARCHAR(MAX)",
+    "amount": "FLOAT"
+  }
+}
+```
 
-บันทึกโฟลเดอร์สำหรับเก็บไฟล์ที่ประมวลผลแล้ว
+### 3. Database Configuration (`config/.env`)
 
-### 5. Log Folder (`config/log_folder_config.json`)
-
-บันทึกโฟลเดอร์สำหรับส่งออกไฟล์ log
-
-### 6. File Management (`config/file_management_settings.json`)
-
-ตั้งค่าการจัดการไฟล์หลังประมวลผล
+การตั้งค่าการเชื่อมต่อฐานข้อมูล (Environment Variables)
 
 ---
 
 ## สถาปัตยกรรมระบบ (Architecture)
 
-โปรแกรมออกแแบบโดยใช้ **Service-Oriented Architecture** แบ่งเป็น:
+โปรแกรมออกแบบโดยใช้ **Service-Oriented Architecture** แบ่งเป็น:
 
 ```text
-📦 PIPELINE_SQLSERVER
-├── 📁 ui/                       # User Interface Layer
-│   ├── login_window.py           # หน้าจอ Login
-│   ├── main_window.py            # หน้าต่างหลัก
-│   ├── tabs/                     # แท็บต่างๆ
-│   │   ├── main_tab.py           # แท็บหลัก (นำเข้าข้อมูล)
-│   │   ├── settings_tab.py       # แท็บตั้งค่า
-│   │   └── log_tab.py            # แท็บ log
-│   ├── handlers/                 # UI Event Handlers
-│   │   ├── file_handler.py       # จัดการเหตุการณ์ไฟล์
-│   │   └── settings_handler.py   # จัดการการตั้งค่า
-│   └── components/               # UI Components
+📦 app-pipeline-sql-server
+├── 📁 ui/                          # User Interface Layer
+│   ├── login_window.py              # หน้าจอ Login
+│   ├── main_window.py               # หน้าต่างหลัก
+│   ├── icon_manager.py              # จัดการไอคอน
+│   ├── loading_dialog.py            # Dialog แสดงการโหลด
+│   ├── tabs/                        # แท็บต่างๆ
+│   │   ├── main_tab.py              # แท็บหลัก (นำเข้าข้อมูล)
+│   │   ├── settings_tab.py          # แท็บตั้งค่า
+│   │   └── log_tab.py               # แท็บ log
+│   ├── handlers/                    # UI Event Handlers
+│   │   ├── file_handler.py          # จัดการเหตุการณ์ไฟล์
+│   │   └── settings_handler.py      # จัดการการตั้งค่า
+│   └── components/                  # UI Components
+│       ├── file_list.py             # รายการไฟล์
+│       ├── progress_bar.py          # แถบความคืบหน้า
+│       └── status_bar.py            # แถบสถานะ
 │
-├── 📁 services/                    # Business Logic Layer
-│   ├── orchestrators/            # High-level Coordinators
+├── 📁 services/                     # Business Logic Layer
+│   ├── settings_manager.py          # จัดการการตั้งค่า
+│   ├── orchestrators/               # High-level Coordinators
 │   │   ├── database_orchestrator.py
 │   │   ├── file_orchestrator.py
+│   │   ├── utility_orchestrator.py
 │   │   └── validation_orchestrator.py
 │   │
-│   ├── database/                 # Database Services
-│   │   ├── connection_service.py  # การเชื่อมต่อ
-│   │   ├── schema_service.py      # จัดการ Schema
-│   │   ├── data_upload_service.py # อัปโหลดข้อมูล
-│   │   └── validation/           # ตรวจสอบข้อมูล
+│   ├── database/                    # Database Services
+│   │   ├── connection_service.py     # การเชื่อมต่อ
+│   │   ├── schema_service.py         # จัดการ Schema
+│   │   ├── data_upload_service.py    # อัปโหลดข้อมูล
+│   │   ├── data_validation_service.py # ตรวจสอบข้อมูล
+│   │   └── validation/              # ตรวจสอบข้อมูลเพิ่มเติม
 │   │
-│   ├── file/                     # File Services
-│   │   ├── file_reader_service.py       # อ่านไฟล์
-│   │   ├── data_processor_service.py    # ประมวลผลข้อมูล
-│   │   └── file_management_service.py   # จัดการไฟล์
+│   ├── file/                        # File Services
+│   │   ├── file_reader_service.py        # อ่านไฟล์
+│   │   ├── data_processor_service.py     # ประมวลผลข้อมูล
+│   │   └── file_management_service.py    # จัดการไฟล์
 │   │
-│   └── utilities/                # Utility Services
-│       ├── preload_service.py    # โหลดข้อมูลเริ่มต้น
+│   └── utilities/                   # Utility Services
+│       ├── preload_service.py       # โหลดข้อมูลเริ่มต้น
 │       └── permission_checker_service.py
 │
-├── 📁 config/                      # Configuration Layer
-│   ├── database.py               # Database config
-│   ├── json_manager.py           # JSON settings manager
-│   └── *.json                    # Settings files
+├── 📁 config/                       # Configuration Layer
+│   ├── database.py                  # Database config
+│   ├── json_manager.py              # JSON settings manager
+│   ├── app_settings.json            # การตั้งค่าหลัก
+│   ├── .env                         # Environment variables
+│   └── file_types/                  # ไฟล์ config แต่ละประเภท
 │
-├── 📁 utils/                       # Utilities
-│   └── logger.py                 # Logging system
+├── 📁 utils/                        # Utilities
+│   ├── logger.py                    # Logging system
+│   ├── helpers.py                   # ฟังก์ชันช่วยเหลือ
+│   ├── validators.py                # ตรวจสอบข้อมูล
+│   └── sql_utils.py                 # SQL utilities
 │
-├── pipeline_gui_app.py           # GUI Entry Point
-└── auto_process_cli.py           # CLI Entry Point
+├── 📁 addons/                       # Add-on Modules
+│   └── column_mapper/               # Column Auto Mapper
+│
+├── pipeline_gui_app.py              # GUI Entry Point
+└── auto_process_cli.py              # CLI Entry Point
 ```
 
 ### การทำงานของระบบ
@@ -507,7 +668,7 @@ python auto_process_cli.py "C:\daily\reports"
 
 ## การสนับสนุน (Support)
 
-- **🐛 พบ Bug หรือต้องการ Feature ใหม่:** [GitHub Issues](https://github.com/ST-415/PIPELINE_SQLSERVER/issues)
+- **🐛 พบ Bug หรือต้องการ Feature ใหม่:** [GitHub Issues](https://github.com/sthongma/app-pipeline-sql-server/issues)
 - **📖 เอกสารเพิ่มเติม:** อยู่ใน repository นี้
 - **🔄 อัปเดต:** ดูประวัติการเปลี่ยนแปลงใน `CHANGELOG.md`
 
