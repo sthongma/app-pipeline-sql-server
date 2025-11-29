@@ -8,6 +8,7 @@ a = Analysis(
     datas=[
         ('config', 'config'),
         ('ui/icons', 'ui/icons'),
+        ('build_resources/app_icon.ico', '.'),
         ('.env.example', '.'),
         ('README.md', '.'),
     ],

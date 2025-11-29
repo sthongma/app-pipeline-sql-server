@@ -4,6 +4,7 @@ UI Helper Functions
 Common utilities for UI components
 """
 import os
+import sys
 
 # Cache สำหรับ icon path
 _app_icon_path = None
@@ -18,9 +19,16 @@ def get_app_icon_path() -> str:
     """
     global _app_icon_path
     if _app_icon_path is None:
-        # หา path จาก utils folder ไปยัง build_resources
-        base_dir = os.path.dirname(os.path.dirname(__file__))
-        _app_icon_path = os.path.join(base_dir, "build_resources", "app_icon.ico")
+        # ตรวจสอบว่ารันจาก PyInstaller bundle หรือไม่
+        if getattr(sys, 'frozen', False):
+            # รันจาก PyInstaller bundle - icon อยู่ที่ root ของ bundle
+            base_dir = sys._MEIPASS
+            _app_icon_path = os.path.join(base_dir, "app_icon.ico")
+        else:
+            # รันจาก source code - icon อยู่ใน build_resources
+            base_dir = os.path.dirname(os.path.dirname(__file__))
+            _app_icon_path = os.path.join(base_dir, "build_resources", "app_icon.ico")
+        
         if not os.path.exists(_app_icon_path):
             _app_icon_path = ""
     return _app_icon_path
