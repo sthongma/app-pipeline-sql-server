@@ -453,6 +453,9 @@ class SettingsTab:
     def _on_file_type_selected(self, choice):
         """เมื่อมีการเลือกประเภทไฟล์จาก dropdown"""
         if choice == "Select a file type...":
+            # ซ่อน UI ทั้งหมดและ reset current_file_type เมื่อเลือก placeholder
+            self._hide_all_cached_ui()
+            self.current_file_type = None
             return
         self._show_file_type_content(choice)
     
@@ -475,21 +478,12 @@ class SettingsTab:
         self.current_file_type = file_type
     
     def _hide_all_cached_ui(self):
-        """ซ่อน UI ที่แคชไว้ทั้งหมดและลบ widget ที่ไม่ได้อยู่ใน cache"""
-        # ซ่อน UI ที่แคชไว้
+        """ซ่อน UI ที่แคชไว้ทั้งหมด (ไม่ destroy เพราะ CTkScrollableFrame มี _parent_frame ภายใน)"""
         for cached_ui in self.ui_cache.values():
-            cached_ui['scroll_frame'].pack_forget()
-        
-        # ลบ widget ที่ไม่ได้อยู่ใน cache (เช่น loading_frame, error_frame)
-        if hasattr(self, 'content_frame'):
-            cached_scroll_frames = {
-                cached.get('scroll_frame') 
-                for cached in self.ui_cache.values() 
-                if cached.get('scroll_frame')
-            }
-            for child in self.content_frame.winfo_children():
-                if child not in cached_scroll_frames:
-                    child.destroy()
+            try:
+                cached_ui['scroll_frame'].pack_forget()
+            except Exception:
+                pass  # Widget อาจถูกทำลายไปแล้ว
     
     def _create_ui_lazy(self, file_type):
         """สร้าง UI แบบ lazy loading พร้อม progress indicator"""
