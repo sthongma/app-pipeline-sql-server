@@ -369,6 +369,7 @@ class FileUploadHandler:
 
             success, message = self.db_service.upload_data(
                 df, logic_type, required_cols,
+                schema_name=os.getenv('DB_SCHEMA', 'bronze'),
                 log_func=self.log,
                 clear_existing=True,
                 batch_id=batch_id
@@ -682,6 +683,7 @@ class FileUploadHandler:
                     # Clear existing data only for the first upload of each table
                     success, message = self.db_service.upload_data(
                         combined_df, logic_type, required_cols,
+                        schema_name=os.getenv('DB_SCHEMA', 'bronze'),
                         log_func=self.log, clear_existing=True, batch_id=batch_id
                     )
 

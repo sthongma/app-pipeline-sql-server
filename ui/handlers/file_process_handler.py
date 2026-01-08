@@ -200,7 +200,7 @@ class FileProcessHandler:
 
         # อัปโหลดข้อมูล
         self.log(f"Uploading {len(df)} rows for type {logic_type}")
-        success, message = self.db_service.upload_data(df, logic_type, required_cols, log_func=self.log, clear_existing=True)
+        success, message = self.db_service.upload_data(df, logic_type, required_cols, schema_name=os.getenv('DB_SCHEMA', 'bronze'), log_func=self.log, clear_existing=True)
 
         if success:
             self.log(f"Upload successful: {message}")
