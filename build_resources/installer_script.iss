@@ -4,7 +4,7 @@
 [Setup]
 ; Application Information
 AppName=SQL Server Data Pipeline
-AppVersion=1.0.0
+AppVersion=0.1.1
 AppPublisher=PIPELINE_SQLSERVER Development Team
 AppPublisherURL=https://github.com/sthongma/app-pipeline-sql-server
 AppSupportURL=https://github.com/sthongma/app-pipeline-sql-server/issues
@@ -17,7 +17,7 @@ DisableProgramGroupPage=yes
 
 ; Output Configuration
 OutputDir=..\installer_output
-OutputBaseFilename=SQLServerPipeline_v1.0.0_Setup
+OutputBaseFilename=SQLServerPipeline_v0.1.1_Setup
 Compression=lzma2/max
 SolidCompression=yes
 
