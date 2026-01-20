@@ -338,7 +338,7 @@ class LoginWindow(ctk.CTk):
                 try:
                     if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
                         return  # ไม่แสดง error ถ้า user ยกเลิก
-                except:
+                except Exception:
                     pass
                 messagebox.showerror("Error", f"An error occurred: {str(e)}")
             
@@ -352,7 +352,7 @@ class LoginWindow(ctk.CTk):
             try:
                 if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
                     return  # ไม่แสดง error ถ้า user ยกเลิก
-            except:
+            except Exception:
                 pass
             if hasattr(self, 'ui_loading_dialog'):
                 self.ui_loading_dialog.destroy()
@@ -413,7 +413,7 @@ class LoginWindow(ctk.CTk):
             try:
                 if hasattr(self, 'ui_loading_dialog') and self.ui_loading_dialog and self.ui_loading_dialog.user_cancelled:
                     return  # ไม่แสดง error ถ้า user ยกเลิก
-            except:
+            except Exception:
                 pass
             if hasattr(self, 'ui_loading_dialog'):
                 self.ui_loading_dialog.destroy()

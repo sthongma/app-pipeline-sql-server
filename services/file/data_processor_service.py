@@ -241,7 +241,7 @@ class DataProcessorService:
             
             for col, expected_dtype in dtypes.items():
                 if col in df.columns:
-                    issues = self._validate_column_data_type(df[col], col, expected_dtype)
+                    issues = self._validate_column_data_type(df[col], col, expected_dtype, logic_type)
                     if issues:
                         validation_report['data_type_issues'][col] = issues
                         validation_report['status'] = False
@@ -295,19 +295,26 @@ class DataProcessorService:
             'summary': f"Found non-numeric data {invalid_count:,} rows ({round((invalid_count / total_rows) * 100, 2)}%)"
         }
 
-    def _get_date_format_setting(self) -> str:
-        """Get date format setting from dtype_settings"""
+    def _get_date_format_setting(self, logic_type: str = None) -> str:
+        """Get date format setting from dtype_settings
+        
+        Args:
+            logic_type: File type to get date format for
+            
+        Returns:
+            str: Date format ('UK' or 'US')
+        """
         date_format = 'UK'  # default
         try:
-            if logic_type in self.dtype_settings:
+            if logic_type and logic_type in self.dtype_settings:
                 date_format = self.dtype_settings[logic_type].get('_date_format', 'UK')
-        except:
+        except Exception:
             pass
         return date_format
 
-    def _validate_date_column(self, series, expected_dtype, total_rows) -> dict:
+    def _validate_date_column(self, series, expected_dtype, total_rows, logic_type: str = None) -> dict:
         """Validate date/datetime column data"""
-        date_format = self._get_date_format_setting()
+        date_format = self._get_date_format_setting(logic_type)
 
         def parse_date_safe(val):
             try:
@@ -316,7 +323,7 @@ class DataProcessorService:
                 # ใช้การตั้งค่า date format
                 dayfirst = (date_format == 'UK')
                 return parser.parse(str(val), dayfirst=dayfirst)
-            except:
+            except Exception:
                 return pd.NaT
 
         date_series = series.apply(parse_date_safe)
@@ -390,7 +397,7 @@ class DataProcessorService:
             'summary': f"High number of nulls {null_rows:,} rows ({null_percentage}%)"
         }
 
-    def _validate_column_data_type(self, series, col_name, expected_dtype):
+    def _validate_column_data_type(self, series, col_name, expected_dtype, logic_type: str = None):
         """Validate specific column data types"""
         issues = {}
 
@@ -401,7 +408,7 @@ class DataProcessorService:
                 issues = self._validate_numeric_column(series, expected_dtype, total_rows)
 
             elif isinstance(expected_dtype, (DATE, DateTime)):
-                issues = self._validate_date_column(series, expected_dtype, total_rows)
+                issues = self._validate_date_column(series, expected_dtype, total_rows, logic_type)
 
             elif isinstance(expected_dtype, NVARCHAR):
                 issues = self._validate_string_column(series, expected_dtype, total_rows)

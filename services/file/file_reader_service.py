@@ -572,7 +572,7 @@ class FileReaderService:
                     # สำหรับ Excel .xlsx
                     df_shape = pd.read_excel(file_path, sheet_name=0, dtype=str).shape
                     row_count = df_shape[0]
-            except:
+            except Exception:
                 row_count = "Cannot count"
             
             # ตรวจจับประเภทไฟล์

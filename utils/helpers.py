@@ -95,7 +95,7 @@ def parse_date_with_format(value: Any, date_format: str = 'UK') -> Optional[pd.T
         # Try parsing with dateutil.parser first
         try:
             return parser.parse(str(value), dayfirst=dayfirst)
-        except:
+        except Exception:
             pass
         
         # If parsing fails, try with pandas
@@ -104,13 +104,13 @@ def parse_date_with_format(value: Any, date_format: str = 'UK') -> Optional[pd.T
                 return pd.to_datetime(value, format='%d/%m/%Y', errors='coerce')
             else:
                 return pd.to_datetime(value, format='%m/%d/%Y', errors='coerce')
-        except:
+        except Exception:
             pass
         
         # Try parsing with other formats
         try:
             return pd.to_datetime(value, errors='coerce')
-        except:
+        except Exception:
             pass
             
         return None
